@@ -339,7 +339,7 @@ function resetForm() {
 }
 
 // ===================== LOAD PROJECTS =====================
-async function loadProjects() {
+async function loadProjects(skipDetailRefresh = false) {
   const { data: projects, error } = await client.from("projects").select("*").order("updated_at", { ascending: false });
   if (error) { console.error(error); return; }
   const { data: inds }  = await client.from("project_indicators").select("*");
@@ -649,15 +649,8 @@ document.getElementById("saveIndicatorUpdatesBtn").addEventListener("click", asy
     msg.className = "form-msg success";
     setTimeout(() => { msg.className = "form-msg hidden"; }, 3000);
 
-    // Reload data background tanpa menimpa tampilan detail yang sedang aktif
-    const savedProjectName = currentProject ? currentProject.name : null;
-    loadProjects().then(() => {
-      // Setelah loadProjects selesai, kembalikan currentProject agar tetap sinkron
-      if (savedProjectName && window._allProjects) {
-        const updated = window._allProjects.find(p => p.name === savedProjectName);
-        if (updated) currentProject = updated;
-      }
-    });
+    // Reload background, skip re-render detail agar avg capaian tidak tertimpa
+    loadProjects(true);
 
   } catch(err) {
     msg.textContent = "❌ " + err.message;
