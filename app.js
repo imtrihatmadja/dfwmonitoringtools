@@ -107,7 +107,7 @@ function renderIndicatorList() {
           <span class="badge badge-${(ind.type||"Output").toLowerCase()}">${ind.type||"Output"}</span>
           ${ind.name || "(Indikator " + (i+1) + ")"}
         </div>
-        <button class="btn-remove" onclick="removeIndicator(${i})">✕</button>
+        <button class="btn-remove" onclick="removeIndicator(${i})">âœ•</button>
       </div>
       <div class="indicator-input-row">
         <div class="form-group">
@@ -135,7 +135,7 @@ function renderIndicatorList() {
         </div>
       </div>
       <div class="history-section">
-        <div class="history-section-title">📅 Histori Capaian</div>
+        <div class="history-section-title">ðŸ“… Histori Capaian</div>
         <div class="history-list">${renderHistoryItems(ind.history, ind.unit, ind.id)}</div>
       </div>
     </div>`).join("");
@@ -145,14 +145,14 @@ window.removeIndicator = function(i) { indicators.splice(i,1); renderIndicatorLi
 
 function renderHistoryItems(history, unit, indicatorId) {
   if (!history || !history.length) return `<div class="history-empty">Belum ada riwayat update.</div>`;
-  const clearBtn = indicatorId ? `<button class="btn-danger btn-sm" style="width:100%;margin-bottom:8px" onclick="clearIndicatorHistory('${indicatorId}')">🗑️ Hapus Semua Riwayat</button>` : '';
+  const clearBtn = indicatorId ? `<button class="btn-danger btn-sm" style="width:100%;margin-bottom:8px" onclick="clearIndicatorHistory('${indicatorId}')">ðŸ—‘ï¸ Hapus Semua Riwayat</button>` : '';
   return clearBtn + history.slice().reverse().map(h => `
     <div class="history-item">
       <div class="history-dot"></div>
       <div class="history-content">
         <div class="history-value">Capaian: <strong>${h.actual_value} ${unit||""}</strong></div>
-        ${h.note ? `<div class="history-note">📝 ${h.note}</div>` : ""}
-        <div class="history-date">🕐 ${new Date(h.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+        ${h.note ? `<div class="history-note">ðŸ“ ${h.note}</div>` : ""}
+        <div class="history-date">ðŸ• ${new Date(h.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
       </div>
     </div>`).join("");
 }
@@ -170,7 +170,7 @@ function renderAchievementList() {
             <div class="indicator-name">${ind.name || "(Indikator "+(i+1)+")"}</div>
             <span class="badge badge-${(ind.type||"output").toLowerCase()}" style="font-size:11px">${ind.type}</span>
           </div>
-          <div class="target-info">Target: <strong>${ind.target||"—"} ${ind.unit||""}</strong>
+          <div class="target-info">Target: <strong>${ind.target||"â€”"} ${ind.unit||""}</strong>
             ${lastH ? `<br><span style="font-size:11px;color:#94a3b8">Update terakhir: ${new Date(lastH.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</span>` : ""}
           </div>
         </div>
@@ -187,18 +187,18 @@ function renderAchievementList() {
           </div>
         </div>
         <div class="form-group" style="margin-top:10px">
-          <label>📝 Catatan Perkembangan</label>
+          <label>ðŸ“ Catatan Perkembangan</label>
           <textarea id="ind-note-${i}" rows="2" placeholder="Tulis perkembangan, kendala, atau temuan lapangan..."
             oninput="indicators[${i}].update_note=this.value" style="font-size:13px">${ind.update_note||""}</textarea>
         </div>
         ${ind.history && ind.history.length ? `
         <div class="mini-history">
-          <div class="mini-history-title">🕐 Riwayat (${ind.history.length} update)</div>
+          <div class="mini-history-title">ðŸ• Riwayat (${ind.history.length} update)</div>
           <div class="mini-history-list">
             ${ind.history.slice().reverse().slice(0,3).map(h => `
               <div class="mini-history-item">
                 <span class="mini-history-val">${h.actual_value} ${ind.unit||""}</span>
-                <span class="mini-history-note">${h.note ? "— "+h.note : ""}</span>
+                <span class="mini-history-note">${h.note ? "â€” "+h.note : ""}</span>
                 <span class="mini-history-date">${new Date(h.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</span>
               </div>`).join("")}
             ${ind.history.length > 3 ? `<div class="mini-history-more">+${ind.history.length-3} update lainnya</div>` : ""}
@@ -223,7 +223,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
   const msg = document.getElementById("formMsg");
   const btn = document.getElementById("submitAllBtn");
   msg.className = "form-msg hidden";
-  btn.textContent = "⏳ Menyimpan..."; btn.disabled = true;
+  btn.textContent = "â³ Menyimpan..."; btn.disabled = true;
 
   try {
     indicators.forEach((ind, i) => {
@@ -269,7 +269,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       indicators[i].id = indData.id;
     }
 
-    msg.textContent = "✅ Data berhasil disimpan!";
+    msg.textContent = "âœ… Data berhasil disimpan!";
     msg.className = "form-msg success";
     setTimeout(() => {
       msg.className = "form-msg hidden";
@@ -280,10 +280,10 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     await loadProjects();
 
   } catch(err) {
-    msg.textContent = "❌ " + err.message;
+    msg.textContent = "âŒ " + err.message;
     msg.className = "form-msg error";
   } finally {
-    btn.textContent = "💾 Simpan Semua Data"; btn.disabled = false;
+    btn.textContent = "ðŸ’¾ Simpan Semua Data"; btn.disabled = false;
   }
 });
 
@@ -340,7 +340,7 @@ function renderStats(items) {
 
 function renderCards(items) {
   const container = document.getElementById("projectCards");
-  if (!items.length) { container.innerHTML = `<div class="empty-state">Belum ada proyek. <a href="#" onclick="switchTab('input');return false">Tambah proyek →</a></div>`; return; }
+  if (!items.length) { container.innerHTML = `<div class="empty-state">Belum ada proyek. <a href="#" onclick="switchTab('input');return false">Tambah proyek â†’</a></div>`; return; }
   container.innerHTML = items.map((item, i) => {
     const cls = item.status.toLowerCase().replace(/ /g,"-");
     const indCount = (item.project_indicators||[]).length;
@@ -350,16 +350,16 @@ function renderCards(items) {
           <div class="proj-card-name">${item.name}</div>
           <span class="badge badge-${cls}">${item.status}</span>
         </div>
-        <div class="proj-card-meta">📍 ${item.location} &nbsp;|&nbsp; 👤 ${item.owner}${item.donor?" &nbsp;|&nbsp; 🏛️ "+item.donor:""}</div>
+        <div class="proj-card-meta">ðŸ“ ${item.location} &nbsp;|&nbsp; ðŸ‘¤ ${item.owner}${item.donor?" &nbsp;|&nbsp; ðŸ›ï¸ "+item.donor:""}</div>
         <div class="progress-label"><span>Progress</span><span>${item.progress}%</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${item.progress}%"></div></div>
         <div class="proj-card-footer">
-          <span class="ind-count">📊 ${indCount} Indikator</span>
-          <span class="ind-count" style="background:#f0fdf4;color:#15803d">✅ ${item.activityCount||0} Aktivitas</span>
+          <span class="ind-count">ðŸ“Š ${indCount} Indikator</span>
+          <span class="ind-count" style="background:#f0fdf4;color:#15803d">âœ… ${item.activityCount||0} Aktivitas</span>
         </div>
         <div class="proj-card-actions">
-          <span style="font-size:11px;color:#94a3b8">${item.deadline ? "📅 "+item.deadline : ""}</span>
-          <button class="btn-danger btn-sm" style="margin-left:auto" onclick="event.stopPropagation();deleteProject('${item.id}','${item.name.replace(/'/g,'\\\'')}')">🗑️ Hapus</button>
+          <span style="font-size:11px;color:#94a3b8">${item.deadline ? "ðŸ“… "+item.deadline : ""}</span>
+          <button class="btn-danger btn-sm" style="margin-left:auto" onclick="event.stopPropagation();deleteProject('${item.id}','${item.name.replace(/'/g,'\\\'')}')">ðŸ—‘ï¸ Hapus</button>
         </div>
       </div>`;
   }).join("");
@@ -382,8 +382,8 @@ function renderTable(items) {
       </td>
       <td>${item.deadline||"-"}</td>
       <td>${dt}</td>
-      <td><button class="btn-edit" onclick="event.stopPropagation();fillFormEdit(${i})">✏️ Edit</button>
-      <button class="btn-danger btn-sm" style="margin-left:4px" onclick="event.stopPropagation();deleteProject(window._allProjects[${i}].id,window._allProjects[${i}].name)">🗑️</button></td>
+      <td><button class="btn-edit" onclick="event.stopPropagation();fillFormEdit(${i})">âœï¸ Edit</button>
+      <button class="btn-danger btn-sm" style="margin-left:4px" onclick="event.stopPropagation();deleteProject(window._allProjects[${i}].id,window._allProjects[${i}].name)">ðŸ—‘ï¸</button></td>
     </tr>`;
   }).join("");
 }
@@ -431,15 +431,15 @@ function renderDetailHeader(proj) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">â† Kembali</button>
           <span class="badge badge-${cls}">${proj.status}</span>
         </div>
         <div class="detail-project-name">${proj.name}</div>
         <div class="detail-meta">
-          <span>📍 ${proj.location}</span>
-          <span>👤 ${proj.owner}</span>
-          ${proj.donor ? `<span>🏛️ ${proj.donor}</span>` : ""}
-          ${proj.deadline ? `<span>📅 Deadline: ${proj.deadline}</span>` : ""}
+          <span>ðŸ“ ${proj.location}</span>
+          <span>ðŸ‘¤ ${proj.owner}</span>
+          ${proj.donor ? `<span>ðŸ›ï¸ ${proj.donor}</span>` : ""}
+          ${proj.deadline ? `<span>ðŸ“… Deadline: ${proj.deadline}</span>` : ""}
         </div>
         ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:600px">${proj.description}</p>` : ""}
       </div>
@@ -460,7 +460,7 @@ function renderIndicatorUpdatePanel(proj) {
   const inds      = proj.project_indicators;
   if (!inds.length) {
     container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center">
-      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:32px;margin-bottom:8px">ðŸ“Š</div>
       <div style="font-weight:600;color:#0f172a;margin-bottom:4px">Belum ada indikator</div>
       <small style="color:#94a3b8">Edit proyek untuk menambah indikator</small>
     </div>`;
@@ -505,7 +505,7 @@ function renderIndicatorUpdatePanel(proj) {
 
       <!-- Form kumulatif per indikator -->
       <div class="ind-kumul-box">
-        <div class="ind-kumul-title">➕ Tambah Capaian Baru</div>
+        <div class="ind-kumul-title">âž• Tambah Capaian Baru</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div class="form-group" style="margin:0">
             <label style="font-size:11px">Tambahan Nilai</label>
@@ -529,7 +529,7 @@ function renderIndicatorUpdatePanel(proj) {
         <div id="upd-msg-${i}" class="form-msg hidden" style="margin-bottom:6px"></div>
         <button class="btn-ind-update"
           onclick="saveOneIndicator(${i},'${safeId}',${currentActual},${target},'${safeName}','${safeUnit}')">
-          💾 Simpan Update
+          ðŸ’¾ Simpan Update
         </button>
       </div>
 
@@ -576,7 +576,7 @@ window.saveOneIndicator = async function(i, indId, currentActual, target, indNam
 
   if (addVal === 0 && !note) {
     if (msgEl) {
-      msgEl.textContent = "⚠️ Isi tambahan nilai atau catatan terlebih dahulu.";
+      msgEl.textContent = "âš ï¸ Isi tambahan nilai atau catatan terlebih dahulu.";
       msgEl.className   = "form-msg";
       msgEl.style.cssText = "background:#fef9c3;color:#92400e;border:1px solid #fde68a";
       setTimeout(() => { msgEl.className = "form-msg hidden"; msgEl.style.cssText = ""; }, 3000);
@@ -585,7 +585,7 @@ window.saveOneIndicator = async function(i, indId, currentActual, target, indNam
   }
 
   const newTotal = currentActual + addVal;
-  if (btn) { btn.textContent = "Menyimpan…"; btn.disabled = true; }
+  if (btn) { btn.textContent = "Menyimpanâ€¦"; btn.disabled = true; }
 
   try {
     await client.from("project_indicators").update({ actual: newTotal }).eq("id", indId);
@@ -600,7 +600,7 @@ window.saveOneIndicator = async function(i, indId, currentActual, target, indNam
     if (addEl)  addEl.value  = "";
     if (noteEl) noteEl.value = "";
     if (msgEl) {
-      msgEl.textContent = `✅ Berhasil: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
+      msgEl.textContent = `âœ… Berhasil: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
       msgEl.className   = "form-msg success";
       setTimeout(() => { msgEl.className = "form-msg hidden"; }, 3500);
     }
@@ -619,7 +619,7 @@ window.saveOneIndicator = async function(i, indId, currentActual, target, indNam
   } catch(err) {
     if (msgEl) { msgEl.textContent = err.message; msgEl.className = "form-msg error"; }
   } finally {
-    if (btn) { btn.textContent = "💾 Simpan Update"; btn.disabled = false; }
+    if (btn) { btn.textContent = "ðŸ’¾ Simpan Update"; btn.disabled = false; }
   }
 };
 
@@ -688,7 +688,7 @@ function renderActivityListDetail() {
 
   container.innerHTML = `
     <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#15803d;font-weight:600">
-      ✅ ${done}/${allActivities.length} selesai &nbsp;|&nbsp; Rata-rata progress: ${avg}%
+      âœ… ${done}/${allActivities.length} selesai &nbsp;|&nbsp; Rata-rata progress: ${avg}%
     </div>
     ` + allActivities.map((act, i) => {
     const cls     = act.status.toLowerCase().replace(/ /g,"-");
@@ -700,14 +700,14 @@ function renderActivityListDetail() {
         <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
           <div class="act-check ${checked?"checked":""}"
             onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
-            title="${checked?"Tandai belum selesai":"Tandai selesai"}">${checked?"✓":""}</div>
+            title="${checked?"Tandai belum selesai":"Tandai selesai"}">${checked?"âœ“":""}</div>
           <div class="activity-card-info">
             <div class="activity-card-title ${checked?"done":""}">${act.title}</div>
             <div class="activity-card-meta">
-              ${act.pic?`<span>👤 ${act.pic}</span>`:""}
-              ${act.due_date?`<span>📅 ${act.due_date}</span>`:""}
+              ${act.pic?`<span>ðŸ‘¤ ${act.pic}</span>`:""}
+              ${act.due_date?`<span>ðŸ“… ${act.due_date}</span>`:""}
               <span><span class="badge ${badgeCls}" style="font-size:10px">${act.status}</span></span>
-              ${notes.length?`<span>💬 ${notes.length}</span>`:""}
+              ${notes.length?`<span>ðŸ’¬ ${notes.length}</span>`:""}
               <span class="file-count-badge" id="filecount-${act.id}"></span>
             </div>
           </div>
@@ -716,18 +716,18 @@ function renderActivityListDetail() {
             <div class="progress-bar" style="width:80px;height:5px"><div class="progress-fill" style="width:${act.progress}%"></div></div>
           </div>
           <div class="activity-card-actions" onclick="event.stopPropagation()">
-            <button class="btn-edit" onclick="openActModal('${act.id}')">✏️</button>
-            <button class="btn-remove" onclick="deleteActivity('${act.id}')">✕</button>
+            <button class="btn-edit" onclick="openActModal('${act.id}')">âœï¸</button>
+            <button class="btn-remove" onclick="deleteActivity('${act.id}')">âœ•</button>
           </div>
         </div>
         <div class="activity-card-body" id="actbody-${act.id}">
           ${act.description?`<p style="font-size:12px;color:#475569;margin:10px 0 6px">${act.description}</p>`:""}
           <div class="act-note-section">
-            <div class="act-note-title">📝 Catatan</div>
+            <div class="act-note-title">ðŸ“ Catatan</div>
             <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
               <textarea id="inline-note-${act.id}" rows="2" placeholder="Tulis catatan pelaksanaan..."
                 style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical"></textarea>
-              <button class="btn-upload" onclick="saveInlineNote('${act.id}')">💬</button>
+              <button class="btn-upload" onclick="saveInlineNote('${act.id}')">ðŸ’¬</button>
             </div>
             <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
           </div>
@@ -743,7 +743,7 @@ function renderActNotes(notes) {
       <div class="history-dot"></div>
       <div class="act-note-content">
         <div class="act-note-text">${n.note}</div>
-        <div class="act-note-date">🕐 ${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} — ${n.noted_by||"Tim"}</div>
+        <div class="act-note-date">ðŸ• ${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} â€” ${n.noted_by||"Tim"}</div>
       </div>
     </div>`).join("");
 }
@@ -782,7 +782,7 @@ async function updateFileCountBadges() {
   (data||[]).forEach(r => { counts[r.activity_id] = (counts[r.activity_id]||0)+1; });
   allActivities.forEach(act => {
     const el = document.getElementById("filecount-"+act.id);
-    if (el) el.textContent = counts[act.id] ? `📎 ${counts[act.id]}` : "";
+    if (el) el.textContent = counts[act.id] ? `ðŸ“Ž ${counts[act.id]}` : "";
   });
 }
 
@@ -792,7 +792,7 @@ document.getElementById("addActivityBtnDetail").addEventListener("click", () => 
 // ===================== MODAL AKTIVITAS =====================
 window.openActModal = async function(id) {
   currentActId = id;
-  document.getElementById("actModalTitle").textContent = id ? "✏️ Edit Aktivitas" : "➕ Tambah Aktivitas";
+  document.getElementById("actModalTitle").textContent = id ? "âœï¸ Edit Aktivitas" : "âž• Tambah Aktivitas";
   document.getElementById("act-id").value       = id || "";
   document.getElementById("act-title").value    = "";
   document.getElementById("act-desc").value     = "";
@@ -850,7 +850,7 @@ document.getElementById("saveNoteBtn").addEventListener("click", async () => {
 document.getElementById("saveActivityBtn").addEventListener("click", async () => {
   const msg   = document.getElementById("actFormMsg");
   const title = document.getElementById("act-title").value.trim();
-  if (!title) { msg.textContent = "❌ Judul wajib diisi."; msg.className = "form-msg error"; return; }
+  if (!title) { msg.textContent = "âŒ Judul wajib diisi."; msg.className = "form-msg error"; return; }
   const payload = {
     project_name: currentActProject,
     title,
@@ -869,14 +869,14 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
     error = insErr;
     if (data) currentActId = data.id;
   }
-  if (error) { msg.textContent = "❌ " + error.message; msg.className = "form-msg error"; return; }
-  msg.textContent = "✅ Tersimpan!"; msg.className = "form-msg success";
+  if (error) { msg.textContent = "âŒ " + error.message; msg.className = "form-msg error"; return; }
+  msg.textContent = "âœ… Tersimpan!"; msg.className = "form-msg success";
   setTimeout(() => { document.getElementById("actModalOverlay").classList.add("hidden"); msg.className = "form-msg hidden"; }, 1200);
   await loadActivities(currentActProject);
 });
 
 // ===================== FILE UPLOAD =====================
-function getFileIcon(n){return /\.(jpg|jpeg|png|gif|webp)$/i.test(n)?"🖼️":/\.pdf$/i.test(n)?"📄":/\.(doc|docx)$/i.test(n)?"📝":/\.(xls|xlsx|csv)$/i.test(n)?"📊":/\.(ppt|pptx)$/i.test(n)?"📑":"📂"}
+function getFileIcon(n){return /\.(jpg|jpeg|png|gif|webp)$/i.test(n)?"ðŸ–¼ï¸":/\.pdf$/i.test(n)?"ðŸ“„":/\.(doc|docx)$/i.test(n)?"ðŸ“":/\.(xls|xlsx|csv)$/i.test(n)?"ðŸ“Š":/\.(ppt|pptx)$/i.test(n)?"ðŸ“‘":"ðŸ“‚"}
 function formatBytes(b){if(!b)return "";if(b<1024)return b+" B";if(b<1048576)return (b/1024).toFixed(1)+" KB";return (b/1048576).toFixed(1)+" MB"}
 function isImage(n){return /\.(jpg|jpeg|png|gif|webp)$/i.test(n)}
 
@@ -887,7 +887,7 @@ function renderStagingList() {
   uploadRow.classList.remove("hidden");
   container.innerHTML = stagedFiles.map(sf => {
     const thumb = isImage(sf.file.name) ? `<img class="file-thumb" src="${URL.createObjectURL(sf.file)}" alt="" />` : `<div class="file-thumb-placeholder">${getFileIcon(sf.file.name)}</div>`;
-    const statusMap = { wait:"⏳ Menunggu", uploading:"🔄 Upload...", ok:"✅ OK", err:"❌ "+(sf.errMsg||"Gagal") };
+    const statusMap = { wait:"â³ Menunggu", uploading:"ðŸ”„ Upload...", ok:"âœ… OK", err:"âŒ "+(sf.errMsg||"Gagal") };
     const statusCls = { wait:"wait", uploading:"uploading", ok:"ok", err:"err" };
     return `
       <div class="file-staging-item ${sf.status==="ok"?"uploaded":sf.status==="err"?"error-item":""}">
@@ -898,7 +898,7 @@ function renderStagingList() {
           <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?100:0}%"></div></div>
         </div>
         <span class="file-staging-status ${statusCls[sf.status]}">${statusMap[sf.status]}</span>
-        ${sf.status!=="uploading"?`<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">✕</button>`:""}
+        ${sf.status!=="uploading"?`<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">âœ•</button>`:""}
       </div>`;
   }).join("");
 }
@@ -921,8 +921,8 @@ function renderSavedFiles() {
           <div class="file-saved-meta">${formatBytes(f.file_size)} | ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
         </div>
         <div class="file-saved-actions">
-          <a href="${f.file_url}" target="_blank" class="file-btn-view">👁️ Lihat</a>
-          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">🗑️</button>
+          <a href="${f.file_url}" target="_blank" class="file-btn-view">ðŸ‘ï¸ Lihat</a>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">ðŸ—‘ï¸</button>
         </div>
       </div>`;
   }).join("");
@@ -963,7 +963,7 @@ document.getElementById("actUploadAllBtn").addEventListener("click", async () =>
     sf.status = dbErr ? "err" : "ok"; sf.errMsg = dbErr ? dbErr.message : "";
     renderStagingList();
   }
-  prog.textContent = "✅ Selesai!"; btn.disabled=false;
+  prog.textContent = "âœ… Selesai!"; btn.disabled=false;
   await loadSavedFiles(currentActId);
   setTimeout(() => { stagedFiles=stagedFiles.filter(sf=>sf.status!=="ok"); renderStagingList(); if(!stagedFiles.length) prog.textContent=""; }, 2000);
   await loadActivities(currentActProject);
@@ -1078,7 +1078,7 @@ function renderSidebarSubmenu(items) {
   if (!items.length) { submenu.innerHTML = ''; return; }
   submenu.innerHTML = items.map((item, i) => {
     const cls = item.status.toLowerCase().replace(/ /g, '-');
-    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + '…' : item.name;
+    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + 'â€¦' : item.name;
     return '<li onclick="openProjectDetail(window._allProjects[' + i + '])">' +
            '<span class="submenu-dot dot-' + cls + '"></span>' +
            '<span class="submenu-name" title="' + item.name.replace(/"/g,'&quot;') + '">' + shortName + '</span>' +
@@ -1087,7 +1087,7 @@ function renderSidebarSubmenu(items) {
 }
 
 // ============================================================
-//  PANEL SCROLL — patch tambahan untuk split view
+//  PANEL SCROLL â€” patch tambahan untuk split view
 // ============================================================
 function initPanelScrollShadow() {
   document.querySelectorAll('.panel-scroll').forEach(function(el) {
