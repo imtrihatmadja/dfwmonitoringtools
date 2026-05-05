@@ -1,3 +1,4 @@
+// PMIS v4 - FIXED BUILD - Bug baris 1256 diperbaiki (hapus komentar ini setelah konfirmasi)
 // ===================== CONFIG =====================
 const SUPABASE_URL      = "https://zdfxcxkgmksaeigyuibe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZnhjeGtnbWtzYWVpZ3l1aWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3Mjc0NjAsImV4cCI6MjA5MjMwMzQ2MH0.baUlaWNvN3wMKHL05E71aSxedjKvWhfVQXHGXraWyVU";
