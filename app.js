@@ -1271,16 +1271,16 @@ function renderIndicatorUpdatePanel(proj) {
         </div>
 
         <!-- Input update kumulatif: hanya untuk non-viewer -->
-        \${can('edit') ? `<div class="ind-kumul-box">
+        ${can('edit') ? `<div class="ind-kumul-box">
           <div class="ind-kumul-header">
             <span>➕ Tambah Capaian Baru</span>
             <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
           </div>
           <div class="ind-kumul-row">
             <div class="form-group" style="flex:1">
-              <label>Tambahan Nilai <span style="color:#94a3b8;font-weight:400">(\${ind.unit||"satuan"})</span></label>
-              <input type="number" id="upd-add-\${i}" min="0" placeholder="0"
-                oninput="previewKumul(\${i}, \${currentActual}, \${target})"
+              <label>Tambahan Nilai <span style="color:#94a3b8;font-weight:400">(${ind.unit||"satuan"})</span></label>
+              <input type="number" id="upd-add-${i}" min="0" placeholder="0"
+                oninput="previewKumul(${i}, ${currentActual}, ${target})"
                 style="font-size:14px;font-weight:600">
             </div>
             <div class="form-group" style="flex:1">
