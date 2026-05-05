@@ -3,9 +3,201 @@ const SUPABASE_URL      = "https://zdfxcxkgmksaeigyuibe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZnhjeGtnbWtzYWVpZ3l1aWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3Mjc0NjAsImV4cCI6MjA5MjMwMzQ2MH0.baUlaWNvN3wMKHL05E71aSxedjKvWhfVQXHGXraWyVU";
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+
+
+// ===================== SUPER ADMIN =====================
+const SUPER_ADMIN_EMAIL = 'admin@dfw.or.id';
+function isSuperAdmin(email) {
+  return (email || '').toLowerCase().trim() === SUPER_ADMIN_EMAIL;
+}
+// ===================== TOAST =====================
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+}
+// ===================== AUTH =====================
+async function initAuth() {
+  // Sembunyikan app shell sampai auth siap
+  document.getElementById('appSidebar').style.display = 'none';
+  document.getElementById('appMain').style.display    = 'none';
+
+  const { data: { session } } = await client.auth.getSession();
+  if (session) {
+    await onLogin(session.user);
+  } else {
+    showLoginPage();
+  }
+
+  client.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN'  && session) await onLogin(session.user);
+    if (event === 'SIGNED_OUT')              showLoginPage();
+  });
+}
+
+async function onLogin(user) {
+  currentUser = user;
+  // Fetch atau buat profil
+  let { data: profile } = await client
+    .from('user_profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+
+  if (!profile) {
+    // Auto-create profil viewer untuk user baru
+    const initial = (user.email||'?')[0].toUpperCase();
+    const { data: np } = await client.from('user_profiles').insert({
+      user_id        : user.id,
+      name           : user.email.split('@')[0],
+      role           : 'viewer',
+      avatar_initial : initial,
+    }).select().single();
+    profile = np;
+  }
+  // Enforce super admin
+  if (isSuperAdmin(user.email)) {
+    if (!profile || profile.role !== 'admin') {
+      await client.from('user_profiles').upsert({
+        user_id: user.id, email: user.email,
+        name: profile?.name || 'Admin DFW', role: 'admin', avatar_initial: 'A',
+      }, { onConflict: 'user_id' });
+      profile = { ...(profile||{}), role: 'admin', email: user.email };
+    }
+    if (!profile.email) {
+      await client.from('user_profiles').update({ email: user.email }).eq('user_id', user.id);
+      profile = { ...profile, email: user.email };
+    }
+  } else {
+    if (profile && !profile.email) {
+      await client.from('user_profiles').update({ email: user.email }).eq('user_id', user.id);
+      profile = { ...profile, email: user.email };
+    }
+  }
+  currentProfile = profile;
+  updateSidebarUser();
+  applyRoleGuards();
+  hideLoginPage();
+  loadProjects();
+}
+
+function updateSidebarUser() {
+  if (!currentProfile) return;
+  const el = (id) => document.getElementById(id);
+  el('sidebarAvatar').textContent = currentProfile.avatar_initial || '?';
+  el('sidebarName').textContent   = currentProfile.name || '–';
+  el('sidebarRole').textContent   = ROLES[currentProfile.role] || currentProfile.role;
+  // Warna avatar per role
+  const colors = { admin:'#dc2626', manager:'#7c3aed', editor:'#2563eb', viewer:'#64748b' };
+  el('sidebarAvatar').style.background = colors[currentProfile.role] || '#64748b';
+}
+
+function applyRoleGuards() {
+  // Sembunyikan tombol Tambah Proyek jika tidak bisa create
+  document.querySelectorAll('[data-guard="create"]').forEach(el => {
+    el.style.display = can('create') ? '' : 'none';
+  });
+  // Sembunyikan tab input di nav
+  const inputNav = document.querySelector('.nav-links li[data-tab="input"]');
+  if (inputNav) inputNav.style.display = can('create') ? '' : 'none';
+  // Bottom nav tambah
+  const btnav = document.querySelector('.bottom-nav-item[data-tab="input"]');
+  if (btnav) btnav.style.display = can('create') ? '' : 'none';
+  const navUsers = document.getElementById('navUsers');
+  if (navUsers) navUsers.style.display = (currentProfile && currentProfile.role === 'admin') ? '' : 'none';
+}
+
+function showLoginPage() {
+  document.getElementById('loginPage').style.display   = 'flex';
+  document.getElementById('appSidebar').style.display  = 'none';
+  document.getElementById('appMain').style.display     = 'none';
+}
+
+function hideLoginPage() {
+  document.getElementById('loginPage').style.display   = 'none';
+  document.getElementById('appSidebar').style.display  = '';
+  document.getElementById('appMain').style.display     = '';
+}
+
+// Login handler
+(function setupLogin() {
+  const emailEl    = () => document.getElementById('loginEmail');
+  const pwEl       = () => document.getElementById('loginPassword');
+  const btnEl      = () => document.getElementById('loginBtn');
+  const errEl      = () => document.getElementById('loginError');
+  const spinnerEl  = () => document.getElementById('loginBtnSpinner');
+  const btnTextEl  = () => document.getElementById('loginBtnText');
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = emailEl().value.trim();
+    const pw    = pwEl().value;
+    if (!email || !pw) { showLoginError('Email dan password wajib diisi.'); return; }
+
+    btnEl().disabled      = true;
+    btnTextEl().style.display  = 'none';
+    spinnerEl().style.display  = 'inline-block';
+    errEl().classList.add('hidden');
+
+    const { error } = await client.auth.signInWithPassword({ email, password: pw });
+
+    btnEl().disabled     = false;
+    btnTextEl().style.display = '';
+    spinnerEl().style.display = 'none';
+
+    if (error) showLoginError(error.message === 'Invalid login credentials'
+      ? 'Email atau password salah.' : error.message);
+  });
+
+  // Enter key
+  [document.getElementById('loginEmail'), document.getElementById('loginPassword')]
+    .forEach(el => el && el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    }));
+
+  // Toggle password visibility
+  const toggle = document.getElementById('loginPwToggle');
+  if (toggle) toggle.addEventListener('click', () => {
+    const pw = document.getElementById('loginPassword');
+    pw.type = pw.type === 'password' ? 'text' : 'password';
+  });
+})();
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+// Logout handler
+(function setupLogout() {
+  const btn = document.getElementById('logoutBtn');
+  if (btn) btn.addEventListener('click', async () => {
+    await client.auth.signOut();
+    currentUser = null; currentProfile = null;
+  });
+})();
+
+
 // ===================== STATE =====================
 let currentProject  = null;
 let indicators      = [];
+// ── Auth state ──
+let currentUser    = null;   // supabase auth user
+let currentProfile = null;   // { id, name, role, avatar_initial }
+// Role hierarchy: admin > manager > editor > viewer
+const ROLES = { admin:'Admin', manager:'Manager', editor:'Editor', viewer:'Viewer' };
+function can(action) {
+  const r = currentProfile?.role || 'viewer';
+  if (action === 'delete')  return r === 'admin';
+  if (action === 'edit')    return ['admin','manager','editor'].includes(r);
+  if (action === 'create')  return ['admin','manager','editor'].includes(r);
+  if (action === 'approve') return ['admin','manager'].includes(r);
+  if (action === 'manage_users') return r === 'admin';
+  return false;
+}
 let allActivities   = [];
 let allActNotes     = [];
 let currentActId    = null;
@@ -199,6 +391,7 @@ window.jumpToProject = async function(projIndex, event) {
 
 // ===================== TAB NAVIGATION =====================
 const tabTitles = {
+  users     : ['Kelola Pengguna', 'Atur akses dan peran pengguna'],
   dashboard : ["Dashboard",     "Selamat datang, pantau semua proyek Anda"],
   projects  : ["Daftar Proyek", "Semua data proyek yang dimonitor"],
   input     : ["Tambah Proyek", "Tambah proyek baru"],
@@ -217,6 +410,7 @@ function switchTab(tab) {
   document.getElementById("pageTitle").textContent    = t ? t[0] : "";
   document.getElementById("pageSubtitle").textContent = t ? t[1] : "";
   if (tab === "projects" || tab === "dashboard") loadProjects();
+  if (tab === "users") loadUsers();
   if (tab === "input") renderOutcomeList();
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
@@ -617,8 +811,8 @@ function renderCards(items) {
       <!-- 1. HEADER -->
       <div class="pcard-head">
         <span class="pcard-badge pcard-badge-${cls}">${item.status}</span>
-        <button class="pcard-del"
-          onclick="event.stopPropagation();deleteProject('${item.id}','${item.name.replace(/'/g,"\\'")}')">×</button>
+        ${can('delete') ? `<button class="pcard-del"
+          onclick="event.stopPropagation();deleteProject('${item.id}','${item.name.replace(/'/g,"\\'")}')">×</button>` : '<span></span>'}
       </div>
 
       <!-- 2. NAMA (fixed 2 baris) -->
@@ -734,6 +928,7 @@ window.openProjectDetail = async function (proj) {
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
   document.getElementById("tab-detail").classList.add("active");
   renderDetailHeader(proj);
+  applyDetailRoleGuards(proj);
   await loadActivities(proj.name);
   renderIndicatorUpdatePanel(proj);
 };
@@ -769,6 +964,7 @@ function renderDetailHeader(proj) {
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
           <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+          <button class="btn-primary btn-sm" onclick="openReportModal()" style="font-size:12px;margin-left:6px">&#128438; Cetak Laporan</button>
           <span class="badge badge-${cls}">${proj.status}</span>
         </div>
         <div class="detail-project-name">${proj.name}</div>
@@ -1065,6 +1261,52 @@ document.getElementById("editProjectBtn").addEventListener("click", () => {
   if (!currentProject) return;
   fillFormEdit(window.allProjects.findIndex(p => p.name === currentProject.name));
 });
+
+// ===================== DETAIL: ROLE GUARDS =====================
+function applyDetailRoleGuards(proj) {
+  const editBtn    = document.getElementById('editProjectBtn');
+  const approveBtn = document.getElementById('approveProjectBtn');
+  const deleteBtn  = document.getElementById('deleteProjectBtn');
+
+  if (editBtn)    editBtn.style.display    = can('edit')    ? '' : 'none';
+  if (approveBtn) {
+    const alreadyApproved = proj.approved;
+    approveBtn.style.display = can('approve') ? '' : 'none';
+    approveBtn.textContent   = alreadyApproved ? '✔ Disetujui' : '✔ Setujui';
+    approveBtn.classList.toggle('btn-approved', !!alreadyApproved);
+    approveBtn.disabled = !!alreadyApproved;
+  }
+  if (deleteBtn)  deleteBtn.style.display  = can('delete')  ? '' : 'none';
+}
+
+// Approve button click
+document.getElementById('approveProjectBtn').addEventListener('click', async () => {
+  if (!currentProject || !can('approve')) return;
+  const btn = document.getElementById('approveProjectBtn');
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+  const { error } = await client.from('projects')
+    .update({ approved: true, approved_by: currentProfile.name, approved_at: new Date().toISOString() })
+    .eq('name', currentProject.name);
+  if (!error) {
+    showToast('✔ Proyek berhasil disetujui', 'success');
+    await loadProjects();
+    // Update currentProject
+    const updated = window.allProjects.find(p => p.name === currentProject.name);
+    if (updated) { currentProject = updated; applyDetailRoleGuards(updated); }
+  } else {
+    btn.disabled = false; btn.textContent = '✔ Setujui';
+    showToast('Gagal menyimpan persetujuan', 'error');
+  }
+});
+
+// Delete button di detail
+document.getElementById('deleteProjectBtn').addEventListener('click', () => {
+  if (!currentProject || !can('delete')) return;
+  deleteProject(currentProject.id, currentProject.name);
+});
+
+
 
 // ===================== FILL FORM EDIT =====================
 window.fillFormEdit = function (idx) {
@@ -1575,7 +1817,7 @@ client.channel("projects-rt")
 document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
-loadProjects();
+initAuth();
 
 // ===================== MOBILE: SIDEBAR TOGGLE =====================
 (function () {
@@ -1640,3 +1882,443 @@ loadProjects();
     }
   };
 })();
+
+
+// ===================== USER MANAGEMENT MODULE =====================
+let allUsers = [];
+
+async function loadUsers() {
+  const tbody = document.getElementById('usersTable');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">Memuat...</td></tr>';
+  const { data, error } = await client.from('user_profiles').select('*').order('created_at', { ascending: true });
+  if (error) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#dc2626;padding:20px">Gagal memuat: ${error.message}</td></tr>`; return; }
+  allUsers = data || [];
+  renderUsersTable(allUsers);
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('usersTable');
+  if (!tbody) return;
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:28px">Belum ada pengguna.</td></tr>';
+    return;
+  }
+  const colors = { admin:'#dc2626', manager:'#7c3aed', editor:'#2563eb', viewer:'#64748b' };
+  tbody.innerHTML = users.map((u, i) => {
+    const isSuper = isSuperAdmin(u.email);
+    const isMe    = currentProfile && currentProfile.id === u.id;
+    const bg      = colors[u.role] || '#64748b';
+    const init    = (u.avatar_initial || (u.name||'?')[0]).toUpperCase();
+    const joined  = u.created_at ? new Date(u.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
+    const emailTxt = u.email ? escHtml(u.email) : '<em style="color:#94a3b8">–</em>';
+    const roleCell = isSuper
+      ? `<span class="superadmin-lock">&#128274; Super Admin</span>`
+      : `<select class="role-select-inline" onchange="changeUserRole('${u.id}',this.value,this)">
+           <option value="admin"   ${u.role==='admin'  ?'selected':''}>Admin</option>
+           <option value="manager" ${u.role==='manager'?'selected':''}>Manager</option>
+           <option value="editor"  ${u.role==='editor' ?'selected':''}>Editor</option>
+           <option value="viewer"  ${u.role==='viewer' ?'selected':''}>Viewer</option>
+         </select>`;
+    const actCell = isSuper
+      ? `<button class="btn-edit" onclick="openEditUserModal('${u.id}')">Edit</button>`
+      : isMe
+        ? `<button class="btn-edit" onclick="openEditUserModal('${u.id}')">Edit</button>`
+        : `<button class="btn-edit" onclick="openEditUserModal('${u.id}')">Edit</button>
+           <button class="btn-danger" style="margin-left:4px" onclick="deleteUser('${u.id}','${escHtml(u.name||'')}')">Hapus</button>`;
+    return `<tr class="${isSuper?'super-admin-row':''}">
+      <td>${i+1}</td>
+      <td><div class="user-table-cell">
+        <div class="user-table-avatar" style="background:${bg}">${init}</div>
+        <div><div class="user-table-name">${escHtml(u.name||'')}${isMe?'<span class="me-badge">Saya</span>':''}</div></div>
+      </div></td>
+      <td style="font-size:12px;color:#475569">${emailTxt}</td>
+      <td>${roleCell}</td>
+      <td style="font-size:12px;color:#64748b">${joined}</td>
+      <td>${actCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+window.changeUserRole = async function(profileId, newRole, sel) {
+  const u = allUsers.find(x => x.id === profileId);
+  if (!u) return;
+  if (isSuperAdmin(u.email)) { showToast('Role Super Admin tidak dapat diubah.','error'); sel.value=u.role; return; }
+  sel.disabled = true;
+  const { error } = await client.from('user_profiles').update({ role: newRole }).eq('id', profileId);
+  sel.disabled = false;
+  if (error) { showToast('Gagal: '+error.message,'error'); sel.value=u.role; }
+  else { u.role=newRole; showToast('Role berhasil diperbarui.','success'); }
+};
+
+function openAddUserModal() {
+  document.getElementById('userModalTitle').textContent = 'Tambah Pengguna';
+  document.getElementById('um-name').value  = '';
+  document.getElementById('um-email').value = '';
+  document.getElementById('um-email').readOnly = false;
+  document.getElementById('um-role').value  = 'viewer';
+  document.getElementById('um-role').disabled = false;
+  document.getElementById('um-userid').value = '';
+  document.getElementById('userModalMsg').className = 'form-msg hidden';
+  document.getElementById('userModalOverlay').classList.remove('hidden');
+}
+window.openEditUserModal = function(profileId) {
+  const u = allUsers.find(x => x.id === profileId); if (!u) return;
+  const isSuper = isSuperAdmin(u.email);
+  document.getElementById('userModalTitle').textContent = 'Edit Pengguna';
+  document.getElementById('um-name').value  = u.name  || '';
+  document.getElementById('um-email').value = u.email || '';
+  document.getElementById('um-email').readOnly = isSuper;
+  document.getElementById('um-role').value  = u.role  || 'viewer';
+  document.getElementById('um-role').disabled = isSuper;
+  document.getElementById('um-userid').value = u.id;
+  document.getElementById('userModalMsg').className = 'form-msg hidden';
+  document.getElementById('userModalOverlay').classList.remove('hidden');
+};
+function closeUserModal() {
+  document.getElementById('userModalOverlay').classList.add('hidden');
+  document.getElementById('um-role').disabled = false;
+  document.getElementById('um-email').readOnly = false;
+}
+function showUserModalMsg(txt, type) {
+  const el = document.getElementById('userModalMsg');
+  el.textContent = txt; el.className = `form-msg ${type}`;
+}
+async function saveUser() {
+  const name  = document.getElementById('um-name').value.trim();
+  const email = document.getElementById('um-email').value.trim().toLowerCase();
+  const role  = document.getElementById('um-role').value;
+  const uid   = document.getElementById('um-userid').value;
+  const btn   = document.getElementById('saveUserBtn');
+  if (!name)  { showUserModalMsg('Nama wajib diisi.','error'); return; }
+  if (!email) { showUserModalMsg('Email wajib diisi.','error'); return; }
+  if (uid) {
+    const ex = allUsers.find(x=>x.id===uid);
+    if (ex && isSuperAdmin(ex.email)) {
+      if (email!==ex.email) { showUserModalMsg('Email Super Admin tidak dapat diubah.','error'); return; }
+      if (role!==ex.role)   { showUserModalMsg('Role Super Admin tidak dapat diubah.','error'); return; }
+    }
+  }
+  btn.disabled=true; btn.textContent='Menyimpan...';
+  try {
+    if (uid) {
+      const upd = { name };
+      if (!isSuperAdmin(email)) { upd.role=role; upd.email=email; }
+      const { error } = await client.from('user_profiles').update(upd).eq('id',uid);
+      if (error) throw new Error(error.message);
+      showToast('Profil berhasil diperbarui.','success');
+    } else {
+      const { data: authId, error: rpcErr } = await client.rpc('get_user_id_by_email', { p_email: email });
+      if (rpcErr||!authId) throw new Error('Email tidak ditemukan di Supabase Auth.\nDaftarkan dulu: Supabase → Authentication → Users → Invite User');
+      const { data: exists } = await client.from('user_profiles').select('id').eq('user_id',authId).maybeSingle();
+      if (exists) throw new Error('Pengguna dengan email ini sudah terdaftar.');
+      const { error: insErr } = await client.from('user_profiles').insert({ user_id:authId, email, name, role, avatar_initial:name[0].toUpperCase() });
+      if (insErr) throw new Error(insErr.message);
+      showToast('Pengguna berhasil ditambahkan.','success');
+    }
+    closeUserModal(); await loadUsers();
+  } catch(err) { showUserModalMsg(err.message,'error'); }
+  finally { btn.disabled=false; btn.textContent='Simpan'; }
+}
+window.deleteUser = async function(profileId, userName) {
+  const u = allUsers.find(x=>x.id===profileId); if (!u) return;
+  if (isSuperAdmin(u.email)) { showToast('Super Admin tidak dapat dihapus.','error'); return; }
+  if (currentProfile&&currentProfile.id===profileId) { showToast('Tidak dapat menghapus akun sendiri.','error'); return; }
+  if (!confirm(`Hapus pengguna "${userName}"?\nTindakan ini tidak dapat dibatalkan.`)) return;
+  const { error } = await client.from('user_profiles').delete().eq('id',profileId);
+  if (error) showToast('Gagal: '+error.message,'error');
+  else { showToast(`"${userName}" berhasil dihapus.`,'success'); await loadUsers(); }
+};
+document.addEventListener('DOMContentLoaded', () => {
+  const $id = id => document.getElementById(id);
+  const addBtn=$id('addUserBtn'), closeBtn=$id('userModalClose'), cancelBtn=$id('userModalCancel'), saveBtn=$id('saveUserBtn'), overlay=$id('userModalOverlay');
+  if (addBtn)    addBtn.addEventListener('click', openAddUserModal);
+  if (closeBtn)  closeBtn.addEventListener('click', closeUserModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeUserModal);
+  if (saveBtn)   saveBtn.addEventListener('click', saveUser);
+  if (overlay)   overlay.addEventListener('click', e => { if(e.target===overlay) closeUserModal(); });
+});
+// ===================== END USER MANAGEMENT MODULE =====================
+
+
+// ===================== GENERATE REPORT MODULE =====================
+function openReportModal() {
+  if (!currentProject) { showToast('Buka detail proyek terlebih dahulu.','error'); return; }
+  document.getElementById('reportLangModal').classList.remove('hidden');
+}
+
+window.generateReport = async function(lang) {
+  document.getElementById('reportLangModal').classList.add('hidden');
+  if (!currentProject) return;
+  const proj = currentProject;
+  showToast(lang==='id'?'Membuat laporan...':'Generating report...','success');
+
+  const [{ data: acts },{ data: notes },{ data: indUpds },{ data: budgets },{ data: projOutcomes }] = await Promise.all([
+    client.from('project_activities').select('*').eq('project_name',proj.name).order('sort_order').order('created_at'),
+    client.from('activity_notes').select('*').eq('project_name',proj.name).order('created_at',{ascending:false}),
+    client.from('indicator_updates').select('*').eq('project_name',proj.name).order('created_at',{ascending:false}),
+    client.from('budget_updates').select('*').eq('project_name',proj.name).order('created_at',{ascending:false}),
+    client.from('project_outcomes').select('*').eq('project_name',proj.name).order('sort_order'),
+  ]);
+
+  const html = buildReportHTML(proj, acts||[], notes||[], indUpds||[], budgets||[], projOutcomes||[], lang);
+  const win = window.open('','_blank','width=1000,height=800');
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => setTimeout(()=>{ win.focus(); win.print(); }, 600);
+};
+
+function buildReportHTML(proj, activities, actNotes, allIndUpds, budgetUpds, projOutcomes, lang) {
+  const ID = lang==='id';
+  const L = {
+    reportTitle: ID?'LAPORAN PROYEK':'PROJECT REPORT',
+    s1: ID?'1. RINGKASAN EKSEKUTIF':'1. EXECUTIVE SUMMARY',
+    s2: ID?'2. CAPAIAN INDIKATOR':'2. INDICATOR ACHIEVEMENT',
+    s3: ID?'3. DAFTAR AKTIVITAS':'3. ACTIVITY LIST',
+    s4: ID?'4. REALISASI ANGGARAN':'4. BUDGET REALIZATION',
+    s5: ID?'5. OUTCOMES / HASIL':'5. OUTCOMES / RESULTS',
+    s6: ID?'6. NARASI & PEMBELAJARAN':'6. NARRATIVE & LEARNING',
+    s7: ID?'7. TANDA TANGAN':'7. SIGNATURES',
+    projectName:  ID?'Nama Proyek':'Project Name',
+    location:     ID?'Lokasi':'Location',
+    owner:        ID?'Pelaksana':'Implementing Org.',
+    donor:        ID?'Donor / Mitra':'Donor / Partner',
+    startDate:    ID?'Tanggal Mulai':'Start Date',
+    deadline:     ID?'Tenggat Waktu':'Deadline',
+    status:       ID?'Status':'Status',
+    printedOn:    ID?'Dicetak pada':'Printed on',
+    overallProg:  ID?'Progres Keseluruhan':'Overall Progress',
+    budgetAppr:   ID?'Anggaran Disetujui':'Approved Budget',
+    budgetReal:   ID?'Realisasi Anggaran':'Budget Realization',
+    absorption:   ID?'Penyerapan':'Absorption',
+    indCount:     ID?'Indikator':'Indicators',
+    achieved:     ID?'tercapai':'achieved',
+    indName:      ID?'Indikator':'Indicator',
+    type:         ID?'Jenis':'Type',
+    target:       ID?'Target':'Target',
+    actual:       ID?'Realisasi':'Actual',
+    pct:          ID?'Capaian':'Achievement',
+    lastNote:     ID?'Catatan Terakhir':'Latest Note',
+    actName:      ID?'Aktivitas':'Activity',
+    pic:          ID?'PIC':'PIC',
+    actStatus:    ID?'Status':'Status',
+    actProg:      ID?'Progres':'Progress',
+    startDt:      ID?'Mulai':'Start',
+    dueDt:        ID?'Selesai':'Due',
+    actNotes:     ID?'Catatan':'Notes',
+    budgetDate:   ID?'Tanggal':'Date',
+    budgetVal:    ID?'Jumlah':'Amount',
+    budgetNote:   ID?'Keterangan':'Note',
+    budgetBy:     ID?'Input Oleh':'By',
+    highlights:   ID?'&#9989; Capaian Utama Periode Ini':'&#9989; Key Achievements',
+    challenges:   ID?'&#9888; Kendala yang Dihadapi':'&#9888; Challenges Encountered',
+    followUp:     ID?'&#128204; Rencana Tindak Lanjut':'&#128204; Follow-up Plan',
+    lessons:      ID?'&#128218; Pembelajaran (Lessons Learned)':'&#128218; Lessons Learned',
+    sigExec:      ID?'Pelaksana Program':'Program Officer',
+    sigSup:       ID?'Supervisor':'Supervisor',
+    sigMgr:       ID?'Manajer Program':'Program Manager',
+    sigDate:      ID?'Tanggal':'Date',
+    sigName:      ID?'Nama & Tanda Tangan':'Name & Signature',
+    noData:       ID?'Tidak ada data':'No data available',
+    desc:         ID?'Deskripsi Proyek':'Project Description',
+    statusAchieved: ID?'Tercapai':'Achieved',
+    statusProgress: ID?'Dalam Proses':'In Progress',
+    statusAttention:ID?'Perlu Perhatian':'Needs Attention',
+  };
+
+  const today   = new Date().toLocaleDateString(ID?'id-ID':'en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  const fmtDate = d => d?new Date(d).toLocaleDateString(ID?'id-ID':'en-GB',{day:'2-digit',month:'short',year:'numeric'}):'-';
+  const fmtMoney= n => n?'Rp '+Number(n).toLocaleString('id-ID'):'-';
+  const esc     = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const pBar    = (p,c='#2563eb') => `<div style="background:#e2e8f0;border-radius:4px;height:10px;width:100%;margin:4px 0"><div style="background:${c};height:10px;border-radius:4px;width:${Math.min(100,p)}%"></div></div><div style="font-size:10px;color:#64748b;text-align:right">${p}%</div>`;
+  const mkList  = arr => arr.length ? `<ul style="margin:0;padding-left:18px;line-height:2">${arr.map(i=>`<li style="font-size:10.5pt">${i}</li>`).join('')}</ul>` : `<p style="color:#94a3b8;font-style:italic;font-size:10.5pt">${L.noData}</p>`;
+
+  const inds        = proj.project_indicators || [];
+  const overall     = calcOverallProgress(proj);
+  const budgetPct   = proj.budget_approved>0?Math.min(100,Math.round(proj.budget_actual/proj.budget_approved*100)):0;
+  const achievedInds= inds.filter(ind=>{ const a=getLatestActual(ind); return ind.target>0&&a/ind.target>=1; });
+
+  // ---- Indicator rows ----
+  const indRows = inds.map(ind => {
+    const actual = getLatestActual(ind);
+    const pct    = ind.target>0?Math.min(100,Math.round(actual/ind.target*100)):0;
+    const color  = pct>=100?'#16a34a':pct>=60?'#d97706':'#dc2626';
+    const lUpd   = allIndUpds.filter(u=>u.indicator_id===ind.id)[0];
+    const stLabel= pct>=100?L.statusAchieved:pct>=60?L.statusProgress:L.statusAttention;
+    return `<tr><td>${esc(ind.indicator_name)}</td><td>${esc(ind.type||'Output')}</td>
+      <td style="text-align:right">${ind.target} ${esc(ind.unit||'')}</td>
+      <td style="text-align:right">${actual} ${esc(ind.unit||'')}</td>
+      <td style="text-align:center"><strong style="color:${color}">${pct}%</strong></td>
+      <td style="text-align:center"><span style="background:${color};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">${stLabel}</span></td>
+      <td style="font-size:10px;color:#64748b">${lUpd&&lUpd.note?esc(lUpd.note):'-'}</td></tr>`;
+  }).join('');
+
+  // ---- Activity rows ----
+  const actRows = activities.map(act => {
+    const aNotes = actNotes.filter(n=>n.activity_id===act.id).slice(0,2).map(n=>`• ${esc(n.note)}`).join('<br>');
+    const sc2    = act.status==='Selesai'||act.status==='Completed'?'#16a34a':act.status==='Terhambat'||act.status==='Blocked'?'#dc2626':act.status==='Berjalan'||act.status==='In Progress'?'#2563eb':'#64748b';
+    return `<tr><td>${esc(act.title)}</td><td>${esc(act.pic||'-')}</td>
+      <td style="text-align:center"><span style="background:${sc2};color:#fff;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700">${esc(act.status)}</span></td>
+      <td style="text-align:center">
+        <div style="background:#e2e8f0;border-radius:3px;height:7px;width:70px;display:inline-block;vertical-align:middle"><div style="background:#2563eb;height:7px;border-radius:3px;width:${act.progress||0}%"></div></div>
+        <span style="font-size:10px;margin-left:4px">${act.progress||0}%</span>
+      </td>
+      <td style="font-size:10px">${fmtDate(act.start_date)}</td>
+      <td style="font-size:10px">${fmtDate(act.due_date)}</td>
+      <td style="font-size:10px;color:#475569">${aNotes||'-'}</td></tr>`;
+  }).join('');
+
+  // ---- Budget rows ----
+  const budgetRows = budgetUpds.slice(0,10).map(b=>`<tr>
+    <td>${fmtDate(b.created_at)}</td>
+    <td style="text-align:right;font-weight:600">${fmtMoney(b.actual_value)}</td>
+    <td>${esc(b.note||'-')}</td><td>${esc(b.updated_by||'-')}</td></tr>`).join('');
+
+  // ---- Outcome rows ----
+  const outcomeRows = projOutcomes.length
+    ? projOutcomes.map((o,i)=>`<tr><td>${i+1}</td><td>${esc(o.outcome_text)}</td></tr>`).join('')
+    : `<tr><td colspan="2" style="color:#94a3b8;text-align:center;font-style:italic">${L.noData}</td></tr>`;
+
+  // ---- Narrative ----
+  const completedActs  = activities.filter(a=>a.status==='Selesai'||a.status==='Completed'||a.progress>=100);
+  const highlightItems = [
+    ...completedActs.map(a=>`${esc(a.title)} <span style="color:#16a34a;font-weight:700">(${a.progress}%)</span>`),
+    ...achievedInds.map(i=>`${esc(i.indicator_name)} — ${ID?'target tercapai':'target achieved'}`),
+  ];
+  const blockedActs    = activities.filter(a=>a.status==='Terhambat'||a.status==='Blocked');
+  const lowInds        = inds.filter(ind=>{ const a=getLatestActual(ind); const p=ind.target>0?a/ind.target*100:0; return p<40&&ind.target>0; });
+  const challengeItems = [
+    ...blockedActs.map(a=>`${esc(a.title)} — ${ID?'aktivitas terhambat':'activity blocked'}`),
+    ...lowInds.map(i=>{ const a=getLatestActual(i); const p=i.target>0?Math.round(a/i.target*100):0; return `${esc(i.indicator_name)} (${p}% ${ID?'dari target':'of target'})`; }),
+  ];
+  const inProgressActs = activities.filter(a=>(a.status==='Berjalan'||a.status==='In Progress')&&a.progress<100);
+  const followUpItems  = inProgressActs.map(a=>`${esc(a.title)} — ${ID?'progres':'progress'} ${a.progress}%`);
+  const allNotes = [
+    ...actNotes.slice(0,5).map(n=>`[${ID?'Catatan Aktivitas':'Activity Note'} — ${esc(n.noted_by||'–')}] ${esc(n.note)}`),
+    ...allIndUpds.filter(u=>u.note).slice(0,4).map(u=>`[${esc(u.indicator_name||'–')}] ${esc(u.note)}`),
+    ...(proj.note?[`[${ID?'Catatan Proyek':'Project Note'}] ${esc(proj.note)}`]:[]),
+  ];
+
+  return `<!DOCTYPE html>
+<html lang="${lang}"><head><meta charset="UTF-8">
+<title>${esc(proj.name)} — ${L.reportTitle}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4;margin:18mm 15mm 18mm 20mm}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#1e293b;background:#fff;line-height:1.5}
+.cover{text-align:center;padding:36px 20px 28px;border-bottom:3px solid #0f172a;margin-bottom:24px}
+.cover-org{font-size:11px;font-weight:700;color:#475569;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.cover-title{font-size:24px;font-weight:800;color:#0f172a;margin-bottom:4px}
+.cover-sub{font-size:13px;color:#2563eb;font-weight:600;margin-bottom:20px}
+.cover-meta{display:inline-block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 24px;text-align:left}
+.cover-meta td{padding:4px 10px 4px 0;font-size:10.5px}
+.cover-meta td:first-child{color:#64748b;font-weight:600;white-space:nowrap}
+.cover-meta td:last-child{font-weight:700;color:#0f172a}
+.section{margin-bottom:26px;page-break-inside:avoid}
+.sec-title{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#fff;background:#0f172a;padding:6px 12px;border-radius:4px;margin-bottom:12px;display:block}
+.exec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.exec-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:11px 13px}
+.exec-card .lbl{font-size:9px;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:3px}
+.exec-card .val{font-size:15px;font-weight:800;color:#0f172a}
+.exec-card .sub{font-size:9.5px;color:#94a3b8;margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:9.5pt}
+th{background:#f1f5f9;color:#475569;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:.4px;padding:7px 8px;border:1px solid #e2e8f0;text-align:left}
+td{padding:6px 8px;border:1px solid #e2e8f0;vertical-align:top}
+tr:nth-child(even) td{background:#f8fafc}
+.narr-wrap{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.narr-grid{display:grid;grid-template-columns:1fr 1fr}
+.narr-cell{padding:13px 15px;border-right:1px solid #e2e8f0}
+.narr-cell:last-child{border-right:none}
+.narr-cell+.narr-cell{border-top:none}
+.narr-border-top{border-top:1px solid #e2e8f0}
+.narr-cell h4{font-size:10.5px;font-weight:700;color:#0f172a;margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid #e2e8f0}
+.sig-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px}
+.sig-box{border:1px solid #cbd5e1;border-radius:8px;padding:11px 13px;text-align:center}
+.sig-box .si-title{font-size:9.5px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:3px}
+.sig-box .si-line{border-top:1px solid #cbd5e1;margin:44px 10px 6px}
+.sig-box .si-label{font-size:9.5px;color:#94a3b8}
+.footer{margin-top:28px;padding-top:8px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:9px;color:#94a3b8}
+@media print{.section{page-break-inside:avoid}}
+</style></head><body>
+
+<div class="cover">
+  <div class="cover-org">${esc(proj.owner||'DFW Indonesia')}</div>
+  <div class="cover-title">${esc(proj.name)}</div>
+  <div class="cover-sub">${L.reportTitle}</div>
+  <div class="cover-meta"><table>
+    <tr><td>${L.projectName}</td><td>${esc(proj.name)}</td></tr>
+    <tr><td>${L.location}</td><td>${esc(proj.location||'-')}</td></tr>
+    <tr><td>${L.owner}</td><td>${esc(proj.owner||'-')}</td></tr>
+    ${proj.donor?`<tr><td>${L.donor}</td><td>${esc(proj.donor)}</td></tr>`:''}
+    <tr><td>${L.startDate}</td><td>${fmtDate(proj.start_date)}</td></tr>
+    <tr><td>${L.deadline}</td><td>${fmtDate(proj.deadline)}</td></tr>
+    <tr><td>${L.status}</td><td><strong>${esc(proj.status)}</strong></td></tr>
+    <tr><td>${L.printedOn}</td><td>${today}</td></tr>
+  </table></div>
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s1}</span>
+  <div class="exec-grid">
+    <div class="exec-card"><div class="lbl">${L.overallProg}</div><div class="val">${overall}%</div>${pBar(overall,overall>=70?'#16a34a':overall>=40?'#d97706':'#dc2626')}</div>
+    <div class="exec-card"><div class="lbl">${L.budgetAppr}</div><div class="val" style="font-size:12px">${fmtMoney(proj.budget_approved)}</div><div class="sub">${L.budgetReal}: ${fmtMoney(proj.budget_actual)}</div>${pBar(budgetPct,'#7c3aed')}</div>
+    <div class="exec-card"><div class="lbl">${L.indCount}</div><div class="val">${inds.length}</div><div class="sub">${achievedInds.length} ${L.achieved} · ${activities.length} ${ID?'aktivitas':'activities'}</div>${pBar(inds.length?Math.round(achievedInds.length/inds.length*100):0,'#2563eb')}</div>
+  </div>
+  ${proj.description?`<div style="margin-top:10px;padding:9px 13px;background:#f8fafc;border-left:3px solid #2563eb;border-radius:0 6px 6px 0;font-size:10.5px;color:#475569"><strong>${L.desc}:</strong> ${esc(proj.description)}</div>`:''}
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s2}</span>
+  ${inds.length?`<table><thead><tr><th style="width:26%">${L.indName}</th><th>${L.type}</th><th>${L.target}</th><th>${L.actual}</th><th>${L.pct}</th><th>${L.status}</th><th style="width:22%">${L.lastNote}</th></tr></thead><tbody>${indRows}</tbody></table>`:`<p style="color:#94a3b8;font-style:italic;font-size:10.5px">${L.noData}</p>`}
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s3}</span>
+  ${activities.length?`<table><thead><tr><th style="width:22%">${L.actName}</th><th>${L.pic}</th><th>${L.actStatus}</th><th>${L.actProg}</th><th>${L.startDt}</th><th>${L.dueDt}</th><th style="width:22%">${L.actNotes}</th></tr></thead><tbody>${actRows}</tbody></table>`:`<p style="color:#94a3b8;font-style:italic;font-size:10.5px">${L.noData}</p>`}
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s4}</span>
+  <div class="exec-grid" style="margin-bottom:10px">
+    <div class="exec-card"><div class="lbl">${L.budgetAppr}</div><div class="val" style="font-size:12px">${fmtMoney(proj.budget_approved)}</div></div>
+    <div class="exec-card"><div class="lbl">${L.budgetReal}</div><div class="val" style="font-size:12px">${fmtMoney(proj.budget_actual)}</div></div>
+    <div class="exec-card"><div class="lbl">${L.absorption}</div><div class="val">${budgetPct}%</div>${pBar(budgetPct,'#7c3aed')}</div>
+  </div>
+  ${budgetRows?`<table><thead><tr><th>${L.budgetDate}</th><th>${L.budgetVal}</th><th>${L.budgetNote}</th><th>${L.budgetBy}</th></tr></thead><tbody>${budgetRows}</tbody></table>`:`<p style="color:#94a3b8;font-style:italic;font-size:10.5px">${L.noData}</p>`}
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s5}</span>
+  <table><thead><tr><th style="width:5%">#</th><th>${ID?'Outcomes / Hasil':'Outcomes / Results'}</th></tr></thead><tbody>${outcomeRows}</tbody></table>
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s6}</span>
+  <div class="narr-wrap">
+    <div class="narr-grid">
+      <div class="narr-cell"><h4>${L.highlights}</h4>${mkList(highlightItems)}</div>
+      <div class="narr-cell"><h4>${L.challenges}</h4>${mkList(challengeItems)}</div>
+    </div>
+    <div class="narr-grid narr-border-top">
+      <div class="narr-cell"><h4>${L.followUp}</h4>${mkList(followUpItems)}</div>
+      <div class="narr-cell"><h4>${L.lessons}</h4>${mkList(allNotes)}</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <span class="sec-title">${L.s7}</span>
+  <div class="sig-grid">
+    <div class="sig-box"><div class="si-title">${L.sigExec}</div><div class="si-line"></div><div class="si-label">${L.sigName}</div><div style="margin-top:6px;border-top:1px dashed #e2e8f0;padding-top:5px;font-size:9px;color:#94a3b8">${L.sigDate}: ____________________</div></div>
+    <div class="sig-box"><div class="si-title">${L.sigSup}</div><div class="si-line"></div><div class="si-label">${L.sigName}</div><div style="margin-top:6px;border-top:1px dashed #e2e8f0;padding-top:5px;font-size:9px;color:#94a3b8">${L.sigDate}: ____________________</div></div>
+    <div class="sig-box"><div class="si-title">${L.sigMgr}</div><div class="si-line"></div><div class="si-label">${L.sigName}</div><div style="margin-top:6px;border-top:1px dashed #e2e8f0;padding-top:5px;font-size:9px;color:#94a3b8">${L.sigDate}: ____________________</div></div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>${esc(proj.name)} — ${L.reportTitle}</span>
+  <span>${L.printedOn}: ${today}</span>
+</div>
+</body></html>`;
+}
+// ===================== END GENERATE REPORT MODULE =====================
