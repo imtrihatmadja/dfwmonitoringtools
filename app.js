@@ -109,9 +109,9 @@ function renderPriorityIndicators(item, projIndex) {
   if (!lowInds.length) return `
     <div class="priority-ind-section">
       <div class="priority-ind-title">
-        <span class="priority-ind-icon">✅</span>
-        <span>Semua indikator ≥ 50%</span>
-        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail →</button>
+        <span class="priority-ind-icon">âœ…</span>
+        <span>Semua indikator â‰¥ 50%</span>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail â†’</button>
       </div>
     </div>`;
 
@@ -132,13 +132,13 @@ function renderPriorityIndicators(item, projIndex) {
   return `
     <div class="priority-ind-section">
       <div class="priority-ind-title">
-        <span class="priority-ind-icon">⚠️</span>
+        <span class="priority-ind-icon">âš ï¸</span>
         <span>Prioritas Kerja</span>
         <span class="priority-ind-badges">
           ${critCount > 0 ? `<span class="priority-tier-badge kritis">${critCount} Kritis</span>` : ""}
           ${warnCount > 0 ? `<span class="priority-tier-badge perhatian">${warnCount} Perhatian</span>` : ""}
         </span>
-        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail →</button>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail â†’</button>
       </div>
       <div class="priority-ind-list">
         ${shown.map(ind => {
@@ -156,13 +156,13 @@ function renderPriorityIndicators(item, projIndex) {
               <span class="priority-ind-pct" style="color:${t.color}">${ind.pct}%</span>
               <button class="priority-goto-btn" style="color:${t.color};border-color:${t.border}"
                 onclick="jumpToIndicator(${projIndex},'${escHtml(ind.name)}',event)"
-                title="Buka & scroll ke indikator ini">↗</button>
+                title="Buka & scroll ke indikator ini">â†—</button>
             </div>
           </div>`;
         }).join("")}
         ${rest > 0 ? `
           <button class="priority-ind-more-btn" onclick="jumpToProject(${projIndex}, event)">
-            +${rest} indikator lainnya — lihat semua
+            +${rest} indikator lainnya â€” lihat semua
           </button>` : ""}
       </div>
     </div>`;
@@ -236,7 +236,7 @@ function setStep(n) {
   });
 }
 
-// Step 1 → Step 2
+// Step 1 â†’ Step 2
 
 document.getElementById("addOutcomeBtn").addEventListener("click", () => {
   outcomes.push({ text: "" });
@@ -281,7 +281,7 @@ function renderIndicatorList() {
           <span class="badge badge-${(ind.type || "Output").toLowerCase()}">${ind.type || "Output"}</span>
           ${ind.name || `Indikator ${i + 1}`}
         </div>
-        <button class="btn-remove" onclick="removeIndicator(${i})">✕</button>
+        <button class="btn-remove" onclick="removeIndicator(${i})">âœ•</button>
       </div>
       <div class="indicator-input-row">
         <div class="form-group">
@@ -316,7 +316,7 @@ function renderIndicatorList() {
         <div class="form-group full">
           <label>Catatan Perkembangan <span style="font-weight:400;color:#94a3b8">(opsional)</span></label>
           <textarea id="ind-note-${i}" rows="2"
-            placeholder="Perkembangan awal, kendala, atau temuan lapangan…"
+            placeholder="Perkembangan awal, kendala, atau temuan lapanganâ€¦"
             oninput="indicators[${i}].update_note=this.value"
             style="font-size:13px">${escHtml(ind.update_note)}</textarea>
         </div>
@@ -379,7 +379,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
   const msg = document.getElementById("formMsg");
   const btn = document.getElementById("submitAllBtn");
   msg.className = "form-msg hidden";
-  btn.textContent = "Menyimpan…";
+  btn.textContent = "Menyimpanâ€¦";
   btn.disabled = true;
 
   try {
@@ -464,7 +464,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       indicators[i].id = indData.id;
     }
 
-    msg.textContent = "✅ Data berhasil disimpan!";
+    msg.textContent = "âœ… Data berhasil disimpan!";
     msg.className   = "form-msg success";
     setTimeout(() => {
       msg.className = "form-msg hidden";
@@ -476,7 +476,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     msg.textContent = err.message;
     msg.className   = "form-msg error";
   } finally {
-    btn.textContent = "💾 Simpan Proyek";
+    btn.textContent = "ðŸ’¾ Simpan Proyek";
     btn.disabled    = false;
   }
 });
@@ -590,10 +590,10 @@ function renderCards(items) {
         </div>` : ""}
                 ${(item.goal || (item.project_outcomes && item.project_outcomes.length)) ? `
           <div style="border-top:1px solid #f1f5f9;margin:8px 0 6px;padding-top:8px">
-            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">🎯 Goal:</span> ${item.goal}</div>` : ""}
+            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">ðŸŽ¯ Goal:</span> ${item.goal}</div>` : ""}
             ${item.project_outcomes && item.project_outcomes.length ? `
               <div style="font-size:11px;color:#475569">
-                <span style="font-weight:700;color:#7c3aed">🏆 Outcomes (${item.project_outcomes.length}):</span>
+                <span style="font-weight:700;color:#7c3aed">ðŸ† Outcomes (${item.project_outcomes.length}):</span>
                 <ul style="margin:3px 0 0 14px;padding:0;line-height:1.6">
                   ${item.project_outcomes.map(o => `<li>${o.outcome_text}</li>`).join("")}
                 </ul>
@@ -707,7 +707,7 @@ function renderDetailHeader(proj) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">â† Kembali</button>
           <span class="badge badge-${cls}">${proj.status}</span>
         </div>
         <div class="detail-project-name">${proj.name}</div>
@@ -720,13 +720,13 @@ function renderDetailHeader(proj) {
         ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:600px">${proj.description}</p>` : ""}
         ${proj.goal ? `
           <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">🎯 GOAL</div>
+            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">ðŸŽ¯ GOAL</div>
             <div style="font-size:13px;color:#1e3a5f;line-height:1.5">${proj.goal}</div>
           </div>
         ` : ""}
         ${proj.project_outcomes && proj.project_outcomes.length ? `
           <div style="margin-top:8px;padding:10px 12px;background:#f5f3ff;border-radius:8px;border-left:3px solid #7c3aed;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">🏆 OUTCOMES</div>
+            <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">ðŸ† OUTCOMES</div>
             ${proj.project_outcomes.map((o, i) => `
               <div style="font-size:13px;color:#3b0764;display:flex;gap:6px;margin-bottom:4px;line-height:1.4">
                 <span style="color:#7c3aed;font-weight:700;min-width:16px">${i+1}.</span>
@@ -740,7 +740,7 @@ function renderDetailHeader(proj) {
         <!-- Progress Keseluruhan (kalkulasi otomatis) -->
         <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
+            <span style="font-size:12px;font-weight:700;color:#475569">ðŸ“Š Progress Keseluruhan</span>
             <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px">
@@ -755,15 +755,15 @@ function renderDetailHeader(proj) {
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#6366f1"></span>
               <span>Aktivitas</span>
-              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "—"}</span>
+              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "â€”"}</span>
             </div>
             <div class="overall-breakdown-sep">+</div>
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
               <span>Indikator</span>
-              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "—"}</span>
+              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "â€”"}</span>
             </div>
-            <div class="overall-breakdown-sep">÷ 2</div>
+            <div class="overall-breakdown-sep">Ã· 2</div>
           </div>
         </div>
         <div class="detail-stats" style="margin-top:12px">
@@ -774,7 +774,7 @@ function renderDetailHeader(proj) {
         </div>
         ${(proj.budget_approved > 0 || proj.budget_actual > 0) ? `
         <div class="detail-budget-box">
-          <div class="detail-budget-title">💰 Anggaran Proyek</div>
+          <div class="detail-budget-title">ðŸ’° Anggaran Proyek</div>
           <div class="detail-budget-row">
             <span>Disetujui</span>
             <strong>${formatRupiah(proj.budget_approved)}</strong>
@@ -810,7 +810,7 @@ function renderIndicatorUpdatePanel(proj) {
   const inds      = proj.project_indicators;
   if (!inds.length) {
     container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center">
-      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:32px;margin-bottom:8px">ðŸ“Š</div>
       <div style="font-weight:600;color:#0f172a;margin-bottom:4px">Belum ada indikator</div>
       <small style="color:#94a3b8">Edit proyek untuk menambah indikator</small>
     </div>`;
@@ -859,14 +859,14 @@ function renderIndicatorUpdatePanel(proj) {
         </div>
         <div class="ind-last-update" id="ind-ts-${i}">
           ${lastTs
-            ? `🕐 Update terakhir: <strong>${lastTs}</strong>`
+            ? `ðŸ• Update terakhir: <strong>${lastTs}</strong>`
             : `<span style="color:#94a3b8;font-style:italic">Belum pernah diupdate</span>`}
         </div>
 
         <!-- Input update kumulatif -->
         <div class="ind-kumul-box">
           <div class="ind-kumul-header">
-            <span>➕ Tambah Capaian Baru</span>
+            <span>âž• Tambah Capaian Baru</span>
             <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
           </div>
           <div class="ind-kumul-row">
@@ -885,12 +885,12 @@ function renderIndicatorUpdatePanel(proj) {
           <div class="form-group" style="margin-top:6px">
             <label>Catatan <span style="color:#94a3b8;font-weight:400">(opsional)</span></label>
             <textarea id="upd-note-${i}" rows="2"
-              placeholder="Perkembangan, kendala, atau temuan lapangan…"
+              placeholder="Perkembangan, kendala, atau temuan lapanganâ€¦"
               style="font-size:12px"></textarea>
           </div>
           <button class="btn-ind-update" id="upd-btn-${i}"
             onclick="saveOneIndicator(${i}, '${ind.id}', ${currentActual}, ${target}, '${escHtml(ind.indicator_name)}', '${escHtml(ind.unit||"")}')">
-            💾 Simpan Update
+            ðŸ’¾ Simpan Update
           </button>
           <div id="upd-msg-${i}" class="form-msg hidden" style="margin-top:6px;font-size:12px"></div>
         </div>
@@ -899,7 +899,7 @@ function renderIndicatorUpdatePanel(proj) {
         ${sortedUpd.length ? `
         <div class="mini-history" style="margin-top:10px">
           <div class="mini-history-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>📋 ${sortedUpd.length} Riwayat Update</span>
+            <span>ðŸ“‹ ${sortedUpd.length} Riwayat Update</span>
             <button class="btn-danger btn-sm" style="font-size:10px;padding:3px 8px"
               onclick="clearIndicatorHistory('${ind.id}')">Hapus Semua</button>
           </div>
@@ -946,14 +946,14 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
 
   // Wajib ada tambahan atau catatan
   if (addVal === 0 && !note) {
-    msgEl.textContent = "⚠️ Isi tambahan nilai atau catatan terlebih dahulu.";
+    msgEl.textContent = "âš ï¸ Isi tambahan nilai atau catatan terlebih dahulu.";
     msgEl.className   = "form-msg error";
     msgEl.style.display = "block";
     setTimeout(() => { msgEl.className = "form-msg hidden"; msgEl.style.display = ""; }, 3000);
     return;
   }
 
-  btn.textContent = "Menyimpan…";
+  btn.textContent = "Menyimpanâ€¦";
   btn.disabled    = true;
   msgEl.className = "form-msg hidden";
 
@@ -978,7 +978,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     if (noteEl) noteEl.value = "";
 
     // Tampilkan sukses
-    msgEl.textContent   = `✅ Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
+    msgEl.textContent   = `âœ… Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
     msgEl.className     = "form-msg success";
     msgEl.style.display = "block";
 
@@ -995,11 +995,11 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     }
 
   } catch (err) {
-    msgEl.textContent   = "❌ " + err.message;
+    msgEl.textContent   = "âŒ " + err.message;
     msgEl.className     = "form-msg error";
     msgEl.style.display = "block";
   } finally {
-    btn.textContent = "💾 Simpan Update";
+    btn.textContent = "ðŸ’¾ Simpan Update";
     btn.disabled    = false;
   }
 };
@@ -1101,14 +1101,14 @@ function renderActivityListDetail() {
           <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
             <div class="act-check ${checked ? "checked" : ""}"
               onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
-              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "✓" : ""}</div>
+              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "âœ“" : ""}</div>
             <div class="activity-card-info">
               <div class="activity-card-title ${checked ? "done" : ""}">${act.title}</div>
               <div class="activity-card-meta">
                 ${act.pic      ? `<span>${act.pic}</span>`      : ""}
                 ${act.due_date ? `<span>${act.due_date}</span>` : ""}
                 <span><span class="badge ${badgeCls}" style="font-size:10px">${act.status}</span></span>
-                ${notes.length ? `<span>${notes.length} 📝</span>` : ""}
+                ${notes.length ? `<span>${notes.length} ðŸ“</span>` : ""}
                 <span class="file-count-badge" id="filecount-${act.id}"></span>
               </div>
             </div>
@@ -1119,8 +1119,8 @@ function renderActivityListDetail() {
               </div>
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
-              <button class="btn-edit"   onclick="openActModal('${act.id}')">✏️</button>
-              <button class="btn-remove" onclick="deleteActivity('${act.id}')">✕</button>
+              <button class="btn-edit"   onclick="openActModal('${act.id}')">âœï¸</button>
+              <button class="btn-remove" onclick="deleteActivity('${act.id}')">âœ•</button>
             </div>
           </div>
           <div class="activity-card-body" id="actbody-${act.id}">
@@ -1129,9 +1129,9 @@ function renderActivityListDetail() {
               <div class="act-note-title">Catatan</div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
                 <textarea id="inline-note-${act.id}" rows="2"
-                  placeholder="Tulis catatan pelaksanaan…"
+                  placeholder="Tulis catatan pelaksanaanâ€¦"
                   style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical"></textarea>
-                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">＋</button>
+                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">ï¼‹</button>
               </div>
               <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
             </div>
@@ -1147,7 +1147,7 @@ function renderActNotes(notes) {
       <div class="history-dot"></div>
       <div class="act-note-content">
         <div class="act-note-text">${n.note}</div>
-        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} — ${n.noted_by || "Tim"}</div>
+        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} â€” ${n.noted_by || "Tim"}</div>
       </div>
     </div>`).join("");
 }
@@ -1187,7 +1187,7 @@ async function updateFileCountBadges() {
   (data || []).forEach(r => { counts[r.activity_id] = (counts[r.activity_id] || 0) + 1; });
   allActivities.forEach(act => {
     const el = document.getElementById("filecount-" + act.id);
-    if (el) el.textContent = counts[act.id] ? `📎 ${counts[act.id]}` : "";
+    if (el) el.textContent = counts[act.id] ? `ðŸ“Ž ${counts[act.id]}` : "";
   });
 }
 
@@ -1275,7 +1275,7 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
     if (data) currentActId = data.id;
   }
   if (error) { msg.textContent = error.message; msg.className = "form-msg error"; return; }
-  msg.textContent = "✅ Tersimpan!";
+  msg.textContent = "âœ… Tersimpan!";
   msg.className   = "form-msg success";
   setTimeout(() => {
     document.getElementById("actModalOverlay").classList.add("hidden");
@@ -1287,11 +1287,11 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
 
 // ===================== FILE UPLOAD =====================
 function getFileIcon(n) {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "🖼️"
-       : /\.pdf$/i.test(n) ? "📄"
-       : /\.(doc|docx)$/i.test(n) ? "📝"
-       : /\.(xls|xlsx|csv)$/i.test(n) ? "📊"
-       : /\.(ppt|pptx)$/i.test(n) ? "📑" : "📎";
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "ðŸ–¼ï¸"
+       : /\.pdf$/i.test(n) ? "ðŸ“„"
+       : /\.(doc|docx)$/i.test(n) ? "ðŸ“"
+       : /\.(xls|xlsx|csv)$/i.test(n) ? "ðŸ“Š"
+       : /\.(ppt|pptx)$/i.test(n) ? "ðŸ“‘" : "ðŸ“Ž";
 }
 function formatBytes(b) {
   if (!b) return "";
@@ -1310,7 +1310,7 @@ function renderStagingList() {
     const thumb = isImage(sf.file.name)
       ? `<img class="file-thumb" src="${URL.createObjectURL(sf.file)}" alt="">`
       : `<div class="file-thumb-placeholder">${getFileIcon(sf.file.name)}</div>`;
-    const statusMap = { wait:"Menunggu", uploading:"Upload…", ok:"OK", err: sf.errMsg || "Gagal" };
+    const statusMap = { wait:"Menunggu", uploading:"Uploadâ€¦", ok:"OK", err: sf.errMsg || "Gagal" };
     return `
       <div class="file-staging-item ${sf.status==="ok"?"uploaded":""} ${sf.status==="err"?"error-item":""}">
         ${thumb}
@@ -1320,7 +1320,7 @@ function renderStagingList() {
           <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?"100":"0"}%"></div></div>
         </div>
         <span class="file-staging-status ${sf.status}">${statusMap[sf.status]}</span>
-        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">✕</button>` : ""}
+        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">âœ•</button>` : ""}
       </div>`;
   }).join("");
 }
@@ -1342,11 +1342,11 @@ function renderSavedFiles() {
         ${thumb}
         <div class="file-saved-info">
           <div class="file-saved-name" title="${f.file_name}">${f.file_name}</div>
-          <div class="file-saved-meta">${formatBytes(f.file_size)} — ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
+          <div class="file-saved-meta">${formatBytes(f.file_size)} â€” ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
         </div>
         <div class="file-saved-actions">
           <a href="${f.file_url}" target="_blank" class="file-btn-view">Lihat</a>
-          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">✕</button>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">âœ•</button>
         </div>
       </div>`;
   }).join("");
@@ -1380,7 +1380,7 @@ document.getElementById("actUploadAllBtn").addEventListener("click", async () =>
   for (let i = 0; i < pending.length; i++) {
     const sf = pending[i];
     sf.status = "uploading"; renderStagingList();
-    prog.textContent = `Upload ${i+1}/${pending.length}…`;
+    prog.textContent = `Upload ${i+1}/${pending.length}â€¦`;
     const path = `${currentActId}/${Date.now()}-${sf.file.name}`;
     const { error: upErr } = await client.storage.from(BUCKET).upload(path, sf.file, { upsert: true });
     if (upErr) { sf.status = "err"; sf.errMsg = upErr.message; renderStagingList(); continue; }
@@ -1474,7 +1474,7 @@ function renderSidebarSubmenu(items) {
   if (!items.length) { submenu.innerHTML = ""; return; }
   submenu.innerHTML = items.map((item, i) => {
     const cls       = item.status.toLowerCase().replace(/\s+/g, "-");
-    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "…" : item.name;
+    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "â€¦" : item.name;
     return `<li onclick="openProjectDetail(window.allProjects[${i}])">
       <span class="submenu-dot dot-${cls}"></span>
       <span class="submenu-name" title="${item.name.replace(/"/g,"&quot;")}">${shortName}</span>
@@ -1529,250 +1529,3 @@ document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
 loadProjects();
-
-
-// ============================================================
-// DOKUMEN PROYEK — Google Drive Upload
-// ============================================================
-const GDRIVE_FN = `${SUPABASE_URL}/functions/v1/gdrive-upload`;
-const GDRIVE_HEADERS = { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
-
-const DOC_CATEGORIES = [
-  'ToR / Kerangka Acuan', 'Kontrak & Perjanjian', 'Laporan Kemajuan',
-  'Laporan Akhir', 'Foto & Dokumentasi', 'Data & Spreadsheet',
-  'Presentasi', 'Keuangan', 'Lainnya'
-];
-
-// ── State dokumen ─────────────────────────────────────────────
-let allDocuments = [];
-let docFilterProject = '';
-let docFilterCategory = '';
-
-// ── Load semua dokumen dari Supabase ─────────────────────────
-async function loadDocuments() {
-  let query = client.from('projectdocuments').select('*').order('uploadedat', { ascending: false });
-  const { data, error } = await query;
-  if (error) { console.error('loadDocuments:', error.message); return; }
-  allDocuments = data || [];
-  renderDocumentList();
-  renderDocFilterProjects();
-}
-
-// ── Render filter project dropdown ───────────────────────────
-function renderDocFilterProjects() {
-  const sel = document.getElementById('doc-filter-project');
-  if (!sel) return;
-  const projects = [...new Set(allDocuments.map(d => d.projectname))].sort();
-  sel.innerHTML = `<option value="">Semua Proyek</option>` +
-    projects.map(p => `<option value="${escHtml(p)}" ${docFilterProject === p ? 'selected' : ''}>${escHtml(p)}</option>`).join('');
-}
-
-// ── Render list dokumen ───────────────────────────────────────
-function renderDocumentList() {
-  const container = document.getElementById('documentList');
-  if (!container) return;
-
-  let docs = allDocuments;
-  if (docFilterProject) docs = docs.filter(d => d.projectname === docFilterProject);
-  if (docFilterCategory) docs = docs.filter(d => d.category === docFilterCategory);
-
-  const search = (document.getElementById('doc-search')?.value || '').toLowerCase();
-  if (search) docs = docs.filter(d =>
-    d.filename?.toLowerCase().includes(search) ||
-    d.projectname?.toLowerCase().includes(search) ||
-    d.category?.toLowerCase().includes(search)
-  );
-
-  if (!docs.length) {
-    container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center">
-      <div style="font-size:32px;margin-bottom:8px">📂</div>
-      <div style="font-weight:600;color:#0f172a;margin-bottom:4px">Belum ada dokumen</div>
-      <small style="color:#94a3b8">Upload dokumen proyek menggunakan form di atas</small>
-    </div>`;
-    return;
-  }
-
-  // Kelompokkan per proyek
-  const grouped = docs.reduce((acc, d) => {
-    if (!acc[d.projectname]) acc[d.projectname] = [];
-    acc[d.projectname].push(d);
-    return acc;
-  }, {});
-
-  container.innerHTML = Object.entries(grouped).map(([proj, files]) => `
-    <div class="doc-group" style="margin-bottom:20px">
-      <div class="doc-group-title" style="font-size:13px;font-weight:700;color:#2563eb;
-        padding:6px 0;border-bottom:2px solid #dbeafe;margin-bottom:10px">
-        📁 ${escHtml(proj)} <span style="font-weight:400;color:#64748b">(${files.length} file)</span>
-      </div>
-      <div class="doc-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
-        ${files.map(f => renderDocCard(f)).join('')}
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderDocCard(f) {
-  const ext = f.filename?.split('.').pop()?.toLowerCase() || '';
-  const icon = ['pdf'].includes(ext) ? '📄' :
-    ['doc','docx'].includes(ext) ? '📝' :
-    ['xls','xlsx','csv'].includes(ext) ? '📊' :
-    ['ppt','pptx'].includes(ext) ? '📑' :
-    ['jpg','jpeg','png','gif','webp'].includes(ext) ? '🖼️' : '📎';
-  const size = f.filesize ? (f.filesize > 1048576 ? (f.filesize/1048576).toFixed(1)+' MB' :
-    f.filesize > 1024 ? (f.filesize/1024).toFixed(1)+' KB' : f.filesize+' B') : '';
-  const date = f.uploadedat ? new Date(f.uploadedat).toLocaleDateString('id-ID',
-    {day:'2-digit',month:'short',year:'numeric'}) : '';
-
-  return `<div class="doc-card" style="border:1px solid #e2e8f0;border-radius:10px;
-      padding:12px;background:#fff;display:flex;gap:10px;align-items:flex-start">
-    <div style="font-size:28px;flex-shrink:0">${icon}</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:13px;font-weight:600;color:#0f172a;white-space:nowrap;
-        overflow:hidden;text-overflow:ellipsis" title="${escHtml(f.filename)}">${escHtml(f.filename)}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:2px">
-        <span style="background:#f0f9ff;color:#0369a1;padding:1px 6px;border-radius:8px;
-          font-size:10px">${escHtml(f.category || 'Lainnya')}</span>
-        ${size ? `<span style="margin-left:6px">${size}</span>` : ''}
-      </div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:3px">${date}</div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        ${f.web_view_link ? `<a href="${f.web_view_link}" target="_blank"
-          style="font-size:11px;padding:3px 10px;border-radius:6px;background:#2563eb;
-          color:#fff;text-decoration:none">Lihat</a>` : ''}
-        <button onclick="deleteDocument('${f.id}','${escHtml(f.drive_file_id||'')}','${escHtml(f.filename)}')"
-          style="font-size:11px;padding:3px 10px;border-radius:6px;background:#fee2e2;
-          color:#dc2626;border:none;cursor:pointer">Hapus</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-// ── Upload dokumen ────────────────────────────────────────────
-async function uploadDocument() {
-  const fileInput = document.getElementById('doc-file-input');
-  const projSel   = document.getElementById('doc-project-select');
-  const catSel    = document.getElementById('doc-category-select');
-  const msgEl     = document.getElementById('doc-upload-msg');
-  const btn       = document.getElementById('doc-upload-btn');
-  const progEl    = document.getElementById('doc-upload-progress');
-
-  const file     = fileInput?.files[0];
-  const projName = projSel?.value;
-  const category = catSel?.value || 'Lainnya';
-
-  if (!file)     { showDocMsg(msgEl, 'Pilih file terlebih dahulu.', 'error'); return; }
-  if (!projName) { showDocMsg(msgEl, 'Pilih proyek terlebih dahulu.', 'error'); return; }
-  if (file.size > 50 * 1024 * 1024) { showDocMsg(msgEl, 'File terlalu besar (maks 50 MB).', 'error'); return; }
-
-  btn.disabled = true;
-  btn.textContent = 'Mengupload...';
-  if (progEl) progEl.textContent = 'Menghubungi Google Drive...';
-  showDocMsg(msgEl, '', '');
-
-  try {
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('project_name', projName);
-    fd.append('category', category);
-
-    const res = await fetch(GDRIVE_FN, { method: 'POST', headers: GDRIVE_HEADERS, body: fd });
-    const result = await res.json();
-
-    if (!result || !result.success) throw new Error(result?.error || 'Upload ke Drive gagal');
-
-    if (progEl) progEl.textContent = 'Menyimpan metadata...';
-
-    const { error: dbErr } = await client.from('projectdocuments').insert({
-      projectname   : projName,
-      filename      : result.file_name,
-      drive_file_id : result.drive_file_id,
-      web_view_link : result.web_view_link,
-      folder_id     : result.folder_id,
-      category      : category,
-      filesize      : result.file_size,
-      mimetype      : result.mime_type,
-      uploadedby    : 'Tim',
-    });
-    if (dbErr) throw new Error(dbErr.message);
-
-    showDocMsg(msgEl, `✅ ${result.file_name} berhasil diupload!`, 'success');
-    if (progEl) progEl.textContent = '';
-    fileInput.value = '';
-    document.getElementById('doc-selected-name').textContent = 'Belum ada file dipilih';
-    await loadDocuments();
-
-  } catch (err) {
-    showDocMsg(msgEl, `Gagal: ${err.message}`, 'error');
-    if (progEl) progEl.textContent = '';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Upload ke Drive';
-  }
-}
-
-// ── Hapus dokumen ─────────────────────────────────────────────
-window.deleteDocument = async function(id, driveFileId, filename) {
-  if (!confirm(`Hapus file "${filename}"?\nFile juga akan dihapus dari Google Drive.`)) return;
-  try {
-    if (driveFileId) {
-      await fetch(`${GDRIVE_FN}?action=delete`, {
-        method: 'POST', headers: { ...GDRIVE_HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ drive_file_id: driveFileId })
-      });
-    }
-    const { error } = await client.from('projectdocuments').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-    await loadDocuments();
-  } catch (err) {
-    alert('Gagal hapus: ' + err.message);
-  }
-};
-
-function showDocMsg(el, msg, type) {
-  if (!el) return;
-  el.textContent = msg;
-  el.className = 'form-msg' + (type ? ' ' + type : ' hidden');
-  el.style.display = msg ? 'block' : 'none';
-}
-
-// ── Event listeners tab documents ────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  // Upload button
-  const uploadBtn = document.getElementById('doc-upload-btn');
-  if (uploadBtn) uploadBtn.addEventListener('click', uploadDocument);
-
-  // File input label
-  const docFileInput = document.getElementById('doc-file-input');
-  if (docFileInput) docFileInput.addEventListener('change', function() {
-    const nameEl = document.getElementById('doc-selected-name');
-    if (nameEl) nameEl.textContent = this.files[0]?.name || 'Belum ada file dipilih';
-  });
-
-  // Filter proyek
-  const docProjFilter = document.getElementById('doc-filter-project');
-  if (docProjFilter) docProjFilter.addEventListener('change', function() {
-    docFilterProject = this.value;
-    renderDocumentList();
-  });
-
-  // Filter kategori
-  const docCatFilter = document.getElementById('doc-filter-category');
-  if (docCatFilter) docCatFilter.addEventListener('change', function() {
-    docFilterCategory = this.value;
-    renderDocumentList();
-  });
-
-  // Search
-  const docSearch = document.getElementById('doc-search');
-  if (docSearch) docSearch.addEventListener('input', renderDocumentList);
-});
-
-// ── Patch switchTab agar load dokumen saat tab dibuka ─────────
-(function() {
-  const _origSwitch = window.switchTab;
-  window.switchTab = function(tab) {
-    _origSwitch(tab);
-    if (tab === 'documents') loadDocuments();
-  };
-})();
