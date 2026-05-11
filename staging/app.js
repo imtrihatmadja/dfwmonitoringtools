@@ -467,15 +467,19 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
         const shouldAddHistory = nextNote || nextActual !== prevActual;
 
         if (shouldAddHistory) {
-          await client.from("indicator_updates").insert({
+          const newHistoryItem = {
             indicator_id   : ind.id,
             project_name   : p.name,
             indicator_name : ind.name.trim(),
             actual_value   : nextActual,
             note           : nextNote || null,
             updated_by     : "Tim",
-          });
+          };
+          const { data: histData } = await client.from("indicator_updates").insert(newHistoryItem).select().single();
+          indicators[i].history = [...(indicators[i].history || []), histData || { ...newHistoryItem, created_at: new Date().toISOString() }];
         }
+        indicators[i].previous_actual = nextActual;
+        indicators[i].update_note = "";
       } else {
         const { data: indData, error: indErr } = await client
           .from("project_indicators")
@@ -487,15 +491,18 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
         keptIndicatorIds.push(indData.id);
 
         if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
-          await client.from("indicator_updates").insert({
+          const newHistoryItem = {
             indicator_id   : indData.id,
             project_name   : p.name,
             indicator_name : ind.name.trim(),
             actual_value   : Number(ind.actual) || 0,
             note           : ind.update_note ? ind.update_note.trim() : null,
             updated_by     : "Tim",
-          });
+          };
+          const { data: histData } = await client.from("indicator_updates").insert(newHistoryItem).select().single();
+          indicators[i].history = [...(indicators[i].history || []), histData || { ...newHistoryItem, created_at: new Date().toISOString() }];
         }
+        indicators[i].update_note = "";
       }
     }
 
@@ -1094,6 +1101,7 @@ window.fillFormEdit = function (idx) {
   renderOutcomeList();
   indicators = item.project_indicators.map(ind => {
     const latestActual = getLatestActual(ind);
+    const existingState = (indicators || []).find(x => x.id && x.id === ind.id);
     return {
       id              : ind.id,
       name            : ind.indicator_name,
@@ -1103,8 +1111,8 @@ window.fillFormEdit = function (idx) {
       actual          : latestActual,
       previous_actual : latestActual,
       update_note     : "",
-      history         : ind.indicator_updates  || [],
-      evidence        : ind.indicator_evidence || [],
+      history         : existingState?.history || ind.indicator_updates  || [],
+      evidence        : existingState?.evidence || ind.indicator_evidence || [],
     };
   });
   renderIndicatorList();
