@@ -758,6 +758,9 @@ window.openProjectDetail = async function (proj) {
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
   document.getElementById("tab-detail").classList.add("active");
+  // Tampilkan tombol print di topbar
+  const _pb = document.getElementById("topbarPrintBtn");
+  if (_pb) _pb.style.display = "inline-flex";
   renderDetailHeader(proj);
   await loadActivities(proj.name);
   renderIndicatorUpdatePanel(proj);
