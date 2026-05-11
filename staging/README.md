@@ -1,58 +1,46 @@
-# PMIS DFW Indonesia
+# ProMonitor PMIS — DFW Indonesia  
+## Versi 5 / Tahap 1 — Siap Deploy
 
-## File Structure
-```
-index.html        ← Struktur halaman (diperbarui: mobile + print)
-app.js            ← Logika utama (TIDAK diubah)
-style.css         ← Styling (diperbarui: mobile responsive + print styles)
-print-report.js   ← BARU: fungsi mobile sidebar + cetak laporan
-schema.sql        ← Skema database Supabase (TIDAK diubah)
-```
+---
 
-## Cara Deploy ke GitHub Pages
+## ⚠️  WAJIB: Jalankan SQL dulu sebelum upload file
 
-1. Buka https://github.com → New Repository (Public)
-2. Upload **5 file**: `index.html`, `app.js`, `style.css`, `print-report.js`, `schema.sql`
-3. Settings → Pages → Source: Deploy from branch → main / root → Save
-4. Tunggu 1-2 menit → akses di `https://username.github.io/nama-repo/`
+1. Buka https://supabase.com → project Anda → **SQL Editor**  
+2. Copy-paste isi file `schema_v5_tahap1.sql` → klik **Run**  
+3. Tunggu sampai tidak ada error, baru lanjut ke deploy file.
 
-## PENTING: Jangan buka index.html langsung dari folder!
-File ini TIDAK akan berfungsi jika dibuka dengan double-click (file://).
-Harus diakses melalui web server (GitHub Pages, Netlify, Live Server, dll).
+---
 
-## Fitur Baru
+## Deploy ke GitHub Pages
 
-### Mobile Responsive
-- Sidebar berubah jadi drawer (geser dari kiri) di mobile
-- Hamburger button (☰) di topbar untuk membuka sidebar
-- Stat grid 2 kolom di mobile
-- Tabel dengan scroll horizontal
-- Panel detail stack vertikal di mobile
-- Modal muncul dari bawah layar (bottom sheet)
+1. Buka repo `dfwmonitoringtools` di GitHub  
+2. Upload / replace semua file berikut:
+   - `index.html`
+   - `app.js`
+   - `style.css`
+   - `documents.js`
+   - `impact.js`
+   - `print-report.js`
+   - `schema_v5_tahap1.sql` *(referensi, tidak dieksekusi browser)*
+3. Tulis pesan commit, klik **Commit changes**  
+4. Tunggu 1–2 menit → buka URL GitHub Pages Anda
 
-### Fitur Cetak Laporan (Print Report)
-- Tombol 🖨️ Cetak Laporan muncul saat membuka detail proyek
-- Pilih bahasa: 🇮🇩 Bahasa Indonesia atau 🇬🇧 English
-- Laporan terdiri dari 3 halaman A4:
-  - **Hal. 1**: Cover, ringkasan eksekutif, progres keseluruhan
-  - **Hal. 2**: Tabel capaian indikator + aktivitas (berjalan & belum mulai)
-  - **Hal. 3**: Realisasi anggaran, narasi & lessons learned, tanda tangan
-- Print via browser (Ctrl+P) → bisa simpan sebagai PDF
+---
 
-## Update Supabase (jalankan di SQL Editor jika belum)
-```sql
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget_approved numeric DEFAULT 0;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget_actual   numeric DEFAULT 0;
+## Fitur baru di v5 (Tahap 1)
 
-CREATE TABLE IF NOT EXISTS budget_updates (
-  id           uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  project_name text NOT NULL REFERENCES projects(name) ON DELETE CASCADE,
-  actual_value numeric NOT NULL DEFAULT 0,
-  note         text,
-  updated_by   text,
-  created_at   timestamptz DEFAULT now()
-);
-ALTER TABLE budget_updates ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_all" ON budget_updates;
-CREATE POLICY "allow_all" ON budget_updates FOR ALL USING (true) WITH CHECK (true);
-```
+| # | Fitur | Detail |
+|---|---|---|
+| 1 | **project_id di semua tabel** | Relasi UUID menggantikan project_name sebagai kunci utama |
+| 2 | **Soft delete / Arsip** | Hapus = arsip, data tetap aman. Tab baru "Arsip Proyek" di sidebar |
+| 3 | **Pulihkan proyek** | Proyek yang diarsipkan bisa dikembalikan dengan tombol Pulihkan |
+| 4 | **Audit log** | Setiap simpan/edit/arsip/pulihkan tercatat di tabel audit_log |
+| 5 | **DB trigger rename** | Ubah nama proyek → semua tabel turunan ikut update otomatis via trigger |
+| 6 | **Save lebih aman** | Upsert menangkap UUID dari Supabase dan meneruskan ke semua insert turunan |
+
+---
+
+## Catatan pengembangan selanjutnya
+
+- `AUDIT_USER = "Tim"` di `app.js` → ganti dengan nama login user setelah fitur auth ditambahkan
+- Tahap 2 berikutnya: Login Gmail + Role access (Admin / Program Manager / Staff)

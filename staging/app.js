@@ -13,8 +13,10 @@ let currentActProject = "";
 let stagedFiles     = [];
 let outcomes        = [];
 let editingProjectOriginalName = null;
-let originalIndicatorIds = [];
-let savedFiles      = [];
+let editingProjectId          = null;
+let originalIndicatorIds      = [];
+let savedFiles                = [];
+const AUDIT_USER              = "Tim";
 const BUCKET        = "activity-files";
 
 // ===================== PROGRESS HELPERS =====================
@@ -414,17 +416,34 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     const prevProj = (window.allProjects || []).find(x => x.name === p.name);
     const prevBudgetActual = prevProj ? (prevProj.budget_actual || 0) : -1;
 
-    const { error: pErr } = await client.from("projects").upsert(p, { onConflict: "name" });
+    const upsertPayload = { ...p };
+    if (editingProjectId) upsertPayload.id = editingProjectId;
+    const { data: pSaved, error: pErr } = await client
+      .from("projects").upsert(upsertPayload, { onConflict: "name" }).select("id").single();
     if (pErr) throw new Error("Gagal simpan proyek: " + pErr.message);
+    const savedProjectId = pSaved?.id || editingProjectId || null;
+    if (savedProjectId) editingProjectId = savedProjectId;
+    client.from("audit_log").insert({
+      project_id: savedProjectId, project_name: p.name,
+      entity_type: "project", action: editingProjectOriginalName ? "update" : "create",
+      changed_by: AUDIT_USER,
+      new_values: { name: p.name, status: p.status, budget_approved: p.budget_approved, budget_actual: p.budget_actual },
+    }).then(()=>{}).catch(()=>{});
 
     // Catat histori budget_actual jika berubah (atau pertama kali & > 0)
     if (p.budget_actual > 0 && p.budget_actual !== prevBudgetActual) {
       await client.from("budget_updates").insert({
         project_name : p.name,
+        project_id   : savedProjectId || editingProjectId || null,
         actual_value : p.budget_actual,
         note         : null,
-        updated_by   : "Tim",
+        updated_by   : AUDIT_USER,
       });
+      client.from("audit_log").insert({
+        project_id: savedProjectId||editingProjectId||null, project_name: p.name,
+        entity_type: "budget", action: "update", changed_by: AUDIT_USER,
+        new_values: { budget_approved: p.budget_approved, budget_actual: p.budget_actual },
+      }).then(()=>{}).catch(()=>{});
     }
 
         // Simpan outcomes: hapus lama, insert baru
@@ -434,7 +453,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     const validOutcomes = outcomes.filter(oc => oc.text && oc.text.trim());
     if (validOutcomes.length) {
       await client.from("project_outcomes").insert(
-        validOutcomes.map((oc, idx) => ({ project_name: p.name, outcome_text: oc.text.trim(), sort_order: idx }))
+        validOutcomes.map((oc, idx) => ({ project_name: p.name, project_id: savedProjectId||editingProjectId||null, outcome_text: oc.text.trim(), sort_order: idx }))
       );
     }
 
@@ -446,6 +465,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
 
       const payload = {
         project_name   : p.name,
+        project_id     : savedProjectId || editingProjectId || null,
         indicator_name : ind.name.trim(),
         type           : ind.type,
         target         : Number(ind.target) || 0,
@@ -467,19 +487,19 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
         const shouldAddHistory = nextNote || nextActual !== prevActual;
 
         if (shouldAddHistory) {
-          const newHistoryItem = {
+          const { data: histSaved } = await client.from("indicator_updates").insert({
             indicator_id   : ind.id,
+            project_id     : savedProjectId || editingProjectId || null,
             project_name   : p.name,
             indicator_name : ind.name.trim(),
             actual_value   : nextActual,
             note           : nextNote || null,
-            updated_by     : "Tim",
-          };
-          const { data: histData } = await client.from("indicator_updates").insert(newHistoryItem).select().single();
-          indicators[i].history = [...(indicators[i].history || []), histData || { ...newHistoryItem, created_at: new Date().toISOString() }];
+            updated_by     : AUDIT_USER,
+          }).select().single();
+          indicators[i].history = [...(indicators[i].history||[]), histSaved||{indicator_id:ind.id,actual_value:nextActual,note:nextNote||null,updated_by:AUDIT_USER,created_at:new Date().toISOString()}];
+          indicators[i].previous_actual = nextActual;
+          indicators[i].update_note = "";
         }
-        indicators[i].previous_actual = nextActual;
-        indicators[i].update_note = "";
       } else {
         const { data: indData, error: indErr } = await client
           .from("project_indicators")
@@ -491,18 +511,18 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
         keptIndicatorIds.push(indData.id);
 
         if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
-          const newHistoryItem = {
+          const { data: newHistSaved } = await client.from("indicator_updates").insert({
             indicator_id   : indData.id,
+            project_id     : savedProjectId || editingProjectId || null,
             project_name   : p.name,
             indicator_name : ind.name.trim(),
             actual_value   : Number(ind.actual) || 0,
             note           : ind.update_note ? ind.update_note.trim() : null,
-            updated_by     : "Tim",
-          };
-          const { data: histData } = await client.from("indicator_updates").insert(newHistoryItem).select().single();
-          indicators[i].history = [...(indicators[i].history || []), histData || { ...newHistoryItem, created_at: new Date().toISOString() }];
+            updated_by     : AUDIT_USER,
+          }).select().single();
+          indicators[i].history = [...(indicators[i].history||[]), newHistSaved||{indicator_id:indData.id,actual_value:Number(ind.actual)||0,updated_by:AUDIT_USER,created_at:new Date().toISOString()}];
+          indicators[i].update_note = "";
         }
-        indicators[i].update_note = "";
       }
     }
 
@@ -511,14 +531,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       await client.from("project_indicators").delete().in("id", removedIds);
     }
 
-    if (editingProjectOriginalName && editingProjectOriginalName !== p.name) {
-      await client.from("indicator_updates").update({ project_name: p.name }).eq("project_name", activeProjectName);
-      await client.from("indicator_evidence").update({ project_name: p.name }).eq("project_name", activeProjectName);
-      await client.from("budget_updates").update({ project_name: p.name }).eq("project_name", activeProjectName);
-      await client.from("project_activities").update({ project_name: p.name }).eq("project_name", activeProjectName);
-      await client.from("activity_notes").update({ project_name: p.name }).eq("project_name", activeProjectName);
-      await client.from("activity_files").update({ project_name: p.name }).eq("project_name", activeProjectName);
-    }
+    // Rename propagasi otomatis via DB trigger: sync_project_name_on_rename
 
     msg.textContent = "✅ Data berhasil disimpan!";
     msg.className   = "form-msg success";
@@ -527,6 +540,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       resetForm(); setStep(1); switchTab("dashboard");
     }, 1800);
     editingProjectOriginalName = p.name;
+    editingProjectId = savedProjectId || editingProjectId || null;
     originalIndicatorIds = indicators.map(ind => ind.id).filter(Boolean);
     await loadProjects();
 
@@ -550,14 +564,15 @@ function resetForm() {
   outcomes = [];
   renderOutcomeList();
   editingProjectOriginalName = null;
-  originalIndicatorIds = [];
+  editingProjectId          = null;
+  originalIndicatorIds      = [];
   // progress dihitung otomatis
   indicators = [];
 }
 
 // ===================== LOAD PROJECTS =====================
 async function loadProjects() {
-  const { data: projects, error } = await client.from("projects").select().order("updated_at", { ascending: false });
+  const { data: projects, error } = await client.from("projects").eq("archived", false).select().order("updated_at", { ascending: false });
   if (error) { console.error(error); return; }
   const { data: inds  } = await client.from("project_indicators").select();
   const { data: upds  } = await client.from("indicator_updates").select().order("created_at", { ascending: true });
@@ -650,7 +665,7 @@ function renderCards(items) {
         </div>` : ""}
                 ${(item.goal || (item.project_outcomes && item.project_outcomes.length)) ? `
           <div style="border-top:1px solid #f1f5f9;margin:8px 0 6px;padding-top:8px">
-            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">ðŸŽ¯ Goal:</span> ${item.goal}</div>` : ""}
+            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">🎯 Goal:</span> ${item.goal}</div>` : ""}
             ${item.project_outcomes && item.project_outcomes.length ? `
               <div style="font-size:11px;color:#475569">
                 <span style="font-weight:700;color:#7c3aed">ðŸ† Outcomes (${item.project_outcomes.length}):</span>
@@ -780,7 +795,7 @@ function renderDetailHeader(proj) {
         ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:600px">${proj.description}</p>` : ""}
         ${proj.goal ? `
           <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">ðŸŽ¯ GOAL</div>
+            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">🎯 GOAL</div>
             <div style="font-size:13px;color:#1e3a5f;line-height:1.5">${proj.goal}</div>
           </div>
         ` : ""}
@@ -1030,7 +1045,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
       indicator_name : indName,
       actual_value   : newTotal,
       note,
-      updated_by     : "Tim",
+      updated_by     : AUDIT_USER,
     });
 
     // Kosongkan input
@@ -1084,6 +1099,7 @@ document.getElementById("editProjectBtn").addEventListener("click", () => {
 window.fillFormEdit = function (idx) {
   const item = window.allProjects[idx];
   editingProjectOriginalName = item.name;
+  editingProjectId          = item.id || null;
   originalIndicatorIds = (item.project_indicators || []).map(ind => ind.id).filter(Boolean);
   document.getElementById("f-name").value       = item.name;
   document.getElementById("f-location").value   = item.location;
@@ -1101,7 +1117,6 @@ window.fillFormEdit = function (idx) {
   renderOutcomeList();
   indicators = item.project_indicators.map(ind => {
     const latestActual = getLatestActual(ind);
-    const existingState = (indicators || []).find(x => x.id && x.id === ind.id);
     return {
       id              : ind.id,
       name            : ind.indicator_name,
@@ -1111,8 +1126,8 @@ window.fillFormEdit = function (idx) {
       actual          : latestActual,
       previous_actual : latestActual,
       update_note     : "",
-      history         : existingState?.history || ind.indicator_updates  || [],
-      evidence        : existingState?.evidence || ind.indicator_evidence || [],
+      history         : ind.indicator_updates  || [],
+      evidence        : ind.indicator_evidence || [],
     };
   });
   renderIndicatorList();
@@ -1124,6 +1139,55 @@ window.fillFormEdit = function (idx) {
   document.getElementById("tab-input").classList.add("active");
   setStep(1);
   window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+
+// ===================== RESTORE & ARSIP =====================
+window.restoreProject = async function (id, name) {
+  if (!confirm(`Pulihkan proyek "${name}" dari arsip?`)) return;
+  const { error } = await client.from("projects").update({
+    archived: false, archived_at: null, archived_by: null
+  }).eq("name", name);
+  if (error) { alert("Gagal pulihkan: " + error.message); return; }
+  client.from("audit_log").insert({
+    project_id: id||null, project_name: name, entity_type: "project", action: "restore", changed_by: AUDIT_USER,
+  }).then(()=>{}).catch(()=>{});
+  await loadProjects();
+  if (document.getElementById("archivedProjectList")) loadArchivedProjects();
+};
+
+window.loadArchivedProjects = async function () {
+  const container = document.getElementById("archivedProjectList");
+  if (!container) return;
+  const { data, error } = await client.from("projects")
+    .eq("archived", true)
+    .select("id, name, owner, donor, status, archived_at, archived_by")
+    .order("archived_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  if (!data || !data.length) {
+    container.innerHTML = '<div style="padding:20px;font-size:13px;color:#94a3b8;">Tidak ada proyek yang diarsipkan.</div>';
+    return;
+  }
+  container.innerHTML = data.map(p => `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:13px;color:#0f172a">${p.name}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:3px">${p.owner}${p.donor?' &middot; '+p.donor:''} &nbsp;&middot;&nbsp; Diarsipkan ${p.archived_at?new Date(p.archived_at).toLocaleDateString('id-ID'):'-'} oleh ${p.archived_by||'-'}</div>
+      </div>
+      <button class="btn-secondary btn-sm" onclick="restoreProject('${p.id}','${p.name.replace(/'/g,"\\'")}')">Pulihkan</button>
+    </div>
+  `).join("");
+};
+
+// ===================== AUDIT LOG VIEWER =====================
+window.loadProjectAuditLog = async function (projectId, projectName) {
+  const { data, error } = await client.from("audit_log")
+    .eq("project_id", projectId)
+    .select("entity_type, action, changed_by, new_values, note, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) { console.error(error); return []; }
+  return data || [];
 };
 
 // ===================== AKTIVITAS =====================
@@ -1497,34 +1561,21 @@ window.deleteSavedFile = async function (fileId, fileUrl) {
 
 // ===================== HAPUS PROYEK =====================
 window.deleteProject = async function (id, name) {
-  if (!confirm(`Hapus proyek "${name}"?\nIndikator, aktivitas, dan file terkait juga akan terhapus.`)) return;
-  const { data: indList } = await client.from("project_indicators").select("id").eq("project_name", name);
-  const indIds = (indList || []).map(i => i.id);
-  if (indIds.length) {
-    await client.from("indicator_evidence").delete().in("indicator_id", indIds);
-    await client.from("indicator_updates").delete().in("indicator_id", indIds);
-  }
-  await client.from("budget_updates").delete().eq("project_name", name);
-  await client.from("project_indicators").delete().eq("project_name", name);
-  const { data: actList } = await client.from("project_activities").select("id").eq("project_name", name);
-  const actIds = (actList || []).map(a => a.id);
-  if (actIds.length) {
-    await client.from("activity_notes").delete().in("activity_id", actIds);
-    const { data: files } = await client.from("activity_files").select("file_url").in("activity_id", actIds);
-    if (files && files.length) {
-      await client.storage.from(BUCKET).remove(files.map(f => {
-        const p = f.file_url.split(BUCKET + "/");
-        return p[1] ? decodeURIComponent(p[1]) : null;
-      }).filter(Boolean));
-    }
-    await client.from("activity_files").delete().in("activity_id", actIds);
-  }
-  await client.from("project_activities").delete().eq("project_name", name);
-  const { error } = await client.from("projects").delete().eq("id", id);
-  if (error) { alert("Gagal hapus proyek: " + error.message); return; }
+  if (!confirm(`Arsipkan proyek "${name}"?\n\nOK = Arsipkan (data tetap aman)\nCancel = Batal`)) return;
+  const { error } = await client.from("projects").update({
+    archived    : true,
+    archived_at : new Date().toISOString(),
+    archived_by : AUDIT_USER,
+  }).eq("name", name);
+  if (error) { alert("Gagal arsipkan proyek: " + error.message); return; }
+  client.from("audit_log").insert({
+    project_id: id||null, project_name: name,
+    entity_type: "project", action: "archive", changed_by: AUDIT_USER,
+  }).then(()=>{}).catch(()=>{});
   if (currentProject && currentProject.name === name) { currentProject = null; switchTab("dashboard"); }
   await loadProjects();
 };
+
 
 // ===================== HAPUS RIWAYAT INDIKATOR =====================
 window.clearIndicatorHistory = async function (indicatorId) {

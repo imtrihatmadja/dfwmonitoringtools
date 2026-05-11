@@ -30,6 +30,7 @@
       <li data-tab="projects"><span class="nav-icon"><i class="fa-solid fa-table-cells-large"></i></span><span>Daftar Proyek</span></li>
       <ul class="nav-submenu" id="projectSubmenu"></ul>
       <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
+      <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
   </div>
@@ -328,6 +329,22 @@
         <button class="btn-primary" id="saveActivityBtn">Simpan Aktivitas</button>
       </div>
     </div>
+  </div>
+</div>
+
+
+
+<!-- ===== TAB ARSIP PROYEK ===== -->
+<div class="tab-content" id="tab-archive">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:16px;font-weight:700;color:#0f172a">📦 Arsip Proyek</div>
+      <div style="font-size:12px;color:#94a3b8;margin-top:2px">Proyek yang diarsipkan dapat dipulihkan kapan saja</div>
+    </div>
+    <button class="btn-secondary btn-sm" onclick="loadArchivedProjects()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+  </div>
+  <div id="archivedProjectList">
+    <div style="padding:20px;font-size:13px;color:#94a3b8;">Klik menu <strong>Arsip Proyek</strong> di sidebar untuk memuat data.</div>
   </div>
 </div>
 
