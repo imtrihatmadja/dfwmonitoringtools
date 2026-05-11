@@ -214,6 +214,8 @@ function switchTab(tab) {
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
   if (tab !== "detail") currentProject = null;
+  const printBtn = document.getElementById('topbarPrintBtn');
+  if (printBtn) printBtn.style.display = (tab === "detail") ? 'inline-flex' : 'none';
   const li = document.querySelector(`[data-tab="${tab}"]`);
   if (li) li.classList.add("active");
   const targetTab = document.getElementById("tab-" + tab);

@@ -58,6 +58,7 @@
       <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
       <span class="realtime-badge">🟢 Realtime ON</span>
       <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
+      <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
     </div>
   </div>
 
@@ -226,7 +227,6 @@
           <div style="display:flex;align-items:center;gap:8px">
             <span class="panel-count" id="indCount">0 indikator</span>
             <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit Proyek</button>
-            <button class="btn-primary btn-sm" onclick="openPrintModal()" title="Cetak Laporan">🖨️ Print</button>
           </div>
         </div>
         <div class="panel-scroll-wrap" id="indScrollWrap">
