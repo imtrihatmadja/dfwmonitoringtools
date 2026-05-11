@@ -509,17 +509,15 @@ async function generateAndPrint(lang) {
     const c=_statusColor(act.status), prog=Number(act.progress)||0;
     const notes=(act.activity_notes||[]);
     const noteSummary = notes.length
-      ? [...notes].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,2)
-          .map(n=>`<div style="font-size:8.5pt;color:#92400e;line-height:1.4">⚠️ ${n.note}</div>`).join('')
+      ? [...notes].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+          .map(n=>`<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:4px"><span style="color:#f59e0b;flex-shrink:0">⚠️</span><span style="font-size:8.5pt;color:#92400e;line-height:1.5">${n.note}</span></div>`).join('')
       : `<span style="color:#94a3b8;font-size:8.5pt;font-style:italic">—</span>`;
     return `<tr>
       <td class="ctr" style="font-weight:600;color:#64748b">${i+1}</td>
       <td><strong style="color:#0f172a">${act.title}</strong>${act.description?`<div style="font-size:8.5pt;color:#64748b;margin-top:2px">${act.description}</div>`:''}</td>
       <td style="font-size:9pt;white-space:nowrap">${act.pic||'—'}</td>
-      <td class="ctr" style="font-size:9pt">${_rptDate(act.start_date)}</td>
-      <td class="ctr" style="font-size:9pt">${_rptDate(act.due_date)}</td>
       <td class="ctr">${badge(act.status,c)}</td>
-      <td>${pbar(prog,c)}</td>
+      <td class="ctr"><strong style="font-size:11pt;color:${c}">${prog}%</strong></td>
       <td>${noteSummary}</td>
     </tr>`;
   }).join('');
@@ -530,18 +528,17 @@ async function generateAndPrint(lang) {
     <table class="tbl">
       <thead><tr>
         <th class="ctr" style="width:28px">#</th>
-        <th style="min-width:130px">${L.actTitle}</th>
+        <th>${L.actTitle}</th>
         <th style="width:80px">${L.pic}</th>
-        <th class="ctr" style="width:72px">${L.startAct}</th>
-        <th class="ctr" style="width:72px">${L.dueAct}</th>
-        <th class="ctr" style="width:68px">${L.actStatus}</th>
-        <th style="width:110px">${L.actProg}</th>
-        <th style="min-width:110px">${L.actNotes}</th>
+        <th class="ctr" style="width:72px">${L.actStatus}</th>
+        <th class="ctr" style="width:60px">${L.actProg}</th>
+        <th style="min-width:160px">${L.actNotes}</th>
       </tr></thead>
       <tbody>${actRows}</tbody>
       <tfoot><tr>
-        <td colspan="6" style="text-align:right;color:#1e40af">${L.avgAct}:</td>
-        <td colspan="2">${pbar(avgAct??0)}</td>
+        <td colspan="4" style="text-align:right;color:#1e40af">${L.avgAct}:</td>
+        <td class="ctr"><strong style="font-size:11pt;color:${_pctColor(avgAct??0)}">${avgAct??0}%</strong></td>
+        <td></td>
       </tr></tfoot>
     </table>
   </div>` : '';
