@@ -12,6 +12,8 @@ let currentActId    = null;
 let currentActProject = "";
 let stagedFiles     = [];
 let outcomes        = [];
+let editingProjectOriginalName = null;
+let originalIndicatorIds = [];
 let savedFiles      = [];
 const BUCKET        = "activity-files";
 
@@ -109,9 +111,9 @@ function renderPriorityIndicators(item, projIndex) {
   if (!lowInds.length) return `
     <div class="priority-ind-section">
       <div class="priority-ind-title">
-        <span class="priority-ind-icon">✅</span>
-        <span>Semua indikator ≥ 50%</span>
-        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail →</button>
+        <span class="priority-ind-icon">âœ…</span>
+        <span>Semua indikator â‰¥ 50%</span>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail â†’</button>
       </div>
     </div>`;
 
@@ -132,13 +134,13 @@ function renderPriorityIndicators(item, projIndex) {
   return `
     <div class="priority-ind-section">
       <div class="priority-ind-title">
-        <span class="priority-ind-icon">⚠️</span>
+        <span class="priority-ind-icon">âš ï¸</span>
         <span>Prioritas Kerja</span>
         <span class="priority-ind-badges">
           ${critCount > 0 ? `<span class="priority-tier-badge kritis">${critCount} Kritis</span>` : ""}
           ${warnCount > 0 ? `<span class="priority-tier-badge perhatian">${warnCount} Perhatian</span>` : ""}
         </span>
-        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail →</button>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail â†’</button>
       </div>
       <div class="priority-ind-list">
         ${shown.map(ind => {
@@ -156,13 +158,13 @@ function renderPriorityIndicators(item, projIndex) {
               <span class="priority-ind-pct" style="color:${t.color}">${ind.pct}%</span>
               <button class="priority-goto-btn" style="color:${t.color};border-color:${t.border}"
                 onclick="jumpToIndicator(${projIndex},'${escHtml(ind.name)}',event)"
-                title="Buka & scroll ke indikator ini">↗</button>
+                title="Buka & scroll ke indikator ini">â†—</button>
             </div>
           </div>`;
         }).join("")}
         ${rest > 0 ? `
           <button class="priority-ind-more-btn" onclick="jumpToProject(${projIndex}, event)">
-            +${rest} indikator lainnya — lihat semua
+            +${rest} indikator lainnya â€” lihat semua
           </button>` : ""}
       </div>
     </div>`;
@@ -201,6 +203,7 @@ window.jumpToProject = async function(projIndex, event) {
 const tabTitles = {
   dashboard : ["Dashboard",     "Selamat datang, pantau semua proyek Anda"],
   projects  : ["Daftar Proyek", "Semua data proyek yang dimonitor"],
+  documents : ["Dokumen",       "Manajemen dokumen proyek via Google Drive"],
   input     : ["Tambah Proyek", "Tambah proyek baru"],
   detail    : ["Detail Proyek", ""]
 };
@@ -235,7 +238,7 @@ function setStep(n) {
   });
 }
 
-// Step 1 → Step 2
+// Step 1 â†’ Step 2
 
 document.getElementById("addOutcomeBtn").addEventListener("click", () => {
   outcomes.push({ text: "" });
@@ -259,7 +262,7 @@ document.getElementById("backStep1Btn").addEventListener("click", () => setStep(
 
 // ===================== INDICATOR BUILDER =====================
 document.getElementById("addIndicatorBtn").addEventListener("click", () => {
-  indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, update_note: "", history: [], evidence: [] });
+  indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, previous_actual: 0, update_note: "", history: [], evidence: [] });
   renderIndicatorList();
 });
 
@@ -280,7 +283,7 @@ function renderIndicatorList() {
           <span class="badge badge-${(ind.type || "Output").toLowerCase()}">${ind.type || "Output"}</span>
           ${ind.name || `Indikator ${i + 1}`}
         </div>
-        <button class="btn-remove" onclick="removeIndicator(${i})">✕</button>
+        <button class="btn-remove" onclick="removeIndicator(${i})">âœ•</button>
       </div>
       <div class="indicator-input-row">
         <div class="form-group">
@@ -315,7 +318,7 @@ function renderIndicatorList() {
         <div class="form-group full">
           <label>Catatan Perkembangan <span style="font-weight:400;color:#94a3b8">(opsional)</span></label>
           <textarea id="ind-note-${i}" rows="2"
-            placeholder="Perkembangan awal, kendala, atau temuan lapangan…"
+            placeholder="Perkembangan awal, kendala, atau temuan lapanganâ€¦"
             oninput="indicators[${i}].update_note=this.value"
             style="font-size:13px">${escHtml(ind.update_note)}</textarea>
         </div>
@@ -378,7 +381,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
   const msg = document.getElementById("formMsg");
   const btn = document.getElementById("submitAllBtn");
   msg.className = "form-msg hidden";
-  btn.textContent = "Menyimpan…";
+  btn.textContent = "Menyimpanâ€¦";
   btn.disabled = true;
 
   try {
@@ -425,7 +428,9 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     }
 
         // Simpan outcomes: hapus lama, insert baru
-    await client.from("project_outcomes").delete().eq("project_name", p.name);
+    const activeProjectName = editingProjectOriginalName || p.name;
+
+    await client.from("project_outcomes").delete().eq("project_name", activeProjectName);
     const validOutcomes = outcomes.filter(oc => oc.text && oc.text.trim());
     if (validOutcomes.length) {
       await client.from("project_outcomes").insert(
@@ -433,49 +438,95 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       );
     }
 
-    await client.from("project_indicators").delete().eq("project_name", p.name);
+    const keptIndicatorIds = [];
 
     for (let i = 0; i < indicators.length; i++) {
       const ind = indicators[i];
-      if (!ind.name) continue;
-      const { data: indData, error: indErr } = await client
-        .from("project_indicators")
-        .insert({
-          project_name   : p.name,
-          indicator_name : ind.name,
-          type           : ind.type,
-          target         : Number(ind.target) || 0,
-          unit           : ind.unit   || null,
-          actual         : ind.actual || 0,
-        })
-        .select().single();
-      if (indErr) { console.warn(indErr.message); continue; }
-      if (ind.actual > 0 || ind.update_note) {
-        await client.from("indicator_updates").insert({
-          indicator_id   : indData.id,
-          project_name   : p.name,
-          indicator_name : ind.name,
-          actual_value   : ind.actual    || 0,
-          note           : ind.update_note || null,
-          updated_by     : "Tim",
-        });
+      if (!ind.name || !ind.name.trim()) continue;
+
+      const payload = {
+        project_name   : p.name,
+        indicator_name : ind.name.trim(),
+        type           : ind.type,
+        target         : Number(ind.target) || 0,
+        unit           : ind.unit || null,
+        actual         : Number(ind.actual) || 0,
+      };
+
+      if (ind.id) {
+        const { error: updErr } = await client
+          .from("project_indicators")
+          .update(payload)
+          .eq("id", ind.id);
+        if (updErr) { console.warn(updErr.message); continue; }
+        keptIndicatorIds.push(ind.id);
+
+        const prevActual = Number(ind.previous_actual ?? 0);
+        const nextActual = Number(ind.actual ?? 0);
+        const nextNote   = ind.update_note ? ind.update_note.trim() : "";
+        const shouldAddHistory = nextNote || nextActual !== prevActual;
+
+        if (shouldAddHistory) {
+          await client.from("indicator_updates").insert({
+            indicator_id   : ind.id,
+            project_name   : p.name,
+            indicator_name : ind.name.trim(),
+            actual_value   : nextActual,
+            note           : nextNote || null,
+            updated_by     : "Tim",
+          });
+        }
+      } else {
+        const { data: indData, error: indErr } = await client
+          .from("project_indicators")
+          .insert(payload)
+          .select().single();
+        if (indErr) { console.warn(indErr.message); continue; }
+        indicators[i].id = indData.id;
+        indicators[i].previous_actual = Number(ind.actual) || 0;
+        keptIndicatorIds.push(indData.id);
+
+        if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
+          await client.from("indicator_updates").insert({
+            indicator_id   : indData.id,
+            project_name   : p.name,
+            indicator_name : ind.name.trim(),
+            actual_value   : Number(ind.actual) || 0,
+            note           : ind.update_note ? ind.update_note.trim() : null,
+            updated_by     : "Tim",
+          });
+        }
       }
-      indicators[i].id = indData.id;
     }
 
-    msg.textContent = "✅ Data berhasil disimpan!";
+    const removedIds = (originalIndicatorIds || []).filter(id => !keptIndicatorIds.includes(id));
+    if (removedIds.length) {
+      await client.from("project_indicators").delete().in("id", removedIds);
+    }
+    if (editingProjectOriginalName && editingProjectOriginalName !== p.name) {
+      await client.from("indicator_updates").update({ project_name: p.name }).eq("project_name", activeProjectName);
+      await client.from("indicator_evidence").update({ project_name: p.name }).eq("project_name", activeProjectName);
+      await client.from("budget_updates").update({ project_name: p.name }).eq("project_name", activeProjectName);
+      await client.from("project_activities").update({ project_name: p.name }).eq("project_name", activeProjectName);
+      await client.from("activity_notes").update({ project_name: p.name }).eq("project_name", activeProjectName);
+      await client.from("activity_files").update({ project_name: p.name }).eq("project_name", activeProjectName);
+    }
+
+    msg.textContent = "âœ… Data berhasil disimpan!";
     msg.className   = "form-msg success";
     setTimeout(() => {
       msg.className = "form-msg hidden";
       resetForm(); setStep(1); switchTab("dashboard");
     }, 1800);
+    editingProjectOriginalName = p.name;
+    originalIndicatorIds = indicators.map(ind => ind.id).filter(Boolean);
     await loadProjects();
 
   } catch (err) {
     msg.textContent = err.message;
     msg.className   = "form-msg error";
   } finally {
-    btn.textContent = "💾 Simpan Proyek";
+    btn.textContent = "ðŸ’¾ Simpan Proyek";
     btn.disabled    = false;
   }
 });
@@ -490,6 +541,8 @@ function resetForm() {
   document.getElementById("f-goal").value = "";
   outcomes = [];
   renderOutcomeList();
+  editingProjectOriginalName = null;
+  originalIndicatorIds = [];
   // progress dihitung otomatis
   indicators = [];
 }
@@ -589,10 +642,10 @@ function renderCards(items) {
         </div>` : ""}
                 ${(item.goal || (item.project_outcomes && item.project_outcomes.length)) ? `
           <div style="border-top:1px solid #f1f5f9;margin:8px 0 6px;padding-top:8px">
-            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">🎯 Goal:</span> ${item.goal}</div>` : ""}
+            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">ðŸŽ¯ Goal:</span> ${item.goal}</div>` : ""}
             ${item.project_outcomes && item.project_outcomes.length ? `
               <div style="font-size:11px;color:#475569">
-                <span style="font-weight:700;color:#7c3aed">🏆 Outcomes (${item.project_outcomes.length}):</span>
+                <span style="font-weight:700;color:#7c3aed">ðŸ† Outcomes (${item.project_outcomes.length}):</span>
                 <ul style="margin:3px 0 0 14px;padding:0;line-height:1.6">
                   ${item.project_outcomes.map(o => `<li>${o.outcome_text}</li>`).join("")}
                 </ul>
@@ -706,7 +759,7 @@ function renderDetailHeader(proj) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">â† Kembali</button>
           <span class="badge badge-${cls}">${proj.status}</span>
         </div>
         <div class="detail-project-name">${proj.name}</div>
@@ -719,13 +772,13 @@ function renderDetailHeader(proj) {
         ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:600px">${proj.description}</p>` : ""}
         ${proj.goal ? `
           <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">🎯 GOAL</div>
+            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">ðŸŽ¯ GOAL</div>
             <div style="font-size:13px;color:#1e3a5f;line-height:1.5">${proj.goal}</div>
           </div>
         ` : ""}
         ${proj.project_outcomes && proj.project_outcomes.length ? `
           <div style="margin-top:8px;padding:10px 12px;background:#f5f3ff;border-radius:8px;border-left:3px solid #7c3aed;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">🏆 OUTCOMES</div>
+            <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">ðŸ† OUTCOMES</div>
             ${proj.project_outcomes.map((o, i) => `
               <div style="font-size:13px;color:#3b0764;display:flex;gap:6px;margin-bottom:4px;line-height:1.4">
                 <span style="color:#7c3aed;font-weight:700;min-width:16px">${i+1}.</span>
@@ -739,7 +792,7 @@ function renderDetailHeader(proj) {
         <!-- Progress Keseluruhan (kalkulasi otomatis) -->
         <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
+            <span style="font-size:12px;font-weight:700;color:#475569">ðŸ“Š Progress Keseluruhan</span>
             <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px">
@@ -754,15 +807,15 @@ function renderDetailHeader(proj) {
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#6366f1"></span>
               <span>Aktivitas</span>
-              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "—"}</span>
+              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "â€”"}</span>
             </div>
             <div class="overall-breakdown-sep">+</div>
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
               <span>Indikator</span>
-              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "—"}</span>
+              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "â€”"}</span>
             </div>
-            <div class="overall-breakdown-sep">÷ 2</div>
+            <div class="overall-breakdown-sep">Ã· 2</div>
           </div>
         </div>
         <div class="detail-stats" style="margin-top:12px">
@@ -773,7 +826,7 @@ function renderDetailHeader(proj) {
         </div>
         ${(proj.budget_approved > 0 || proj.budget_actual > 0) ? `
         <div class="detail-budget-box">
-          <div class="detail-budget-title">💰 Anggaran Proyek</div>
+          <div class="detail-budget-title">ðŸ’° Anggaran Proyek</div>
           <div class="detail-budget-row">
             <span>Disetujui</span>
             <strong>${formatRupiah(proj.budget_approved)}</strong>
@@ -809,7 +862,7 @@ function renderIndicatorUpdatePanel(proj) {
   const inds      = proj.project_indicators;
   if (!inds.length) {
     container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center">
-      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:32px;margin-bottom:8px">ðŸ“Š</div>
       <div style="font-weight:600;color:#0f172a;margin-bottom:4px">Belum ada indikator</div>
       <small style="color:#94a3b8">Edit proyek untuk menambah indikator</small>
     </div>`;
@@ -858,14 +911,14 @@ function renderIndicatorUpdatePanel(proj) {
         </div>
         <div class="ind-last-update" id="ind-ts-${i}">
           ${lastTs
-            ? `🕐 Update terakhir: <strong>${lastTs}</strong>`
+            ? `ðŸ• Update terakhir: <strong>${lastTs}</strong>`
             : `<span style="color:#94a3b8;font-style:italic">Belum pernah diupdate</span>`}
         </div>
 
         <!-- Input update kumulatif -->
         <div class="ind-kumul-box">
           <div class="ind-kumul-header">
-            <span>➕ Tambah Capaian Baru</span>
+            <span>âž• Tambah Capaian Baru</span>
             <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
           </div>
           <div class="ind-kumul-row">
@@ -884,12 +937,12 @@ function renderIndicatorUpdatePanel(proj) {
           <div class="form-group" style="margin-top:6px">
             <label>Catatan <span style="color:#94a3b8;font-weight:400">(opsional)</span></label>
             <textarea id="upd-note-${i}" rows="2"
-              placeholder="Perkembangan, kendala, atau temuan lapangan…"
+              placeholder="Perkembangan, kendala, atau temuan lapanganâ€¦"
               style="font-size:12px"></textarea>
           </div>
           <button class="btn-ind-update" id="upd-btn-${i}"
             onclick="saveOneIndicator(${i}, '${ind.id}', ${currentActual}, ${target}, '${escHtml(ind.indicator_name)}', '${escHtml(ind.unit||"")}')">
-            💾 Simpan Update
+            ðŸ’¾ Simpan Update
           </button>
           <div id="upd-msg-${i}" class="form-msg hidden" style="margin-top:6px;font-size:12px"></div>
         </div>
@@ -898,7 +951,7 @@ function renderIndicatorUpdatePanel(proj) {
         ${sortedUpd.length ? `
         <div class="mini-history" style="margin-top:10px">
           <div class="mini-history-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>📋 ${sortedUpd.length} Riwayat Update</span>
+            <span>ðŸ“‹ ${sortedUpd.length} Riwayat Update</span>
             <button class="btn-danger btn-sm" style="font-size:10px;padding:3px 8px"
               onclick="clearIndicatorHistory('${ind.id}')">Hapus Semua</button>
           </div>
@@ -945,14 +998,14 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
 
   // Wajib ada tambahan atau catatan
   if (addVal === 0 && !note) {
-    msgEl.textContent = "⚠️ Isi tambahan nilai atau catatan terlebih dahulu.";
+    msgEl.textContent = "âš ï¸ Isi tambahan nilai atau catatan terlebih dahulu.";
     msgEl.className   = "form-msg error";
     msgEl.style.display = "block";
     setTimeout(() => { msgEl.className = "form-msg hidden"; msgEl.style.display = ""; }, 3000);
     return;
   }
 
-  btn.textContent = "Menyimpan…";
+  btn.textContent = "Menyimpanâ€¦";
   btn.disabled    = true;
   msgEl.className = "form-msg hidden";
 
@@ -977,7 +1030,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     if (noteEl) noteEl.value = "";
 
     // Tampilkan sukses
-    msgEl.textContent   = `✅ Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
+    msgEl.textContent   = `âœ… Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
     msgEl.className     = "form-msg success";
     msgEl.style.display = "block";
 
@@ -994,11 +1047,11 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     }
 
   } catch (err) {
-    msgEl.textContent   = "❌ " + err.message;
+    msgEl.textContent   = "âŒ " + err.message;
     msgEl.className     = "form-msg error";
     msgEl.style.display = "block";
   } finally {
-    btn.textContent = "💾 Simpan Update";
+    btn.textContent = "ðŸ’¾ Simpan Update";
     btn.disabled    = false;
   }
 };
@@ -1022,6 +1075,8 @@ document.getElementById("editProjectBtn").addEventListener("click", () => {
 // ===================== FILL FORM EDIT =====================
 window.fillFormEdit = function (idx) {
   const item = window.allProjects[idx];
+  editingProjectOriginalName = item.name;
+  originalIndicatorIds = (item.project_indicators || []).map(ind => ind.id).filter(Boolean);
   document.getElementById("f-name").value       = item.name;
   document.getElementById("f-location").value   = item.location;
   document.getElementById("f-owner").value      = item.owner;
@@ -1037,17 +1092,22 @@ window.fillFormEdit = function (idx) {
   document.getElementById("f-goal").value = item.goal || "";
   outcomes = (item.project_outcomes || []).map(o => ({ text: o.outcome_text }));
   renderOutcomeList();
-  indicators = item.project_indicators.map(ind => ({
-    id          : ind.id,
-    name        : ind.indicator_name,
-    type        : ind.type,
-    target      : ind.target,
-    unit        : ind.unit,
-    actual      : ind.actual || 0,
-    update_note : "",
-    history     : ind.indicator_updates  || [],
-    evidence    : ind.indicator_evidence || [],
-  }));
+  indicators = item.project_indicators.map(ind => {
+    const latestActual = getLatestActual(ind);
+    return {
+      id              : ind.id,
+      name            : ind.indicator_name,
+      type            : ind.type,
+      target          : ind.target,
+      unit            : ind.unit,
+      actual          : latestActual,
+      previous_actual : latestActual,
+      update_note     : "",
+      history         : ind.indicator_updates  || [],
+      evidence        : ind.indicator_evidence || [],
+    };
+  });
+  renderIndicatorList();
   document.getElementById("pageTitle").textContent    = "Edit Proyek";
   document.getElementById("pageSubtitle").textContent = item.name;
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
@@ -1100,14 +1160,14 @@ function renderActivityListDetail() {
           <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
             <div class="act-check ${checked ? "checked" : ""}"
               onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
-              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "✓" : ""}</div>
+              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "âœ“" : ""}</div>
             <div class="activity-card-info">
               <div class="activity-card-title ${checked ? "done" : ""}">${act.title}</div>
               <div class="activity-card-meta">
                 ${act.pic      ? `<span>${act.pic}</span>`      : ""}
                 ${act.due_date ? `<span>${act.due_date}</span>` : ""}
                 <span><span class="badge ${badgeCls}" style="font-size:10px">${act.status}</span></span>
-                ${notes.length ? `<span>${notes.length} 📝</span>` : ""}
+                ${notes.length ? `<span>${notes.length} ðŸ“</span>` : ""}
                 <span class="file-count-badge" id="filecount-${act.id}"></span>
               </div>
             </div>
@@ -1118,8 +1178,8 @@ function renderActivityListDetail() {
               </div>
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
-              <button class="btn-edit"   onclick="openActModal('${act.id}')">✏️</button>
-              <button class="btn-remove" onclick="deleteActivity('${act.id}')">✕</button>
+              <button class="btn-edit"   onclick="openActModal('${act.id}')">âœï¸</button>
+              <button class="btn-remove" onclick="deleteActivity('${act.id}')">âœ•</button>
             </div>
           </div>
           <div class="activity-card-body" id="actbody-${act.id}">
@@ -1128,9 +1188,9 @@ function renderActivityListDetail() {
               <div class="act-note-title">Catatan</div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
                 <textarea id="inline-note-${act.id}" rows="2"
-                  placeholder="Tulis catatan pelaksanaan…"
+                  placeholder="Tulis catatan pelaksanaanâ€¦"
                   style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical"></textarea>
-                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">＋</button>
+                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">ï¼‹</button>
               </div>
               <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
             </div>
@@ -1146,7 +1206,7 @@ function renderActNotes(notes) {
       <div class="history-dot"></div>
       <div class="act-note-content">
         <div class="act-note-text">${n.note}</div>
-        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} — ${n.noted_by || "Tim"}</div>
+        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} â€” ${n.noted_by || "Tim"}</div>
       </div>
     </div>`).join("");
 }
@@ -1186,7 +1246,7 @@ async function updateFileCountBadges() {
   (data || []).forEach(r => { counts[r.activity_id] = (counts[r.activity_id] || 0) + 1; });
   allActivities.forEach(act => {
     const el = document.getElementById("filecount-" + act.id);
-    if (el) el.textContent = counts[act.id] ? `📎 ${counts[act.id]}` : "";
+    if (el) el.textContent = counts[act.id] ? `ðŸ“Ž ${counts[act.id]}` : "";
   });
 }
 
@@ -1274,7 +1334,7 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
     if (data) currentActId = data.id;
   }
   if (error) { msg.textContent = error.message; msg.className = "form-msg error"; return; }
-  msg.textContent = "✅ Tersimpan!";
+  msg.textContent = "âœ… Tersimpan!";
   msg.className   = "form-msg success";
   setTimeout(() => {
     document.getElementById("actModalOverlay").classList.add("hidden");
@@ -1286,11 +1346,11 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
 
 // ===================== FILE UPLOAD =====================
 function getFileIcon(n) {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "🖼️"
-       : /\.pdf$/i.test(n) ? "📄"
-       : /\.(doc|docx)$/i.test(n) ? "📝"
-       : /\.(xls|xlsx|csv)$/i.test(n) ? "📊"
-       : /\.(ppt|pptx)$/i.test(n) ? "📑" : "📎";
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "ðŸ–¼ï¸"
+       : /\.pdf$/i.test(n) ? "ðŸ“„"
+       : /\.(doc|docx)$/i.test(n) ? "ðŸ“"
+       : /\.(xls|xlsx|csv)$/i.test(n) ? "ðŸ“Š"
+       : /\.(ppt|pptx)$/i.test(n) ? "ðŸ“‘" : "ðŸ“Ž";
 }
 function formatBytes(b) {
   if (!b) return "";
@@ -1309,7 +1369,7 @@ function renderStagingList() {
     const thumb = isImage(sf.file.name)
       ? `<img class="file-thumb" src="${URL.createObjectURL(sf.file)}" alt="">`
       : `<div class="file-thumb-placeholder">${getFileIcon(sf.file.name)}</div>`;
-    const statusMap = { wait:"Menunggu", uploading:"Upload…", ok:"OK", err: sf.errMsg || "Gagal" };
+    const statusMap = { wait:"Menunggu", uploading:"Uploadâ€¦", ok:"OK", err: sf.errMsg || "Gagal" };
     return `
       <div class="file-staging-item ${sf.status==="ok"?"uploaded":""} ${sf.status==="err"?"error-item":""}">
         ${thumb}
@@ -1319,7 +1379,7 @@ function renderStagingList() {
           <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?"100":"0"}%"></div></div>
         </div>
         <span class="file-staging-status ${sf.status}">${statusMap[sf.status]}</span>
-        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">✕</button>` : ""}
+        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">âœ•</button>` : ""}
       </div>`;
   }).join("");
 }
@@ -1341,11 +1401,11 @@ function renderSavedFiles() {
         ${thumb}
         <div class="file-saved-info">
           <div class="file-saved-name" title="${f.file_name}">${f.file_name}</div>
-          <div class="file-saved-meta">${formatBytes(f.file_size)} — ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
+          <div class="file-saved-meta">${formatBytes(f.file_size)} â€” ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
         </div>
         <div class="file-saved-actions">
           <a href="${f.file_url}" target="_blank" class="file-btn-view">Lihat</a>
-          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">✕</button>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">âœ•</button>
         </div>
       </div>`;
   }).join("");
@@ -1379,7 +1439,7 @@ document.getElementById("actUploadAllBtn").addEventListener("click", async () =>
   for (let i = 0; i < pending.length; i++) {
     const sf = pending[i];
     sf.status = "uploading"; renderStagingList();
-    prog.textContent = `Upload ${i+1}/${pending.length}…`;
+    prog.textContent = `Upload ${i+1}/${pending.length}â€¦`;
     const path = `${currentActId}/${Date.now()}-${sf.file.name}`;
     const { error: upErr } = await client.storage.from(BUCKET).upload(path, sf.file, { upsert: true });
     if (upErr) { sf.status = "err"; sf.errMsg = upErr.message; renderStagingList(); continue; }
@@ -1473,7 +1533,7 @@ function renderSidebarSubmenu(items) {
   if (!items.length) { submenu.innerHTML = ""; return; }
   submenu.innerHTML = items.map((item, i) => {
     const cls       = item.status.toLowerCase().replace(/\s+/g, "-");
-    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "…" : item.name;
+    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "â€¦" : item.name;
     return `<li onclick="openProjectDetail(window.allProjects[${i}])">
       <span class="submenu-dot dot-${cls}"></span>
       <span class="submenu-name" title="${item.name.replace(/"/g,"&quot;")}">${shortName}</span>
