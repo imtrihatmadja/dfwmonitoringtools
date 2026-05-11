@@ -33,8 +33,6 @@ function calcAvgIndikator(proj) {
 }
 
 function calcAvgAktivitas(proj) {
-  // Gunakan activities_summary dari loadProjects (project_name, progress, status)
-  // ATAU allActivities jika sedang di halaman detail (data lebih fresh)
   const acts = (proj.activities_summary && proj.activities_summary.length)
     ? proj.activities_summary
     : (allActivities && allActivities.length && currentProject && currentProject.name === proj.name)
@@ -51,7 +49,7 @@ function calcOverallProgress(proj) {
   if (avgInd !== null && avgAct !== null) return Math.round((avgInd + avgAct) / 2);
   if (avgInd !== null) return avgInd;
   if (avgAct !== null) return avgAct;
-  return 0; // progress dihitung otomatis; tidak lagi fallback ke field manual
+  return 0;
 }
 
 function progressColor(pct) {
@@ -119,13 +117,11 @@ function renderPriorityIndicators(item, projIndex) {
   const shown    = lowInds.slice(0, MAX_SHOW);
   const rest     = lowInds.length - MAX_SHOW;
 
-  // Warna berdasarkan tier: merah <25%, kuning/oranye 25-49%
   function tierColor(pct) {
     if (pct < 25) return { color: "#ef4444", bg: "#fef2f2", border: "#fecaca", label: "Kritis" };
     return { color: "#f59e0b", bg: "#fffbeb", border: "#fde68a", label: "Perhatian" };
   }
 
-  // Hitung jumlah per tier untuk badge ringkasan
   const critCount = lowInds.filter(x => x.pct < 25).length;
   const warnCount = lowInds.filter(x => x.pct >= 25).length;
 
@@ -175,7 +171,6 @@ window.jumpToIndicator = async function(projIndex, indName, event) {
   const proj = window.allProjects[projIndex];
   if (!proj) return;
   await openProjectDetail(proj);
-  // Tunggu panel indikator selesai dirender
   setTimeout(() => {
     const inds = proj.project_indicators || [];
     const idx  = inds.findIndex(ind => ind.indicator_name === indName);
@@ -183,7 +178,6 @@ window.jumpToIndicator = async function(projIndex, indName, event) {
     const card = document.getElementById("ind-card-" + idx);
     if (!card) return;
     card.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Highlight sementara
     card.classList.add("ind-card-highlight");
     setTimeout(() => card.classList.remove("ind-card-highlight"), 2000);
   }, 400);
@@ -254,17 +248,40 @@ document.getElementById("toStep2Btn").addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
-// Kembali ke Step 1
-document.getElementById("backStep1Btn").addEventListener("click", () => setStep(1));
+// ★★ [PERBAIKAN] Kembali ke Step 1 — baca dulu nilai DOM indikator
+document.getElementById("backStep1Btn").addEventListener("click", () => {
+  indicators.forEach((_, i) => readIndicatorFromDOM(i));
+  setStep(1);
+});
 
 // ===================== INDICATOR BUILDER =====================
+
+// ★★ [PERBAIKAN] Tombol Tambah Indikator — baca dulu nilai DOM yang sudah diisi
 document.getElementById("addIndicatorBtn").addEventListener("click", () => {
+  indicators.forEach((_, i) => readIndicatorFromDOM(i));
   indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, update_note: "", history: [], evidence: [] });
   renderIndicatorList();
 });
 
 function escHtml(v) {
   return (v || "").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// ★★ [PERBAIKAN] Fungsi helper untuk baca nilai dari DOM ke array indicators
+function readIndicatorFromDOM(i) {
+  const nameEl   = document.getElementById("ind-name-" + i);
+  const typeEl   = document.getElementById("ind-type-" + i);
+  const targetEl = document.getElementById("ind-target-" + i);
+  const unitEl   = document.getElementById("ind-unit-" + i);
+  const actualEl = document.getElementById("ind-actual-" + i);
+  const noteEl   = document.getElementById("ind-note-" + i);
+  
+  if (nameEl)   indicators[i].name        = nameEl.value;
+  if (typeEl)   indicators[i].type        = typeEl.value;
+  if (targetEl) indicators[i].target      = targetEl.value;
+  if (unitEl)   indicators[i].unit        = unitEl.value;
+  if (actualEl) indicators[i].actual      = Number(actualEl.value) || 0;
+  if (noteEl)   indicators[i].update_note = noteEl.value;
 }
 
 function renderIndicatorList() {
@@ -407,14 +424,12 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     };
     if (!p.name) throw new Error("Nama proyek wajib diisi.");
 
-    // Simpan nilai budget_actual lama untuk cek apakah berubah
     const prevProj = (window.allProjects || []).find(x => x.name === p.name);
     const prevBudgetActual = prevProj ? (prevProj.budget_actual || 0) : -1;
 
     const { error: pErr } = await client.from("projects").upsert(p, { onConflict: "name" });
     if (pErr) throw new Error("Gagal simpan proyek: " + pErr.message);
 
-    // Catat histori budget_actual jika berubah (atau pertama kali & > 0)
     if (p.budget_actual > 0 && p.budget_actual !== prevBudgetActual) {
       await client.from("budget_updates").insert({
         project_name : p.name,
@@ -424,7 +439,6 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       });
     }
 
-        // Simpan outcomes: hapus lama, insert baru
     await client.from("project_outcomes").delete().eq("project_name", p.name);
     const validOutcomes = outcomes.filter(oc => oc.text && oc.text.trim());
     if (validOutcomes.length) {
@@ -490,7 +504,6 @@ function resetForm() {
   document.getElementById("f-goal").value = "";
   outcomes = [];
   renderOutcomeList();
-  // progress dihitung otomatis
   indicators = [];
 }
 
@@ -686,7 +699,6 @@ function renderDetailHeader(proj) {
     return pct >= 100;
   }).length;
   const cls    = proj.status.toLowerCase().replace(/\s+/g, "-");
-  // Avg capaian = rata-rata % pencapaian masing-masing indikator (cap 100%)
   const avgInd = inds.length
     ? Math.round(
         inds.reduce((a, ind) => {
@@ -701,7 +713,6 @@ function renderDetailHeader(proj) {
   const ovLabel   = progressLabel(overall);
   const avgActPct = calcAvgAktivitas(proj);
   const avgIndPct = calcAvgIndikator(proj);
-
   document.getElementById("detailHeader").innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
       <div>
@@ -943,7 +954,6 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
   const addVal  = parseFloat(addEl.value) || 0;
   const note    = noteEl ? noteEl.value.trim() || null : null;
 
-  // Wajib ada tambahan atau catatan
   if (addVal === 0 && !note) {
     msgEl.textContent = "⚠️ Isi tambahan nilai atau catatan terlebih dahulu.";
     msgEl.className   = "form-msg error";
@@ -959,10 +969,8 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
   try {
     const newTotal = currentActual + addVal;
 
-    // Update kolom actual di project_indicators
     await client.from("project_indicators").update({ actual: newTotal }).eq("id", indId);
 
-    // Selalu insert ke indicator_updates (nilai sudah pasti berbeda karena kumulatif)
     await client.from("indicator_updates").insert({
       indicator_id   : indId,
       project_name   : currentProject.name,
@@ -972,16 +980,13 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
       updated_by     : "Tim",
     });
 
-    // Kosongkan input
     addEl.value  = "";
     if (noteEl) noteEl.value = "";
 
-    // Tampilkan sukses
     msgEl.textContent   = `✅ Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
     msgEl.className     = "form-msg success";
     msgEl.style.display = "block";
 
-    // Reload dan refresh panel
     await loadProjects();
     const updated = (window.allProjects || []).find(p => p.name === currentProject.name);
     if (updated) {
@@ -1029,7 +1034,6 @@ window.fillFormEdit = function (idx) {
   document.getElementById("f-start-date").value = item.start_date  || "";
   document.getElementById("f-deadline").value   = item.deadline    || "";
   document.getElementById("f-status").value     = item.status;
-  // progress tidak diisi manual
   document.getElementById("f-desc").value            = item.description    || "";
   document.getElementById("f-note").value            = item.note           || "";
   document.getElementById("f-budget-approved").value = item.budget_approved || "";
@@ -1066,9 +1070,7 @@ async function loadActivities(projectName) {
   allActNotes     = notes || [];
   renderActivityListDetail();
   updateFileCountBadges();
-  // Refresh header progress setelah aktivitas dimuat (data activities_summary fresh)
   if (currentProject) {
-    // Suntikkan activities_summary terbaru ke currentProject
     currentProject.activities_summary = allActivities.map(a => ({
       project_name: a.project_name,
       progress    : a.progress,
@@ -1190,7 +1192,6 @@ async function updateFileCountBadges() {
   });
 }
 
-// Tambah aktivitas dari panel detail
 document.getElementById("addActivityBtnDetail").addEventListener("click", () => openActModal(null));
 
 // ===================== MODAL AKTIVITAS =====================
