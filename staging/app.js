@@ -111,9 +111,9 @@ function renderPriorityIndicators(item, projIndex) {
   if (!lowInds.length) return `
     <div class="priority-ind-section">
       <div class="priority-ind-title">
-        <span class="priority-ind-icon">âœ…</span>
-        <span>Semua indikator â‰¥ 50%</span>
-        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail â†’</button>
+        <span class="priority-ind-icon">✅</span>
+        <span>Semua indikator ≥ 50%</span>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail →</button>
       </div>
     </div>`;
 
@@ -140,7 +140,7 @@ function renderPriorityIndicators(item, projIndex) {
           ${critCount > 0 ? `<span class="priority-tier-badge kritis">${critCount} Kritis</span>` : ""}
           ${warnCount > 0 ? `<span class="priority-tier-badge perhatian">${warnCount} Perhatian</span>` : ""}
         </span>
-        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail â†’</button>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail →</button>
       </div>
       <div class="priority-ind-list">
         ${shown.map(ind => {
@@ -158,13 +158,13 @@ function renderPriorityIndicators(item, projIndex) {
               <span class="priority-ind-pct" style="color:${t.color}">${ind.pct}%</span>
               <button class="priority-goto-btn" style="color:${t.color};border-color:${t.border}"
                 onclick="jumpToIndicator(${projIndex},'${escHtml(ind.name)}',event)"
-                title="Buka & scroll ke indikator ini">â†—</button>
+                title="Buka & scroll ke indikator ini">↗</button>
             </div>
           </div>`;
         }).join("")}
         ${rest > 0 ? `
           <button class="priority-ind-more-btn" onclick="jumpToProject(${projIndex}, event)">
-            +${rest} indikator lainnya â€” lihat semua
+            +${rest} indikator lainnya — lihat semua
           </button>` : ""}
       </div>
     </div>`;
@@ -238,7 +238,7 @@ function setStep(n) {
   });
 }
 
-// Step 1 â†’ Step 2
+// Step 1 → Step 2
 
 document.getElementById("addOutcomeBtn").addEventListener("click", () => {
   outcomes.push({ text: "" });
@@ -283,7 +283,7 @@ function renderIndicatorList() {
           <span class="badge badge-${(ind.type || "Output").toLowerCase()}">${ind.type || "Output"}</span>
           ${ind.name || `Indikator ${i + 1}`}
         </div>
-        <button class="btn-remove" onclick="removeIndicator(${i})">âœ•</button>
+        <button class="btn-remove" onclick="removeIndicator(${i})"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="indicator-input-row">
         <div class="form-group">
@@ -318,7 +318,7 @@ function renderIndicatorList() {
         <div class="form-group full">
           <label>Catatan Perkembangan <span style="font-weight:400;color:#94a3b8">(opsional)</span></label>
           <textarea id="ind-note-${i}" rows="2"
-            placeholder="Perkembangan awal, kendala, atau temuan lapanganâ€¦"
+            placeholder="Perkembangan awal, kendala, atau temuan lapangan…"
             oninput="indicators[${i}].update_note=this.value"
             style="font-size:13px">${escHtml(ind.update_note)}</textarea>
         </div>
@@ -381,7 +381,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
   const msg = document.getElementById("formMsg");
   const btn = document.getElementById("submitAllBtn");
   msg.className = "form-msg hidden";
-  btn.textContent = "Menyimpanâ€¦";
+  btn.textContent = "Menyimpan…";
   btn.disabled = true;
 
   try {
@@ -503,6 +503,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     if (removedIds.length) {
       await client.from("project_indicators").delete().in("id", removedIds);
     }
+
     if (editingProjectOriginalName && editingProjectOriginalName !== p.name) {
       await client.from("indicator_updates").update({ project_name: p.name }).eq("project_name", activeProjectName);
       await client.from("indicator_evidence").update({ project_name: p.name }).eq("project_name", activeProjectName);
@@ -512,7 +513,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       await client.from("activity_files").update({ project_name: p.name }).eq("project_name", activeProjectName);
     }
 
-    msg.textContent = "âœ… Data berhasil disimpan!";
+    msg.textContent = "✅ Data berhasil disimpan!";
     msg.className   = "form-msg success";
     setTimeout(() => {
       msg.className = "form-msg hidden";
@@ -526,7 +527,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     msg.textContent = err.message;
     msg.className   = "form-msg error";
   } finally {
-    btn.textContent = "ðŸ’¾ Simpan Proyek";
+    btn.textContent = "💾 Simpan Proyek";
     btn.disabled    = false;
   }
 });
@@ -759,7 +760,7 @@ function renderDetailHeader(proj) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
       <div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">â† Kembali</button>
+          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
           <span class="badge badge-${cls}">${proj.status}</span>
         </div>
         <div class="detail-project-name">${proj.name}</div>
@@ -807,13 +808,13 @@ function renderDetailHeader(proj) {
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#6366f1"></span>
               <span>Aktivitas</span>
-              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "â€”"}</span>
+              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "—"}</span>
             </div>
             <div class="overall-breakdown-sep">+</div>
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
               <span>Indikator</span>
-              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "â€”"}</span>
+              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "—"}</span>
             </div>
             <div class="overall-breakdown-sep">Ã· 2</div>
           </div>
@@ -918,7 +919,7 @@ function renderIndicatorUpdatePanel(proj) {
         <!-- Input update kumulatif -->
         <div class="ind-kumul-box">
           <div class="ind-kumul-header">
-            <span>âž• Tambah Capaian Baru</span>
+            <span><i class="fa-solid fa-plus"></i> Tambah Capaian Baru</span>
             <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
           </div>
           <div class="ind-kumul-row">
@@ -937,12 +938,12 @@ function renderIndicatorUpdatePanel(proj) {
           <div class="form-group" style="margin-top:6px">
             <label>Catatan <span style="color:#94a3b8;font-weight:400">(opsional)</span></label>
             <textarea id="upd-note-${i}" rows="2"
-              placeholder="Perkembangan, kendala, atau temuan lapanganâ€¦"
+              placeholder="Perkembangan, kendala, atau temuan lapangan…"
               style="font-size:12px"></textarea>
           </div>
           <button class="btn-ind-update" id="upd-btn-${i}"
             onclick="saveOneIndicator(${i}, '${ind.id}', ${currentActual}, ${target}, '${escHtml(ind.indicator_name)}', '${escHtml(ind.unit||"")}')">
-            ðŸ’¾ Simpan Update
+            💾 Simpan Update
           </button>
           <div id="upd-msg-${i}" class="form-msg hidden" style="margin-top:6px;font-size:12px"></div>
         </div>
@@ -1005,7 +1006,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     return;
   }
 
-  btn.textContent = "Menyimpanâ€¦";
+  btn.textContent = "Menyimpan…";
   btn.disabled    = true;
   msgEl.className = "form-msg hidden";
 
@@ -1030,7 +1031,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     if (noteEl) noteEl.value = "";
 
     // Tampilkan sukses
-    msgEl.textContent   = `âœ… Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
+    msgEl.textContent   = `✅ Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
     msgEl.className     = "form-msg success";
     msgEl.style.display = "block";
 
@@ -1051,7 +1052,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     msgEl.className     = "form-msg error";
     msgEl.style.display = "block";
   } finally {
-    btn.textContent = "ðŸ’¾ Simpan Update";
+    btn.textContent = "💾 Simpan Update";
     btn.disabled    = false;
   }
 };
@@ -1159,7 +1160,7 @@ function renderActivityListDetail() {
           <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
             <div class="act-check ${checked ? "checked" : ""}"
               onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
-              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "âœ“" : ""}</div>
+              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "<i class="fa-solid fa-check"></i>" : ""}</div>
             <div class="activity-card-info">
               <div class="activity-card-title ${checked ? "done" : ""}">${act.title}</div>
               <div class="activity-card-meta">
@@ -1177,8 +1178,8 @@ function renderActivityListDetail() {
               </div>
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
-              <button class="btn-edit"   onclick="openActModal('${act.id}')">âœï¸</button>
-              <button class="btn-remove" onclick="deleteActivity('${act.id}')">âœ•</button>
+              <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class="fa-solid fa-xmark"></i></button>
             </div>
           </div>
           <div class="activity-card-body" id="actbody-${act.id}">
@@ -1187,9 +1188,9 @@ function renderActivityListDetail() {
               <div class="act-note-title">Catatan</div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
                 <textarea id="inline-note-${act.id}" rows="2"
-                  placeholder="Tulis catatan pelaksanaanâ€¦"
+                  placeholder="Tulis catatan pelaksanaan…"
                   style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical"></textarea>
-                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">ï¼‹</button>
+                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">+</button>
               </div>
               <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
             </div>
@@ -1205,7 +1206,7 @@ function renderActNotes(notes) {
       <div class="history-dot"></div>
       <div class="act-note-content">
         <div class="act-note-text">${n.note}</div>
-        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} â€” ${n.noted_by || "Tim"}</div>
+        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} — ${n.noted_by || "Tim"}</div>
       </div>
     </div>`).join("");
 }
@@ -1333,7 +1334,7 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
     if (data) currentActId = data.id;
   }
   if (error) { msg.textContent = error.message; msg.className = "form-msg error"; return; }
-  msg.textContent = "âœ… Tersimpan!";
+  msg.textContent = "✅ Tersimpan!";
   msg.className   = "form-msg success";
   setTimeout(() => {
     document.getElementById("actModalOverlay").classList.add("hidden");
@@ -1368,7 +1369,7 @@ function renderStagingList() {
     const thumb = isImage(sf.file.name)
       ? `<img class="file-thumb" src="${URL.createObjectURL(sf.file)}" alt="">`
       : `<div class="file-thumb-placeholder">${getFileIcon(sf.file.name)}</div>`;
-    const statusMap = { wait:"Menunggu", uploading:"Uploadâ€¦", ok:"OK", err: sf.errMsg || "Gagal" };
+    const statusMap = { wait:"Menunggu", uploading:"Upload…", ok:"OK", err: sf.errMsg || "Gagal" };
     return `
       <div class="file-staging-item ${sf.status==="ok"?"uploaded":""} ${sf.status==="err"?"error-item":""}">
         ${thumb}
@@ -1378,7 +1379,7 @@ function renderStagingList() {
           <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?"100":"0"}%"></div></div>
         </div>
         <span class="file-staging-status ${sf.status}">${statusMap[sf.status]}</span>
-        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">âœ•</button>` : ""}
+        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')"><i class="fa-solid fa-xmark"></i></button>` : ""}
       </div>`;
   }).join("");
 }
@@ -1400,11 +1401,11 @@ function renderSavedFiles() {
         ${thumb}
         <div class="file-saved-info">
           <div class="file-saved-name" title="${f.file_name}">${f.file_name}</div>
-          <div class="file-saved-meta">${formatBytes(f.file_size)} â€” ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
+          <div class="file-saved-meta">${formatBytes(f.file_size)} — ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
         </div>
         <div class="file-saved-actions">
           <a href="${f.file_url}" target="_blank" class="file-btn-view">Lihat</a>
-          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">âœ•</button>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </div>`;
   }).join("");
@@ -1438,7 +1439,7 @@ document.getElementById("actUploadAllBtn").addEventListener("click", async () =>
   for (let i = 0; i < pending.length; i++) {
     const sf = pending[i];
     sf.status = "uploading"; renderStagingList();
-    prog.textContent = `Upload ${i+1}/${pending.length}â€¦`;
+    prog.textContent = `Upload ${i+1}/${pending.length}…`;
     const path = `${currentActId}/${Date.now()}-${sf.file.name}`;
     const { error: upErr } = await client.storage.from(BUCKET).upload(path, sf.file, { upsert: true });
     if (upErr) { sf.status = "err"; sf.errMsg = upErr.message; renderStagingList(); continue; }
@@ -1532,7 +1533,7 @@ function renderSidebarSubmenu(items) {
   if (!items.length) { submenu.innerHTML = ""; return; }
   submenu.innerHTML = items.map((item, i) => {
     const cls       = item.status.toLowerCase().replace(/\s+/g, "-");
-    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "â€¦" : item.name;
+    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "…" : item.name;
     return `<li onclick="openProjectDetail(window.allProjects[${i}])">
       <span class="submenu-dot dot-${cls}"></span>
       <span class="submenu-name" title="${item.name.replace(/"/g,"&quot;")}">${shortName}</span>

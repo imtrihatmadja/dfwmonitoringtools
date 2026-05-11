@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>DFW Indonesia — Monev Tools</title>
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- SIDEBAR -->
-<aside class="sidebar">
+<aside class="sidebar" id="mainSidebar">
   <div class="sidebar-logo">
     <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-label="PMIS Logo">
       <rect width="30" height="30" rx="8" fill="#2563eb"/>
@@ -24,11 +26,11 @@
   <div class="sidebar-brand">DFW-I ME Tools</div>
   <div>
     <ul class="nav-links">
-      <li class="active" data-tab="dashboard"><span class="nav-icon"></span><span>Dashboard</span></li>
-      <li data-tab="projects"><span class="nav-icon"></span><span>Daftar Proyek</span></li>
+      <li class="active" data-tab="dashboard"><span class="nav-icon"><i class="fa-solid fa-gauge-high"></i></span><span>Dashboard</span></li>
+      <li data-tab="projects"><span class="nav-icon"><i class="fa-solid fa-table-cells-large"></i></span><span>Daftar Proyek</span></li>
       <ul class="nav-submenu" id="projectSubmenu"></ul>
-      <li data-tab="documents"><span class="nav-icon">📂</span><span>Dokumen</span></li>
-      <li data-tab="input"><span class="nav-icon"></span><span>Tambah Proyek</span></li>
+      <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
+      <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
   </div>
   <div class="sidebar-footer">
@@ -52,8 +54,11 @@
       <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
     </div>
     <div class="topbar-right">
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">
+        <i class="fa-solid fa-bars"></i>
+      </button>
       <span class="realtime-badge">🟢 Realtime ON</span>
-      <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
+      <button class="btn-secondary btn-sm" id="refreshBtn"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
     </div>
   </div>
 
@@ -329,5 +334,33 @@
 </div>
 
   <script src="documents.js" defer></script>
+
+<script>
+function toggleSidebar(){
+  const sb=document.getElementById('mainSidebar');
+  const ov=document.getElementById('sidebarOverlay');
+  if(sb) sb.classList.toggle('open');
+  if(ov) ov.classList.toggle('open');
+}
+function closeSidebar(){
+  const sb=document.getElementById('mainSidebar');
+  const ov=document.getElementById('sidebarOverlay');
+  if(sb) sb.classList.remove('open');
+  if(ov) ov.classList.remove('open');
+}
+document.addEventListener('click',function(e){
+  const sb=document.getElementById('mainSidebar');
+  const ov=document.getElementById('sidebarOverlay');
+  if(!sb||window.innerWidth>768) return;
+  if(e.target.closest('.sidebar-toggle-btn')) return;
+  if(e.target.closest('#mainSidebar')) return;
+  sb.classList.remove('open');
+  if(ov) ov.classList.remove('open');
+});
+document.addEventListener('click',function(e){
+  if(window.innerWidth>768) return;
+  if(e.target.closest('.nav-links li') || e.target.closest('#projectSubmenu')) closeSidebar();
+});
+</script>
 </body>
 </html>
