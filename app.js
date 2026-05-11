@@ -604,6 +604,7 @@ async function loadProjects() {
   }));
 
   window.allProjects = items;
+  console.log('[PMIS] dari DB =', (projects||[]).length, '| tampil =', items.length);
   renderStats(items);
   renderCards(items);
   renderTable(items);
