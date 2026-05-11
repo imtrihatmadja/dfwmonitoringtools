@@ -1266,7 +1266,7 @@ function renderActivityListDetail() {
           <div class="activity-card-body" id="actbody-${act.id}">
             ${act.description ? `<p style="font-size:12px;color:#475569;margin:10px 0 6px">${act.description}</p>` : ""}
             <div class="act-note-section">
-              <div class="act-note-title">Catatan</div>
+              <div class="act-note-title">⚠️ Tantangan &amp; Hambatan</div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
                 <textarea id="inline-note-${act.id}" rows="2"
                   placeholder="Tulis catatan pelaksanaan…"
