@@ -244,13 +244,11 @@ document.getElementById("toStep2Btn").addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });  
 });  
 
-// Kembali ke Step 1 — baca dulu nilai DOM indikator  
 document.getElementById("backStep1Btn").addEventListener("click", () => {  
   indicators.forEach((_, i) => readIndicatorFromDOM(i));  
   setStep(1);  
 });  
 
-// Tombol Tambah Indikator — baca dulu nilai DOM yang sudah diisi  
 document.getElementById("addIndicatorBtn").addEventListener("click", () => {  
   indicators.forEach((_, i) => readIndicatorFromDOM(i));  
   indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, update_note: "", history: [], evidence: [] });  
@@ -262,7 +260,6 @@ function escHtml(v) {
   return (v || "").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");  
 }  
 
-// Fungsi helper untuk baca nilai dari DOM ke array indicators  
 function readIndicatorFromDOM(i) {  
   const nameEl   = document.getElementById("ind-name-" + i);  
   const typeEl   = document.getElementById("ind-type-" + i);  
@@ -448,7 +445,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     // Jangan delete semua indikator. Sebaliknya:  
     // 1. Update indikator yang sudah ada (punya ID)  
     // 2. Insert indikator baru (tidak punya ID)  
-    // 3. Hapus indikator yang sudah tidak ada di form (tidak perlu, kita skip dulu)  
+    // 3. Hapus indikator yang sudah tidak ada di form  
 
     // Ambil daftar ID indikator yang sudah ada di database untuk proyek ini  
     const { data: existingInds } = await client  
@@ -480,9 +477,8 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
         if (updErr) {  
           console.warn("Gagal update indikator:", updErr.message);  
         } else {  
-          // Catat update jika ada perubahan  
+          // Catat update jika ada perubahan nilai  
           if (ind.actual > 0 || ind.update_note) {  
-            // Cek apakah sudah ada update dengan nilai yang sama persis  
             const { data: lastUpd } = await client  
               .from("indicator_updates")  
               .select("actual_value, note")  
@@ -539,7 +535,7 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       }  
     }  
 
-    // ★ Hapus indikator yang ada di DB tapi tidak ada di form  
+    // ★ Hapus indikator yang ada di DB tapi tidak ada di form (dihapus oleh user)  
     const idsToDelete = [...existingIds].filter(id => !formIds.has(id));  
     for (const id of idsToDelete) {  
       await client.from("indicator_updates").delete().eq("indicator_id", id);  
@@ -588,7 +584,7 @@ async function loadProjects() {
   const { data: budgetHist } = await client.from("budget_updates").select().order("created_at", { ascending: true });  
   const { data: outcomesData } = await client.from("project_outcomes").select().order("sort_order");  
 
-  // Mapping indikator: pastikan actual paling akurat dari history terbaru  
+  // ★ [PERBAIKAN] Mapping indikator: pastikan actual paling akurat dari history terbaru  
   const items = projects.map(proj => {  
     const projectIndicators = (inds || []).filter(ind => ind.project_name === proj.name).map(ind => {  
       const updates = (upds || []).filter(u => u.indicator_id === ind.id);  
@@ -682,7 +678,7 @@ function renderCards(items) {
             <div class="progress-fill" style="width:${Math.min(pctBudget(item.budget_approved, item.budget_actual), 100)}%;background:#f59e0b"></div>  
           </div>  
         </div>` : ""}  
-                ${(item.goal || (item.project_outcomes && item.project_outcomes.length)) ? `  
+        ${(item.goal || (item.project_outcomes && item.project_outcomes.length)) ? `  
           <div style="border-top:1px solid #f1f5f9;margin:8px 0 6px;padding-top:8px">  
             ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">🎯 Goal:</span> ${item.goal}</div>` : ""}  
             ${item.project_outcomes && item.project_outcomes.length ? `  
@@ -909,7 +905,6 @@ function renderIndicatorUpdatePanel(proj) {
   container.innerHTML = inds.map((ind, i) => {  
     const sortedUpd     = ind.indicator_updates ? [...ind.indicator_updates] : [];  
     const lastH         = sortedUpd.length ? sortedUpd[sortedUpd.length - 1] : null;  
-    // Gunakan nilai dari history terbaru, atau kolom actual yang sudah disinkronkan  
     const currentActual = lastH ? Number(lastH.actual_value) : (Number(ind.actual) || 0);  
     const target        = Number(ind.target) || 0;  
     const pct           = target > 0 ? Math.min(Math.round(currentActual / target * 100), 100) : 0;  
@@ -1079,7 +1074,7 @@ document.getElementById("editProjectBtn").addEventListener("click", () => {
   fillFormEdit(window.allProjects.findIndex(p => p.name === currentProject.name));  
 });  
 
-// Fill Form Edit — ambil actual dari history terbaru  
+// ★ [PERBAIKAN] Fill Form Edit — ambil actual dari history terbaru  
 window.fillFormEdit = function (idx) {  
   const item = window.allProjects[idx];  
   document.getElementById("f-name").value       = item.name;  
@@ -1097,7 +1092,7 @@ window.fillFormEdit = function (idx) {
   outcomes = (item.project_outcomes || []).map(o => ({ text: o.outcome_text }));  
   renderOutcomeList();  
   
-  // Ambil actual dari history terbaru untuk setiap indikator  
+  // ★ [PERBAIKAN] Ambil actual dari history terbaru untuk setiap indikator  
   indicators = item.project_indicators.map(ind => {  
     const updates = ind.indicator_updates || [];  
     const lastUpd = updates.length ? updates[updates.length - 1] : null;  
@@ -1109,7 +1104,7 @@ window.fillFormEdit = function (idx) {
       type        : ind.type,  
       target      : ind.target,  
       unit        : ind.unit,  
-      actual      : latestActual, // pakai nilai dari history  
+      actual      : latestActual,  
       update_note : "",  
       history     : ind.indicator_updates || [],  
       evidence    : ind.indicator_evidence || [],  
@@ -1124,6 +1119,41 @@ window.fillFormEdit = function (idx) {
   document.getElementById("tab-input").classList.add("active");  
   setStep(1);  
   window.scrollTo({ top: 0, behavior: "smooth" });  
+};  
+
+// ===================== DELETE PROJECT =====================  
+window.deleteProject = async function (id, name) {  
+  if (!confirm(`Hapus proyek "${name}" beserta semua indikator dan aktivitasnya?`)) return;  
+  try {  
+    const inds = await client.from("project_indicators").select("id").eq("project_name", name);  
+    if (inds.data) {  
+      for (const ind of inds.data) {  
+        await client.from("indicator_updates").delete().eq("indicator_id", ind.id);  
+        await client.from("indicator_evidence").delete().eq("indicator_id", ind.id);  
+      }  
+    }  
+    await client.from("project_indicators").delete().eq("project_name", name);  
+    await client.from("project_outcomes").delete().eq("project_name", name);  
+    await client.from("project_activities").delete().eq("project_name", name);  
+    await client.from("activity_notes").delete().eq("project_name", name);  
+    await client.from("budget_updates").delete().eq("project_name", name);  
+    await client.from("projects").delete().eq("id", id);  
+    await loadProjects();  
+  } catch (err) {  
+    alert("Gagal hapus: " + err.message);  
+  }  
+};  
+
+// ===================== CLEAR INDICATOR HISTORY =====================  
+window.clearIndicatorHistory = async function (indicatorId) {  
+  if (!confirm("Hapus semua riwayat update indikator ini? Capaian akan direset ke 0.")) return;  
+  try {  
+    await client.from("indicator_updates").delete().eq("indicator_id", indicatorId);  
+    await client.from("project_indicators").update({ actual: 0 }).eq("id", indicatorId);  
+    await loadProjects();  
+  } catch (err) {  
+    alert("Gagal: " + err.message);  
+  }  
 };  
 
 // ===================== AKTIVITAS =====================  
@@ -1160,3 +1190,32 @@ function renderActivityListDetail() {
       const cls      = act.status.toLowerCase().replace(/\s+/g, "-");  
       const notes    = allActNotes.filter(n => n.activity_id === act.id);  
       const checked  = act.status === "Selesai";  
+      const fileCount = act.file_count || 0;  
+      return `  
+      <div class="activity-card ${cls}" id="act-${act.id}">  
+        <div class="activity-card-header">  
+          <div class="activity-title-row">  
+            <div class="activity-name">${escHtml(act.activity_name)}</div>  
+            <span class="badge badge-${cls}">${act.status}</span>  
+          </div>  
+          <div class="activity-meta">  
+            ${act.pic ? `<span>👤 ${escHtml(act.pic)}</span>` : ""}  
+            ${act.location ? `<span>📍 ${escHtml(act.location)}</span>` : ""}  
+            ${act.start_date ? `<span>📅 ${act.start_date}${act.end_date ? ` — ${act.end_date}` : ""}</span>` : ""}  
+            ${act.budget ? `<span>💰 ${formatRupiah(act.budget)}</span>` : ""}  
+          </div>  
+          ${act.note ? `<div class="activity-note">${escHtml(act.note)}</div>` : ""}  
+        </div>  
+        <div class="activity-progress-row">  
+          <div class="activity-progress-label">  
+            <span style="font-weight:600">Progress: ${act.progress}%</span>  
+            <span style="font-size:11px;color:#64748b">${act.progress >= 100 ? "✅ Selesai" : `(${act.progress}/100)`}</span>  
+          </div>  
+          <div class="progress-bar" style="height:6px">  
+            <div class="progress-fill" style="width:${act.progress}%"></div>  
+          </div>  
+        </div>  
+        <div class="activity-actions">  
+          <button class="btn-secondary btn-sm" onclick="openActivityUpdatePanel('${act.id}')">📝 Update</button>  
+          <button class="btn-secondary btn-sm" onclick="openActivityFiles('${act.id}')">📎 Berkas (${fileCount})</button>  
+          <button class="btn-edit btn-sm" onclick="editActivity('${act
