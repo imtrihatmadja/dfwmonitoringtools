@@ -572,8 +572,15 @@ function resetForm() {
 
 // ===================== LOAD PROJECTS =====================
 async function loadProjects() {
-  const { data: projects, error } = await client.from("projects").or("archived.eq.false,archived.is.null").select().order("updated_at", { ascending: false });
-  if (error) { console.error(error); return; }
+  const { data: projects, error } = await client.from("projects").select().order("updated_at", { ascending: false });
+  if (error) {
+    console.error("loadProjects error:", error);
+    const msg = document.getElementById("projectLoadError");
+    if (msg) { msg.textContent = "Gagal memuat proyek: " + (error.message || JSON.stringify(error)); msg.style.display = "block"; }
+    return;
+  }
+  const msg = document.getElementById("projectLoadError");
+  if (msg) msg.style.display = "none";
   const { data: inds  } = await client.from("project_indicators").select();
   const { data: upds  } = await client.from("indicator_updates").select().order("created_at", { ascending: true });
   const { data: evids } = await client.from("indicator_evidence").select();
@@ -581,7 +588,9 @@ async function loadProjects() {
   const { data: budgetHist } = await client.from("budget_updates").select().order("created_at", { ascending: true });
   const { data: outcomesData } = await client.from("project_outcomes").select().order("sort_order");
 
-  const items = projects.map(proj => ({
+  // filter client-side: tampilkan yang archived=false atau archived tidak ada
+  const activeProjects = (projects || []).filter(proj => !proj.archived);
+  const items = activeProjects.map(proj => ({
     ...proj,
     project_indicators: (inds || []).filter(ind => ind.project_name === proj.name).map(ind => ({
       ...ind,

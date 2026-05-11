@@ -26,7 +26,10 @@ END;
 $$;
 
 -- A1. Tambah kolom archived ke tabel projects
+-- (jika kolom sudah ada tapi nilainya NULL, update ke false)
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived    boolean     NOT NULL DEFAULT false;
+-- Pastikan semua proyek lama nilainya false (bukan NULL)
+UPDATE projects SET archived = false WHERE archived IS NULL;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_by text;
 
