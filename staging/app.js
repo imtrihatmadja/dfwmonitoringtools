@@ -283,7 +283,7 @@ function renderIndicatorList() {
           <span class="badge badge-${(ind.type || "Output").toLowerCase()}">${ind.type || "Output"}</span>
           ${ind.name || `Indikator ${i + 1}`}
         </div>
-        <button class="btn-remove" onclick="removeIndicator(${i})"><i class="fa-solid fa-xmark"></i></button>
+        <button class="btn-remove" onclick="removeIndicator(${i})"><i class='fa-solid fa-xmark'></i></button>
       </div>
       <div class="indicator-input-row">
         <div class="form-group">
@@ -919,7 +919,7 @@ function renderIndicatorUpdatePanel(proj) {
         <!-- Input update kumulatif -->
         <div class="ind-kumul-box">
           <div class="ind-kumul-header">
-            <span><i class="fa-solid fa-plus"></i> Tambah Capaian Baru</span>
+            <span><i class='fa-solid fa-plus'></i> Tambah Capaian Baru</span>
             <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
           </div>
           <div class="ind-kumul-row">
@@ -1160,7 +1160,7 @@ function renderActivityListDetail() {
           <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
             <div class="act-check ${checked ? "checked" : ""}"
               onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
-              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "<i class="fa-solid fa-check"></i>" : ""}</div>
+              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "<i class='fa-solid fa-check'></i>" : ""}</div>
             <div class="activity-card-info">
               <div class="activity-card-title ${checked ? "done" : ""}">${act.title}</div>
               <div class="activity-card-meta">
@@ -1178,8 +1178,8 @@ function renderActivityListDetail() {
               </div>
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
-              <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class="fa-solid fa-pen-to-square"></i></button>
-              <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class="fa-solid fa-xmark"></i></button>
+              <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class='fa-solid fa-pen-to-square'></i></button>
+              <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class='fa-solid fa-xmark'></i></button>
             </div>
           </div>
           <div class="activity-card-body" id="actbody-${act.id}">
@@ -1379,7 +1379,7 @@ function renderStagingList() {
           <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?"100":"0"}%"></div></div>
         </div>
         <span class="file-staging-status ${sf.status}">${statusMap[sf.status]}</span>
-        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')"><i class="fa-solid fa-xmark"></i></button>` : ""}
+        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')"><i class='fa-solid fa-xmark'></i></button>` : ""}
       </div>`;
   }).join("");
 }
@@ -1405,7 +1405,7 @@ function renderSavedFiles() {
         </div>
         <div class="file-saved-actions">
           <a href="${f.file_url}" target="_blank" class="file-btn-view">Lihat</a>
-          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')"><i class="fa-solid fa-xmark"></i></button>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')"><i class='fa-solid fa-xmark'></i></button>
         </div>
       </div>`;
   }).join("");

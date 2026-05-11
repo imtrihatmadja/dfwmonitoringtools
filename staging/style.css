@@ -648,109 +648,38 @@ tr:hover td{background:#f8fafc}
 }
 
 
-/* ==========================================================
-   UI REFRESH — clean desktop, mobile friendly, readable icons
-   ========================================================== */
-:root{
-  --bg:#f1f5f9;
-  --panel:#ffffff;
-  --text:#0f172a;
-  --muted:#64748b;
-  --line:#e2e8f0;
-  --blue:#2563eb;
-  --blue-2:#1d4ed8;
-  --danger:#dc2626;
-  --danger-bg:#fee2e2;
-  --radius:14px;
-}
-body{overflow-x:hidden;background:var(--bg)}
-.main{min-width:0}
-.topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.nav-icon{width:18px;min-width:18px;text-align:center;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+/* Minimal safe fixes */
+.proj-card-grid{grid-template-columns:repeat(4,minmax(0,1fr));}
+.nav-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;min-width:18px;text-align:center}
 .nav-icon i{font-size:14px;line-height:1}
-.sidebar-toggle-btn{display:none;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--line);background:#fff;border-radius:10px;color:#334155;box-shadow:0 1px 2px rgba(15,23,42,.04)}
-.sidebar-toggle-btn:hover{background:#f8fafc}
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);z-index:90}
+.btn-edit,.btn-remove{display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.btn-edit i,.btn-remove i{pointer-events:none}
+.sidebar-toggle-btn{display:none;width:36px;height:36px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#334155;font-size:16px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:90}
 .sidebar-overlay.open{display:block}
-.sidebar{z-index:100}
 
-/* Buttons and icon readability */
-.btn-edit,.btn-remove{display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1}
-.btn-edit i,.btn-remove i,.btn-secondary i,.btn-primary i,.btn-ind-update i,.nav-icon i{pointer-events:none}
-.btn-edit{min-width:30px;height:30px;padding:0 9px;background:#eff6ff;color:var(--blue);border:1px solid #dbeafe;border-radius:8px;font-size:12px;font-weight:700}
-.btn-edit:hover{background:#dbeafe;color:var(--blue-2)}
-.btn-remove{width:30px;height:30px;background:var(--danger-bg);color:var(--danger);border:1px solid #fecaca;border-radius:8px;font-size:13px}
-.btn-remove:hover{background:#fecaca;color:#b91c1c}
-.btn-secondary i,.btn-primary i{margin-right:4px}
-
-/* Card grid: max 4 cards per row on desktop */
-.proj-card-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-.proj-card{padding:16px;border-radius:16px}
-.proj-card-header{align-items:flex-start}
-.proj-card-name{font-size:13px;line-height:1.35}
-.proj-card-footer{margin-top:10px}
-
-/* Cleaner activity cards */
-.activity-card{border-radius:14px}
-.activity-card-header{gap:8px;min-width:0;overflow:hidden}
-.activity-card-info{min-width:0}
-.activity-card-meta{row-gap:4px}
-.activity-card-progress{min-width:72px}
-.activity-card-actions{flex-shrink:0}
-.act-check{font-size:11px;font-weight:700}
-
-/* Better indicator blocks */
-.indicator-block,.ind-update-card,.detail-panel,.form-card,.detail-header,.table-wrap{border-radius:16px}
-.indicator-block-header,.ind-update-header,.panel-titlebar{gap:10px}
-.indicator-block-title,.ind-update-name{min-width:0;word-break:break-word}
-
-/* Print readability */
-@media print{
-  body{background:#fff}
-  .tab-content,.detail-header,.detail-panel,.form-card{box-shadow:none!important}
-  p,li,td,th,.history-note,.act-note-text{line-height:1.55!important}
-}
-
-/* Responsive */
-@media(max-width:1400px){
-  .proj-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-}
-@media(max-width:1100px){
-  .proj-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .detail-split{grid-template-columns:1fr}
-  .detail-panel{max-height:none;min-height:320px}
+@media(max-width:1280px){.proj-card-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:1024px){
+  .proj-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .detail-split{grid-template-columns:1fr;}
+  .detail-panel{max-height:none;min-height:320px;}
 }
 @media(max-width:768px){
-  body{display:block}
-  .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .25s ease;width:250px;height:100vh;box-shadow:4px 0 24px rgba(0,0,0,.18)}
-  .sidebar.open{transform:translateX(0)}
-  .sidebar-toggle-btn{display:inline-flex}
-  .topbar{padding:14px 16px;gap:10px;align-items:flex-start}
-  .page-title{font-size:17px}
-  .page-subtitle{font-size:11px}
-  .tab-content{padding:16px}
-  .stat-grid{grid-template-columns:1fr 1fr;gap:12px}
-  .detail-stats{grid-template-columns:1fr 1fr;gap:10px}
-  .proj-card-grid{grid-template-columns:1fr}
-  .form-grid,.indicator-input-row,.achievement-inputs,.ind-update-inputs,.ind-kumul-row{grid-template-columns:1fr}
-  .form-actions{flex-wrap:wrap;justify-content:stretch}
-  .form-actions > *{flex:1}
-  .table-toolbar{flex-direction:column;align-items:stretch}
-  .search-input{max-width:none;width:100%}
-  .activity-card-header{padding:12px}
-  .activity-card-progress{min-width:58px}
-  .activity-card-pct{font-size:12px}
-  .activity-card-actions{display:flex;gap:6px}
-  .detail-meta{gap:10px}
-  .modal-overlay{padding:12px}
-  .modal-box{max-height:92vh}
+  body{display:block;}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:240px;height:100vh;transform:translateX(-100%);transition:transform .25s ease;z-index:100;}
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-toggle-btn{display:inline-flex;align-items:center;justify-content:center;}
+  .tab-content{padding:16px;}
+  .topbar{padding:14px 16px;}
+  .main{min-height:100vh;}
+  .proj-card-grid{grid-template-columns:1fr;}
+  .stat-grid{grid-template-columns:1fr 1fr;}
+  .detail-stats{grid-template-columns:1fr 1fr;}
+  .form-grid,.indicator-input-row,.achievement-inputs,.ind-update-inputs,.ind-kumul-row{grid-template-columns:1fr;}
+  .table-toolbar{flex-direction:column;align-items:stretch;}
+  .search-input{max-width:none;}
 }
 @media(max-width:480px){
-  .topbar{padding:12px}
-  .tab-content{padding:12px}
-  .stat-grid,.detail-stats{grid-template-columns:1fr}
-  .stat-card,.detail-header,.form-card{padding:16px}
-  .proj-card{padding:14px}
-  .btn-primary,.btn-secondary{padding:9px 14px}
-  .sidebar{width:86vw;max-width:280px}
+  .stat-grid,.detail-stats{grid-template-columns:1fr;}
+  .tab-content{padding:12px;}
 }

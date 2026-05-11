@@ -54,11 +54,9 @@
       <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
     </div>
     <div class="topbar-right">
-      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">
-        <i class="fa-solid fa-bars"></i>
-      </button>
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
       <span class="realtime-badge">🟢 Realtime ON</span>
-      <button class="btn-secondary btn-sm" id="refreshBtn"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
     </div>
   </div>
 
@@ -334,33 +332,19 @@
 </div>
 
   <script src="documents.js" defer></script>
-
 <script>
 function toggleSidebar(){
-  const sb=document.getElementById('mainSidebar');
-  const ov=document.getElementById('sidebarOverlay');
-  if(sb) sb.classList.toggle('open');
-  if(ov) ov.classList.toggle('open');
+  const s=document.getElementById('mainSidebar');
+  const o=document.getElementById('sidebarOverlay');
+  if(s) s.classList.toggle('open');
+  if(o) o.classList.toggle('open');
 }
 function closeSidebar(){
-  const sb=document.getElementById('mainSidebar');
-  const ov=document.getElementById('sidebarOverlay');
-  if(sb) sb.classList.remove('open');
-  if(ov) ov.classList.remove('open');
+  const s=document.getElementById('mainSidebar');
+  const o=document.getElementById('sidebarOverlay');
+  if(s) s.classList.remove('open');
+  if(o) o.classList.remove('open');
 }
-document.addEventListener('click',function(e){
-  const sb=document.getElementById('mainSidebar');
-  const ov=document.getElementById('sidebarOverlay');
-  if(!sb||window.innerWidth>768) return;
-  if(e.target.closest('.sidebar-toggle-btn')) return;
-  if(e.target.closest('#mainSidebar')) return;
-  sb.classList.remove('open');
-  if(ov) ov.classList.remove('open');
-});
-document.addEventListener('click',function(e){
-  if(window.innerWidth>768) return;
-  if(e.target.closest('.nav-links li') || e.target.closest('#projectSubmenu')) closeSidebar();
-});
 </script>
 </body>
 </html>
