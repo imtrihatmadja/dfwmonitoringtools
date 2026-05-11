@@ -646,3 +646,10 @@ tr:hover td{background:#f8fafc}
   .doc-grid { grid-template-columns:1fr; }
   .doc-thumb-icon { width:48px;height:48px;font-size:22px; }
 }
+
+
+/* Fix requested: 4 cards per row on desktop only */
+.proj-card-grid{grid-template-columns:repeat(4,1fr);}
+@media(max-width:1280px){.proj-card-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:1024px){.proj-card-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.proj-card-grid{grid-template-columns:1fr;}}

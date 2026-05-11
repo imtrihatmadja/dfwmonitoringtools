@@ -1084,7 +1084,6 @@ window.fillFormEdit = function (idx) {
   document.getElementById("f-start-date").value = item.start_date  || "";
   document.getElementById("f-deadline").value   = item.deadline    || "";
   document.getElementById("f-status").value     = item.status;
-  // progress tidak diisi manual
   document.getElementById("f-desc").value            = item.description    || "";
   document.getElementById("f-note").value            = item.note           || "";
   document.getElementById("f-budget-approved").value = item.budget_approved || "";
