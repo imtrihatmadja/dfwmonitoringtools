@@ -1199,8 +1199,8 @@ window.loadArchivedProjects = async function () {
     return;
   }
   const { data, error } = await _client.from("projects")
-    .eq("archived", true)
     .select("id, name, owner, donor, status, archived_at, archived_by")
+    .eq("archived", true)
     .order("archived_at", { ascending: false });
   if (error) { console.error(error); return; }
   if (!data || !data.length) {
@@ -1221,8 +1221,8 @@ window.loadArchivedProjects = async function () {
 // ===================== AUDIT LOG VIEWER =====================
 window.loadProjectAuditLog = async function (projectId, projectName) {
   const { data, error } = await client.from("audit_log")
-    .eq("project_id", projectId)
     .select("entity_type, action, changed_by, new_values, note, created_at")
+    .eq("project_id", projectId)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) { console.error(error); return []; }
@@ -1611,8 +1611,9 @@ window.deleteProject = async function (id, name) {
     project_id: id||null, project_name: name,
     entity_type: "project", action: "archive", changed_by: AUDIT_USER,
   }).then(()=>{}).catch(()=>{});
-  if (currentProject && currentProject.name === name) { currentProject = null; switchTab("dashboard"); }
+  currentProject = null;
   await loadProjects();
+  switchTab("archive");
 };
 
 
