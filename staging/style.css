@@ -1022,3 +1022,58 @@ table { min-width: 520px; }
   #refreshBtn     { padding: 5px 8px; font-size: 11px; }
   #topbarPrintBtn { padding: 5px 8px; font-size: 11px; }
 }
+
+/* ── Detail Header: 2-card grid layout ─────────────────────── */
+.detail-header-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.detail-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  height: 100%;
+}
+
+.detail-card-left  { border-top: 3px solid #2563eb; }
+.detail-card-right { border-top: 3px solid #0ea5e9; }
+
+/* Goal & Outcomes boxes */
+.dh-goal-box {
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  margin-bottom: 0;
+}
+.dh-outcomes-box {
+  background: #f5f3ff;
+  border-left: 3px solid #7c3aed;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+}
+.dh-section-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.dh-label-blue   { color: #2563eb; }
+.dh-label-purple { color: #7c3aed; }
+
+/* Remove old detail-header padding — now handled by cards */
+.detail-header { padding: 0; background: transparent; border: none; box-shadow: none; }
+
+/* ── Mobile: stack vertically ── */
+@media (max-width: 768px) {
+  .detail-header-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .detail-card { padding: 16px; }
+}

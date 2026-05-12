@@ -777,7 +777,6 @@ function renderDetailHeader(proj) {
     return pct >= 100;
   }).length;
   const cls    = proj.status.toLowerCase().replace(/\s+/g, "-");
-  // Avg capaian = rata-rata % pencapaian masing-masing indikator (cap 100%)
   const avgInd = inds.length
     ? Math.round(
         inds.reduce((a, ind) => {
@@ -794,43 +793,57 @@ function renderDetailHeader(proj) {
   const avgIndPct = calcAvgIndikator(proj);
 
   document.getElementById("detailHeader").innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-      <div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
-          <span class="badge badge-${cls}">${proj.status}</span>
-        </div>
+    <!-- Tombol Kembali + badge status -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+      <span class="badge badge-${cls}">${proj.status}</span>
+      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()" style="margin-left:auto">✏️ Edit Proyek</button>
+      <button class="btn-danger btn-sm" onclick="deleteProject('${proj.id}','${proj.name.replace(/'/g,"\\'")}')">🗑️ Arsipkan</button>
+    </div>
+
+    <!-- 2-card layout -->
+    <div class="detail-header-grid">
+
+      <!-- ── KIRI: Identitas + Goal + Outcomes ── -->
+      <div class="detail-card detail-card-left">
         <div class="detail-project-name">${proj.name}</div>
-        <div class="detail-meta">
-          <span>${proj.location}</span>
-          <span>${proj.owner}</span>
-          ${proj.donor    ? `<span>${proj.donor}</span>`            : ""}
-          ${proj.deadline ? `<span>Deadline: ${proj.deadline}</span>` : ""}
+        <div class="detail-meta" style="margin-top:6px;margin-bottom:10px">
+          <span>📍 ${proj.location}</span>
+          <span>👤 ${proj.owner}</span>
+          ${proj.donor    ? `<span>🏦 ${proj.donor}</span>`              : ""}
+          ${proj.deadline ? `<span>📅 Deadline: ${proj.deadline}</span>` : ""}
         </div>
-        ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:100%">${proj.description}</p>` : ""}
+        ${proj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${proj.description}</p>` : ""}
+
         ${proj.goal ? `
-          <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:100%">
-            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">🎯 GOAL</div>
-            <div style="font-size:13px;color:#1e3a5f;line-height:1.5">${proj.goal}</div>
+          <div class="dh-goal-box">
+            <div class="dh-section-label dh-label-blue">🎯 GOAL</div>
+            <div style="font-size:13px;color:#1e3a5f;line-height:1.6">Goal: ${proj.goal}</div>
           </div>
         ` : ""}
+
         ${proj.project_outcomes && proj.project_outcomes.length ? `
-          <div style="margin-top:8px;padding:10px 12px;background:#f5f3ff;border-radius:8px;border-left:3px solid #7c3aed;max-width:100%">
-            <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">ðŸ† OUTCOMES</div>
-            ${proj.project_outcomes.map((o, i) => `
-              <div style="font-size:13px;color:#3b0764;display:flex;gap:6px;margin-bottom:4px;line-height:1.4">
-                <span style="color:#7c3aed;font-weight:700;min-width:16px">${i+1}.</span>
-                <span>${o.outcome_text}</span>
-              </div>
-            `).join("")}
+          <div class="dh-outcomes-box" style="margin-top:10px">
+            <div class="dh-section-label dh-label-purple">🏆 OUTCOMES</div>
+            <ol style="margin:6px 0 0;padding-left:18px">
+              ${proj.project_outcomes.map(o => `
+                <li style="font-size:13px;color:#3b0764;line-height:1.5;margin-bottom:5px">
+                  <span style="color:#64748b;font-size:11px;display:block;margin-bottom:1px">Component / Outcome:</span>
+                  ${o.outcome_text}
+                </li>
+              `).join("")}
+            </ol>
           </div>
         ` : ""}
       </div>
-      <div class="detail-header-right">
-        <!-- Progress Keseluruhan (kalkulasi otomatis) -->
-        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08">
+
+      <!-- ── KANAN: Progress + Stats + Anggaran ── -->
+      <div class="detail-card detail-card-right">
+
+        <!-- Progress Keseluruhan -->
+        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08;margin-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:12px;font-weight:700;color:#475569">ðŸ“Š Progress Keseluruhan</span>
+            <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
             <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px">
@@ -840,8 +853,7 @@ function renderDetailHeader(proj) {
           <div class="overall-progress-bar">
             <div class="overall-progress-fill" style="width:${overall}%;background:${ovColor}"></div>
           </div>
-          <!-- Breakdown komponen -->
-          <div class="overall-breakdown">
+          <div class="overall-breakdown" style="margin-top:8px">
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#6366f1"></span>
               <span>Aktivitas</span>
@@ -853,18 +865,22 @@ function renderDetailHeader(proj) {
               <span>Indikator</span>
               <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "—"}</span>
             </div>
-            <div class="overall-breakdown-sep">Ã· 2</div>
+            <div class="overall-breakdown-sep">÷ 2</div>
           </div>
         </div>
-        <div class="detail-stats" style="margin-top:12px">
+
+        <!-- Stat cards -->
+        <div class="detail-stats" style="margin-bottom:12px">
           <div class="detail-stat"><div class="detail-stat-label">Total Indikator</div><div class="detail-stat-value">${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${new Date(proj.updated_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div></div>
         </div>
+
+        <!-- Anggaran -->
         ${(proj.budget_approved > 0 || proj.budget_actual > 0) ? `
         <div class="detail-budget-box">
-          <div class="detail-budget-title">ðŸ’° Anggaran Proyek</div>
+          <div class="detail-budget-title">💰 Anggaran Proyek</div>
           <div class="detail-budget-row">
             <span>Disetujui</span>
             <strong>${formatRupiah(proj.budget_approved)}</strong>
@@ -890,6 +906,7 @@ function renderDetailHeader(proj) {
             ${proj.budget_updates.length > 5 ? `<div class="mini-history-more">${proj.budget_updates.length - 5} update lainnya</div>` : ""}
           </div>` : ""}
         </div>` : ""}
+
       </div>
     </div>`;
 }
