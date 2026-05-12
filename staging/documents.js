@@ -19,7 +19,11 @@ const DOC_CATEGORIES = [
 window._allDocs        = [];
 window._stagedDocFiles = [];
 
-const _db = () => window.client;
+const _db = () => {
+  const c = window.client;
+  if (!c) throw new Error('Supabase client belum siap. Refresh halaman dan coba lagi.');
+  return c;
+};
 
 // ─────────────────────────────────────────────────────────────
 // INIT TAB DOKUMEN
