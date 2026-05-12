@@ -338,13 +338,30 @@
 
 <!-- ===== TAB ARSIP PROYEK ===== -->
 <div class="tab-content" id="tab-archive">
-  <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+  <div class="table-toolbar">
+    <input type="text" class="search-input" id="archiveSearchInput"
+           placeholder="🔍 Cari nama proyek, PIC…"
+           oninput="filterArchivedProjects(this.value)">
     <button class="btn-secondary btn-sm" onclick="loadArchivedProjects()">
       <i class="fa-solid fa-rotate-right"></i> Refresh
     </button>
   </div>
-  <div id="archivedProjectList">
-    <div style="padding:20px;font-size:13px;color:#94a3b8;">Klik menu <strong>Arsip Proyek</strong> di sidebar untuk memuat data.</div>
+  <div class="table-wrap">
+    <table id="archiveTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama Proyek</th>
+          <th>Lokasi / PIC</th>
+          <th>Donor</th>
+          <th>Status</th>
+          <th>Diarsipkan</th>
+          <th>Oleh</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="archivedProjectList"></tbody>
+    </table>
   </div>
 </div>
 

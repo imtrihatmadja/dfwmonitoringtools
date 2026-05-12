@@ -1190,32 +1190,71 @@ window.restoreProject = async function (id, name) {
   if (document.getElementById("archivedProjectList")) loadArchivedProjects();
 };
 
+window._archivedData = [];
 window.loadArchivedProjects = async function () {
-  const container = document.getElementById("archivedProjectList");
-  if (!container) return;
+  const tbody = document.getElementById("archivedProjectList");
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#94a3b8;font-size:13px;">⏳ Memuat data...</td></tr>';
   const _client = window.client || client;
   if (!_client || typeof _client.from !== 'function') {
-    container.innerHTML = '<div style="padding:20px;font-size:13px;color:#ef4444;">⚠️ Koneksi database belum siap. Coba refresh halaman.</div>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#ef4444;font-size:13px;">⚠️ Koneksi database belum siap. Coba refresh halaman.</td></tr>';
     return;
   }
   const { data, error } = await _client.from("projects")
-    .select("id, name, owner, donor, status, archived_at, archived_by")
+    .select("id, name, location, owner, donor, status, archived_at, archived_by")
     .eq("archived", true)
     .order("archived_at", { ascending: false });
-  if (error) { console.error(error); return; }
-  if (!data || !data.length) {
-    container.innerHTML = '<div style="padding:20px;font-size:13px;color:#94a3b8;">Tidak ada proyek yang diarsipkan.</div>';
+  if (error) { console.error(error); tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;color:#ef4444;">${error.message}</td></tr>`; return; }
+  window._archivedData = data || [];
+  renderArchivedRows(window._archivedData);
+};
+
+function renderArchivedRows(rows) {
+  const tbody = document.getElementById("archivedProjectList");
+  if (!tbody) return;
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#94a3b8;font-size:13px;">📦 Tidak ada proyek yang diarsipkan.</td></tr>';
     return;
   }
-  container.innerHTML = data.map(p => `
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <div style="min-width:0">
-        <div style="font-weight:700;font-size:13px;color:#0f172a">${p.name}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:3px">${p.owner}${p.donor?' &middot; '+p.donor:''} &nbsp;&middot;&nbsp; Diarsipkan ${p.archived_at?new Date(p.archived_at).toLocaleDateString('id-ID'):'-'} oleh ${p.archived_by||'-'}</div>
-      </div>
-      <button class="btn-secondary btn-sm" onclick="restoreProject('${p.id}','${p.name.replace(/'/g,"\\'")}')">Pulihkan</button>
-    </div>
+  const statusClass = s => {
+    if (!s) return 'badge badge-ditangguhkan';
+    const sl = s.toLowerCase();
+    if (sl.includes('aktif') || sl.includes('on-track') || sl.includes('on track')) return 'badge badge-aktif';
+    if (sl.includes('terlambat') || sl.includes('at risk')) return 'badge badge-terlambat';
+    if (sl.includes('selesai') || sl.includes('completed')) return 'badge badge-selesai';
+    return 'badge badge-ditangguhkan';
+  };
+  tbody.innerHTML = rows.map((p, i) => `
+    <tr>
+      <td style="color:#94a3b8;font-size:12px">${i + 1}</td>
+      <td>
+        <div style="font-weight:600;font-size:13px;color:#0f172a">${p.name}</div>
+        ${p.donor ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${p.donor}</div>` : ''}
+      </td>
+      <td style="font-size:12px;color:#475569">${p.location || '-'}<br><span style="color:#94a3b8">${p.owner || '-'}</span></td>
+      <td style="font-size:12px;color:#475569">${p.donor || '-'}</td>
+      <td><span class="${statusClass(p.status)}">${p.status || 'N/A'}</span></td>
+      <td style="font-size:12px;color:#475569;white-space:nowrap">${p.archived_at ? new Date(p.archived_at).toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}) : '-'}</td>
+      <td style="font-size:12px;color:#475569">${p.archived_by || '-'}</td>
+      <td>
+        <button class="btn-secondary btn-sm" style="white-space:nowrap"
+          onclick="restoreProject('${p.id}','${p.name.replace(/'/g,"\\'")}')">
+          <i class="fa-solid fa-rotate-left"></i> Pulihkan
+        </button>
+      </td>
+    </tr>
   `).join("");
+}
+
+window.filterArchivedProjects = function(q) {
+  if (!q) { renderArchivedRows(window._archivedData); return; }
+  const lower = q.toLowerCase();
+  const filtered = (window._archivedData || []).filter(p =>
+    (p.name||'').toLowerCase().includes(lower) ||
+    (p.owner||'').toLowerCase().includes(lower) ||
+    (p.location||'').toLowerCase().includes(lower)
+  );
+  renderArchivedRows(filtered);
 };
 
 // ===================== AUDIT LOG VIEWER =====================
