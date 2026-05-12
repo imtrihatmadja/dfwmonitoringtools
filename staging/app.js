@@ -1193,7 +1193,12 @@ window.restoreProject = async function (id, name) {
 window.loadArchivedProjects = async function () {
   const container = document.getElementById("archivedProjectList");
   if (!container) return;
-  const { data, error } = await client.from("projects")
+  const _client = window.client || client;
+  if (!_client || typeof _client.from !== 'function') {
+    container.innerHTML = '<div style="padding:20px;font-size:13px;color:#ef4444;">⚠️ Koneksi database belum siap. Coba refresh halaman.</div>';
+    return;
+  }
+  const { data, error } = await _client.from("projects")
     .eq("archived", true)
     .select("id, name, owner, donor, status, archived_at, archived_by")
     .order("archived_at", { ascending: false });
