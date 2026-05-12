@@ -686,3 +686,276 @@ tr:hover td{background:#f8fafc}
 
 /* Archive tab badge */
 .archived-badge{background:#f1f5f9;color:#64748b;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+
+
+/* ============================================================
+   MOBILE RESPONSIVE — Comprehensive Fix
+   Breakpoints: 768px (tablet/phone), 480px (small phone)
+   ============================================================ */
+
+/* ── Base: prevent overflow on all screens ── */
+html, body {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+* { box-sizing: border-box; min-width: 0; }
+
+/* ── Topbar: wrap buttons on small screens ── */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── proj-card: prevent overflow in cards ── */
+.proj-card { overflow: hidden; word-break: break-word; }
+.proj-card-name { font-size: 13px; line-height: 1.4; word-break: break-word; }
+.proj-card-meta { font-size: 11px; flex-wrap: wrap; gap: 4px; }
+.proj-card-actions { flex-wrap: wrap; gap: 6px; }
+.proj-card-budget { font-size: 11px; }
+.budget-value { word-break: break-all; }
+.priority-ind-name { font-size: 11px; word-break: break-word; }
+
+/* ── detail-header: flex → block on small ── */
+.detail-header { padding: 16px; }
+.detail-header > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.detail-project-name { font-size: 16px; word-break: break-word; }
+.detail-meta { flex-wrap: wrap; gap: 6px; font-size: 11px; }
+.detail-stats { gap: 8px; }
+
+/* ── overall-progress-box: handle overflow ── */
+.overall-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── modal: full width on mobile ── */
+.modal-overlay { padding: 12px; align-items: flex-end; }
+.modal-box {
+  max-width: 100% !important;
+  max-height: 92vh;
+  border-radius: 16px 16px 0 0;
+}
+.modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* ── ind-update-card: prevent capaian number overflow ── */
+.ind-capaian-main { flex-wrap: wrap; gap: 4px; }
+.ind-capaian-actual { font-size: clamp(22px, 6vw, 36px) !important; }
+.ind-kumul-row { flex-wrap: wrap; }
+.ind-update-header { flex-wrap: wrap; gap: 6px; }
+.ind-update-name { font-size: 12px; word-break: break-word; }
+
+/* ── activity-card: prevent overflow ── */
+.activity-header { flex-wrap: wrap; gap: 6px; }
+.activity-title { font-size: 12px; word-break: break-word; }
+.activity-meta { flex-wrap: wrap; gap: 4px; font-size: 11px; }
+.activity-actions { flex-wrap: wrap; gap: 6px; }
+.act-note-area { flex-wrap: wrap; }
+
+/* ── forms: prevent overflow ── */
+.form-card { padding: 16px; }
+.indicator-block { overflow: hidden; }
+.indicator-input-row { gap: 8px; }
+
+/* ── table: horizontal scroll ── */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { min-width: 520px; }
+
+/* ── budget history: wrap ── */
+.detail-budget-box { font-size: 12px; }
+.mini-history-item { flex-wrap: wrap; gap: 4px; font-size: 11px; }
+
+
+@media (max-width: 768px) {
+
+  /* Topbar */
+  .topbar { padding: 10px 14px; gap: 8px; }
+  .page-title { font-size: 15px; }
+  .page-subtitle { font-size: 11px; }
+  .topbar-right { gap: 6px; }
+  .realtime-badge { font-size: 10px; padding: 3px 8px; }
+  #topbarPrintBtn { font-size: 11px; padding: 5px 10px; }
+
+  /* Sidebar */
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 260px; height: 100vh;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 100;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-brand { display: block !important; }
+  .user-info div { display: block !important; }
+  .nav-links li span:not(.nav-icon) { display: inline !important; }
+  .sidebar-toggle-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .main { margin-left: 0 !important; }
+
+  /* Tab content padding */
+  .tab-content { padding: 14px 12px; }
+
+  /* Dashboard stat grid */
+  .stat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card { padding: 14px 12px; }
+  .stat-value { font-size: 26px; }
+
+  /* Project cards grid: 1 column */
+  .proj-card-grid { grid-template-columns: 1fr !important; gap: 12px; }
+  .proj-card { padding: 14px; }
+
+  /* Detail header: stack vertically */
+  .detail-header > div:first-child {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .detail-header > div:first-child > div:last-child {
+    min-width: unset !important;
+    width: 100%;
+  }
+  .overall-progress-box { padding: 12px 14px; }
+  .overall-progress-bar { height: 8px; }
+
+  /* Detail split panels: stack vertically */
+  .detail-split {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+  .detail-panel {
+    max-height: none !important;
+    min-height: unset !important;
+    height: auto;
+  }
+  .panel-scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .panel-scroll-wrap::after { display: none; }
+
+  /* Panel titlebar */
+  .panel-titlebar { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+  .panel-title { font-size: 13px; }
+
+  /* Indicator update cards */
+  .ind-update-card { padding: 12px; }
+  .ind-kumul-box { padding: 10px 12px; }
+  .ind-kumul-row { grid-template-columns: 1fr !important; }
+  .ind-capaian-display { padding: 10px 12px; }
+  .ind-capaian-actual { font-size: 28px !important; }
+  .ind-capaian-pct-badge { font-size: 18px !important; }
+
+  /* Activity cards */
+  .activity-card-body { padding: 10px 12px; }
+  .activity-footer { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+  .activity-notes-section { padding: 8px 12px; }
+  .act-note-area { gap: 6px; }
+  .act-note-area textarea { font-size: 13px; }
+
+  /* Modal: bottom sheet on mobile */
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-box {
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 90vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .modal-header { padding: 14px 16px; }
+  .modal-body { padding: 14px 16px; }
+  .form-grid { grid-template-columns: 1fr !important; }
+  .form-group.full { grid-column: 1 !important; }
+
+  /* Form step card */
+  .form-card { padding: 16px; }
+  .step-indicator { gap: 8px; }
+  .step-dot { font-size: 11px; }
+  .form-actions { flex-direction: column; gap: 8px; }
+  .form-actions button { width: 100%; }
+
+  /* Indicator builder in form */
+  .indicator-block { padding: 12px; }
+  .indicator-input-row { grid-template-columns: 1fr !important; }
+
+  /* Table: scroll horizontally */
+  .table-wrap { overflow-x: auto; border-radius: 12px; }
+  .table-wrap table { min-width: 560px; }
+
+  /* Detail stats */
+  .detail-stats { grid-template-columns: 1fr 1fr !important; gap: 8px; }
+
+  /* Budget box */
+  .detail-budget-box { padding: 12px 14px; }
+  .detail-budget-row { font-size: 12px; }
+
+  /* Priority indicators */
+  .priority-ind-section { padding: 10px 12px; }
+  .priority-ind-item { padding: 8px 10px; }
+  .priority-ind-right { gap: 4px; }
+  .priority-ind-bar-wrap { width: 60px !important; }
+}
+
+@media (max-width: 480px) {
+
+  .topbar { padding: 9px 12px; }
+  .page-title { font-size: 14px; }
+  .tab-content { padding: 10px; }
+
+  /* 1-col stats on very small */
+  .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 10px; }
+
+  /* Detail stats 2-col */
+  .detail-stats { grid-template-columns: 1fr 1fr !important; }
+  .detail-stat-value { font-size: 18px; }
+
+  /* Cards */
+  .proj-card { padding: 12px; }
+  .proj-card-name { font-size: 12px; }
+
+  /* Typography scale down */
+  .detail-project-name { font-size: 14px; }
+  .ind-update-name { font-size: 11px; }
+  .ind-capaian-actual { font-size: 24px !important; }
+
+  /* Buttons smaller */
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+  .btn-primary, .btn-secondary { padding: 8px 14px; font-size: 12px; }
+
+  /* Panel scroll height on tiny screens */
+  .panel-scroll { max-height: 50vh; }
+
+  /* Form actions stack */
+  .form-actions { flex-direction: column; }
+  .form-actions button { width: 100%; font-size: 13px; }
+
+  /* Overall progress: compact */
+  .overall-progress-box { padding: 10px 12px; }
+  .overall-breakdown { gap: 4px; }
+  .overall-breakdown-item { font-size: 11px; }
+}
+
+/* ── Detail header right column (progress box) ── */
+.detail-header-right {
+  min-width: 260px;
+  flex: 0 0 auto;
+}
+@media (max-width: 768px) {
+  .detail-header-right {
+    min-width: unset !important;
+    width: 100% !important;
+    flex: 1 1 100%;
+  }
+}

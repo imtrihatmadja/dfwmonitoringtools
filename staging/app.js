@@ -806,15 +806,15 @@ function renderDetailHeader(proj) {
           ${proj.donor    ? `<span>${proj.donor}</span>`            : ""}
           ${proj.deadline ? `<span>Deadline: ${proj.deadline}</span>` : ""}
         </div>
-        ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:600px">${proj.description}</p>` : ""}
+        ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:100%">${proj.description}</p>` : ""}
         ${proj.goal ? `
-          <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:600px">
+          <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:100%">
             <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">🎯 GOAL</div>
             <div style="font-size:13px;color:#1e3a5f;line-height:1.5">${proj.goal}</div>
           </div>
         ` : ""}
         ${proj.project_outcomes && proj.project_outcomes.length ? `
-          <div style="margin-top:8px;padding:10px 12px;background:#f5f3ff;border-radius:8px;border-left:3px solid #7c3aed;max-width:600px">
+          <div style="margin-top:8px;padding:10px 12px;background:#f5f3ff;border-radius:8px;border-left:3px solid #7c3aed;max-width:100%">
             <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">ðŸ† OUTCOMES</div>
             ${proj.project_outcomes.map((o, i) => `
               <div style="font-size:13px;color:#3b0764;display:flex;gap:6px;margin-bottom:4px;line-height:1.4">
@@ -825,7 +825,7 @@ function renderDetailHeader(proj) {
           </div>
         ` : ""}
       </div>
-      <div style="min-width:280px">
+      <div class="detail-header-right">
         <!-- Progress Keseluruhan (kalkulasi otomatis) -->
         <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
