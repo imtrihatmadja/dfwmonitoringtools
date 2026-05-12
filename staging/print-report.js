@@ -6,35 +6,138 @@
 function openPrintModal() {
   if (!currentProject) { alert('Buka halaman detail proyek terlebih dahulu.'); return; }
   const m = document.getElementById('printLangModal');
-  if (m) m.classList.remove('hidden');
+  if (!m) return;
+  const activeBtn = document.querySelector('#printPresetGrid .print-preset-btn.active')
+    || document.querySelectorAll('#printPresetGrid .print-preset-btn')[2];
+  setPrintPreset('month', activeBtn);
+  m.classList.remove('hidden');
 }
 function closePrintModal() {
   const m = document.getElementById('printLangModal');
   if (m) m.classList.add('hidden');
 }
 
-// ── Fetch data segar ──────────────────────────────────────────
-async function _rptFetch(projectName) {
-  const [indRes, actRes, budRes, outRes] = await Promise.all([
-    client.from('project_indicators')
-      .select('id,indicator_name,type,target,unit,actual,indicator_updates(id,actual_value,note,updated_by,created_at)')
-      .eq('project_name', projectName).order('created_at', { ascending: true }),
-    client.from('project_activities')
-      .select('id,title,description,pic,status,start_date,due_date,progress,sort_order,activity_notes(id,note,noted_by,created_at)')
-      .eq('project_name', projectName).order('sort_order', { ascending: true }),
-    client.from('budget_updates')
-      .select('id,actual_value,note,updated_by,created_at')
-      .eq('project_name', projectName).order('created_at', { ascending: true }),
-    client.from('project_outcomes')
-      .select('id,outcome_text,sort_order')
-      .eq('project_name', projectName).order('sort_order', { ascending: true }),
-  ]);
+// ── Preset helpers ─────────────────────────────────────────────
+function setPrintPreset(preset, btn) {
+  const today = new Date(); today.setHours(23,59,59,999);
+  let from = new Date();    from.setHours(0,0,0,0);
+  if      (preset==='week')    { from.setDate(today.getDate()-6); }
+  else if (preset==='2week')   { from.setDate(today.getDate()-13); }
+  else if (preset==='month')   { from=new Date(today.getFullYear(),today.getMonth(),1); }
+  else if (preset==='quarter') { from=new Date(today.getFullYear(),today.getMonth()-2,1); }
+  else if (preset==='half')    { from=new Date(today.getFullYear(),today.getMonth()-5,1); }
+  if (preset!=='custom') {
+    const fi=document.getElementById('printDateFrom');
+    const ti=document.getElementById('printDateTo');
+    if(fi) fi.value=_toInputDate(from);
+    if(ti) ti.value=_toInputDate(today);
+  }
+  document.querySelectorAll('.print-preset-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  _updatePeriodInfo();
+}
+function clearPresetActive() {
+  document.querySelectorAll('.print-preset-btn').forEach(b=>b.classList.remove('active'));
+  const btns=document.querySelectorAll('.print-preset-btn');
+  if(btns.length) btns[btns.length-1].classList.add('active');
+  _updatePeriodInfo();
+}
+function _toInputDate(d) {
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+function _updatePeriodInfo() {
+  const fv=document.getElementById('printDateFrom')?.value;
+  const tv=document.getElementById('printDateTo')?.value;
+  const el=document.getElementById('printPeriodInfo');
+  if(!el) return;
+  if(fv&&tv) {
+    const fStr=new Date(fv).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
+    const tStr=new Date(tv).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
+    el.innerHTML=`📋 Laporan akan merangkum data dari <strong>${fStr}</strong> sampai <strong>${tStr}</strong>`;
+  } else { el.innerHTML=`ℹ️ Pilih preset atau isi tanggal secara manual.`; }
+}
+function _getPrintRange() {
+  const fv=document.getElementById('printDateFrom')?.value;
+  const tv=document.getElementById('printDateTo')?.value;
+  if(!fv||!tv) return null;
+  const from=new Date(fv+'T00:00:00'), to=new Date(tv+'T23:59:59');
   return {
-    indicators:    indRes.data  || [],
-    activities:    actRes.data  || [],
-    budgetUpdates: budRes.data  || [],
-    outcomes:      outRes.data  || [],
+    from, to,
+    fromStr: from.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}),
+    toStr:   to.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}),
+    fromStrEN: from.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}),
+    toStrEN:   to.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}),
   };
+}
+
+// ── Fetch data segar ──────────────────────────────────────────
+async function _rptFetch(projectName, dateRange = null) {
+  // Semua indikator & aktivitas selalu diambil sebagai konteks
+  let indQ = client.from('project_indicators')
+    .select('id,indicator_name,type,target,unit,actual,indicator_updates(id,actual_value,note,updated_by,created_at)')
+    .eq('project_name', projectName).order('created_at', { ascending: true });
+
+  let actQ = client.from('project_activities')
+    .select('id,title,description,pic,status,start_date,due_date,progress,sort_order,activity_notes(id,note,noted_by,created_at)')
+    .eq('project_name', projectName).order('sort_order', { ascending: true });
+
+  // Budget & outcomes
+  let budQ = client.from('budget_updates')
+    .select('id,actual_value,note,updated_by,created_at')
+    .eq('project_name', projectName).order('created_at', { ascending: true });
+
+  let outQ = client.from('project_outcomes')
+    .select('id,outcome_text,sort_order')
+    .eq('project_name', projectName).order('sort_order', { ascending: true });
+
+  // Filter budget_updates by range di server
+  if (dateRange) {
+    budQ = budQ
+      .gte('created_at', dateRange.from.toISOString())
+      .lte('created_at', dateRange.to.toISOString());
+  }
+
+  const [indRes, actRes, budRes, outRes] = await Promise.all([indQ, actQ, budQ, outQ]);
+
+  let indicators    = indRes.data || [];
+  let activities    = actRes.data || [];
+  const budgetUpdates = budRes.data || [];
+  const outcomes    = outRes.data  || [];
+
+  // Filter indicator_updates & activity_notes client-side
+  if (dateRange) {
+    const fromMs = dateRange.from.getTime();
+    const toMs   = dateRange.to.getTime();
+
+    indicators = indicators.map(ind => ({
+      ...ind,
+      indicator_updates_all: ind.indicator_updates || [],
+      indicator_updates: (ind.indicator_updates || []).filter(u => {
+        const t = new Date(u.created_at).getTime();
+        return t >= fromMs && t <= toMs;
+      }),
+    }));
+
+    activities = activities.map(act => {
+      const sd = act.start_date ? new Date(act.start_date).getTime() : null;
+      const dd = act.due_date   ? new Date(act.due_date  ).getTime() : null;
+      const inRange = !sd || (sd <= toMs && (!dd || dd >= fromMs));
+      return {
+        ...act,
+        activity_notes: (act.activity_notes || []).filter(n => {
+          const t = new Date(n.created_at).getTime();
+          return t >= fromMs && t <= toMs;
+        }),
+        _inRange: inRange,
+      };
+    });
+  } else {
+    indicators = indicators.map(i => ({ ...i, indicator_updates_all: i.indicator_updates || [] }));
+    activities = activities.map(a => ({ ...a, _inRange: true }));
+  }
+
+  return { indicators, activities, budgetUpdates, outcomes, dateRange };
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -117,6 +220,16 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:10.5pt;color:#1
 .cover-type{font-size:9.5pt;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
   opacity:.75;margin-bottom:6px}
 .cover-title{font-size:21pt;font-weight:800;line-height:1.15;margin-bottom:14px;position:relative;z-index:1}
+.cover-period-badge{
+  display:inline-block;background:rgba(255,255,255,.18);color:#fff;
+  font-size:9pt;font-weight:700;letter-spacing:.4px;
+  padding:4px 12px;border-radius:20px;margin-bottom:10px;
+  border:1px solid rgba(255,255,255,.3)
+}
+.cover-period-footer{
+  font-size:9pt;font-weight:700;opacity:.9;
+  background:rgba(255,255,255,.15);padding:3px 10px;border-radius:12px
+}
 .cover-meta-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 24px;
   background:rgba(255,255,255,.12);border-radius:10px;padding:12px 16px;
   backdrop-filter:blur(6px);position:relative;z-index:1}
@@ -237,6 +350,7 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:10.5pt;color:#1
 
 // ── Fungsi utama ──────────────────────────────────────────────
 async function generateAndPrint(lang) {
+  const dateRange = _getPrintRange();
   closePrintModal();
   if (!currentProject) return;
   const proj = currentProject;
@@ -254,7 +368,7 @@ async function generateAndPrint(lang) {
   document.body.appendChild(ld);
 
   let fresh;
-  try { fresh = await _rptFetch(proj.name); }
+  try { fresh = await _rptFetch(proj.name, dateRange); }
   catch(e) { document.body.removeChild(ld); alert('Gagal: '+e.message); return; }
   document.body.removeChild(ld);
 
@@ -262,6 +376,12 @@ async function generateAndPrint(lang) {
   const isID = lang !== 'en';
   const now  = new Date();
   const nowStr = now.toLocaleString('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const dr = fresh.dateRange;
+  const periodLabel = dr
+    ? (isID
+        ? `Periode: ${dr.fromStr} – ${dr.toStr}`
+        : `Period: ${dr.fromStrEN} – ${dr.toStrEN}`)
+    : (isID ? 'Semua Data' : 'All Data');
 
   // ── Kalkulasi progress ────────────────────────────────────
   let avgInd=null, avgAct=null;
@@ -400,6 +520,7 @@ async function generateAndPrint(lang) {
   <div class="cover-header avoid-break">
     <div class="cover-org-badge">🏢 ${L.org}</div>
     <div class="cover-type">${L.reportType}</div>
+    <div class="cover-period-badge">📅 ${periodLabel}</div>
     <div class="cover-title">${proj.name}</div>
     <div class="cover-meta-grid">
       ${proj.location  ?`<div class="cover-meta-item"><span class="cover-meta-label">${L.location}</span><span class="cover-meta-value">${proj.location}</span></div>`:''}
@@ -412,6 +533,7 @@ async function generateAndPrint(lang) {
     </div>
     <div class="cover-footer">
       <span>${L.printedOn}: ${nowStr}</span>
+      <span class="cover-period-footer">📅 ${periodLabel}</span>
       <span style="font-size:18pt;font-weight:900;opacity:.95">${overall}% <span style="font-size:10pt;opacity:.8">${_pctLabel(overall)}</span></span>
     </div>
   </div>`;
@@ -505,7 +627,8 @@ async function generateAndPrint(lang) {
   // ═══════════════════════════════════════════════════════════
   // SECTION 5: Aktivitas
   // ═══════════════════════════════════════════════════════════
-  const actRows = activities.map((act,i)=>{
+  const rangedActivities = activities.filter(a => a._inRange !== false);
+  const actRows = rangedActivities.map((act,i)=>{
     const c=_statusColor(act.status), prog=Number(act.progress)||0;
     const notes=(act.activity_notes||[]);
     const noteSummary = notes.length
@@ -524,7 +647,7 @@ async function generateAndPrint(lang) {
 
   const s5 = activities.length ? `
   <div class="section-card page-break">
-    ${secHead('📋',L.sec_act,'#0891b2',activities.length+' aktivitas')}
+    ${secHead('📋',L.sec_act,'#0891b2',rangedActivities.length+' aktivitas')}
     <table class="tbl">
       <thead><tr>
         <th class="ctr" style="width:28px">#</th>
@@ -546,7 +669,7 @@ async function generateAndPrint(lang) {
   // ═══════════════════════════════════════════════════════════
   // SECTION 6: Hambatan & Tantangan (dari activity_notes)
   // ═══════════════════════════════════════════════════════════
-  const actsWithNotes = activities.filter(a=>(a.activity_notes||[]).length>0);
+  const actsWithNotes = rangedActivities.filter(a=>(a.activity_notes||[]).length>0);
   const hambatanCards = actsWithNotes.length
     ? actsWithNotes.map(act=>{
         const notes=[...act.activity_notes].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
