@@ -50,12 +50,14 @@
 
   <!-- TOPBAR -->
   <div class="topbar">
-    <div>
-      <div class="page-title" id="pageTitle">Dashboard</div>
-      <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
+    <div class="topbar-left">
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+      <div class="topbar-page-info">
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
+      </div>
     </div>
     <div class="topbar-right">
-      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
       <span class="realtime-badge">🟢 Realtime ON</span>
       <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
       <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
