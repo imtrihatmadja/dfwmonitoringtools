@@ -7,8 +7,6 @@
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js" defer></script>
 </head>
 <body>
 <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -350,9 +348,11 @@
   </div>
 </div>
 
-  <script src="documents.js" defer></script>
-  <script src="impact.js" defer></script>
-  <script src="print-report.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+  <script src="documents.js"></script>
+  <script src="impact.js"></script>
+  <script src="print-report.js"></script>
 <script>
 function toggleSidebar(){
   const s=document.getElementById('mainSidebar');
