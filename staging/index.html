@@ -340,12 +340,16 @@
 
 <!-- ===== TAB ARSIP PROYEK ===== -->
 <div class="tab-content" id="tab-archive">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+  <div class="tab-page-header">
     <div>
-      <div style="font-size:16px;font-weight:700;color:#0f172a">📦 Arsip Proyek</div>
-      <div style="font-size:12px;color:#94a3b8;margin-top:2px">Proyek yang diarsipkan dapat dipulihkan kapan saja</div>
+      <div class="tab-page-title">📦 Arsip Proyek</div>
+      <div class="tab-page-subtitle">Proyek yang diarsipkan dapat dipulihkan kapan saja</div>
     </div>
-    <button class="btn-secondary btn-sm" onclick="loadArchivedProjects()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+    <div class="tab-page-actions">
+      <button class="btn-secondary btn-sm" onclick="loadArchivedProjects()">
+        <i class="fa-solid fa-rotate-right"></i> Refresh
+      </button>
+    </div>
   </div>
   <div id="archivedProjectList">
     <div style="padding:20px;font-size:13px;color:#94a3b8;">Klik menu <strong>Arsip Proyek</strong> di sidebar untuk memuat data.</div>

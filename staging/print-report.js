@@ -31,6 +31,13 @@ function setPrintPreset(preset, btn) {
     const ti=document.getElementById('printDateTo');
     if(fi) fi.value=_toInputDate(from);
     if(ti) ti.value=_toInputDate(today);
+  } else {
+    // Custom: isi default bulan ini jika belum ada nilai
+    const fi=document.getElementById('printDateFrom');
+    const ti=document.getElementById('printDateTo');
+    const defFrom=new Date(today.getFullYear(),today.getMonth(),1);
+    if(fi&&!fi.value) fi.value=_toInputDate(defFrom);
+    if(ti&&!ti.value) ti.value=_toInputDate(today);
   }
   document.querySelectorAll('.print-preset-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
@@ -142,6 +149,7 @@ async function _rptFetch(projectName, dateRange = null) {
 
 // ── Helpers ───────────────────────────────────────────────────
 function _rptActual(ind) {
+  // Pakai indicator_updates (bisa filtered by range — untuk RTL/notes periode)
   const upds = ind.indicator_updates || [];
   if (upds.length) {
     const v = Number([...upds].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0].actual_value);
@@ -149,6 +157,16 @@ function _rptActual(ind) {
   }
   return isNaN(Number(ind.actual)) ? 0 : Number(ind.actual);
 }
+function _rptActualAll(ind) {
+  // Selalu pakai semua updates (untuk overall progress & capaian aktual proyek)
+  const upds = ind.indicator_updates_all || ind.indicator_updates || [];
+  if (upds.length) {
+    const v = Number([...upds].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0].actual_value);
+    if (!isNaN(v)) return v;
+  }
+  return isNaN(Number(ind.actual)) ? 0 : Number(ind.actual);
+}
+
 function _rptPct(a, t) { const n=Number(t)||0; return n>0?Math.min(Math.round(a/n*100),999):0; }
 function _rptRupiah(n) { if(!n&&n!==0)return'—'; return'Rp\u00a0'+Number(n).toLocaleString('id-ID'); }
 function _rptDate(d)   { if(!d)return'—'; return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); }
@@ -351,6 +369,10 @@ body{font-family:'Segoe UI',system-ui,Arial,sans-serif;font-size:10.5pt;color:#1
 // ── Fungsi utama ──────────────────────────────────────────────
 async function generateAndPrint(lang) {
   const dateRange = _getPrintRange();
+  if (!dateRange) {
+    alert('Harap isi tanggal "Dari" dan "Sampai" terlebih dahulu.');
+    return;
+  }
   closePrintModal();
   if (!currentProject) return;
   const proj = currentProject;
@@ -387,7 +409,7 @@ async function generateAndPrint(lang) {
   let avgInd=null, avgAct=null;
   if(indicators.length){
     avgInd = Math.round(indicators.reduce((s,i)=>{
-      const a=_rptActual(i),t=Number(i.target)||0;
+      const a=_rptActualAll(i),t=Number(i.target)||0;
       return s+(t>0?Math.min(Math.round(a/t*100),100):0);
     },0)/indicators.length);
   }
@@ -399,7 +421,7 @@ async function generateAndPrint(lang) {
   else if(avgInd!==null)overall=avgInd;
   else if(avgAct!==null)overall=avgAct;
 
-  const doneInd = indicators.filter(i=>{const a=_rptActual(i),t=Number(i.target)||0;return t>0&&a>=t;}).length;
+  const doneInd = indicators.filter(i=>{const a=_rptActualAll(i),t=Number(i.target)||0;return t>0&&a>=t;}).length;
   const doneAct = activities.filter(a=>a.status==='Selesai').length;
   const budAppr = Number(proj.budget_approved)||0;
   const lastBudRow = budgetUpdates.length ? [...budgetUpdates].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0] : null;
@@ -589,7 +611,7 @@ async function generateAndPrint(lang) {
   // SECTION 4: Indikator
   // ═══════════════════════════════════════════════════════════
   const indRows = indicators.map((ind,i)=>{
-    const a=_rptActual(ind), tg=Number(ind.target)||0, pct=_rptPct(a,tg), c=_pctColor(pct);
+    const a=_rptActualAll(ind), tg=Number(ind.target)||0, pct=_rptPct(a,tg), c=_pctColor(pct);
     const notes = (ind.indicator_updates||[]).filter(u=>u.note&&u.note.trim());
     const lastNote = notes.length ? [...notes].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0].note : '—';
     return `<tr>

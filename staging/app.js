@@ -208,6 +208,7 @@ const tabTitles = {
   projects  : ["Daftar Proyek", "Semua data proyek yang dimonitor"],
   documents : ["Dokumen",       "Manajemen dokumen proyek via Google Drive"],
   input     : ["Tambah Proyek", "Tambah proyek baru"],
+  archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
   detail    : ["Detail Proyek", ""]
 };
 
@@ -226,6 +227,7 @@ function switchTab(tab) {
   document.getElementById("pageSubtitle").textContent = t ? t[1] : "";
   if (tab === "projects" || tab === "dashboard") loadProjects();
   if (tab === "input") renderOutcomeList();
+  if (tab === "archive") loadArchivedProjects();
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
