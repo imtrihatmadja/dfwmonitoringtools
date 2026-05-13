@@ -36,7 +36,7 @@
 | 3 | **Pulihkan proyek** | Proyek yang diarsipkan bisa dikembalikan dengan tombol Pulihkan |
 | 4 | **Audit log** | Setiap simpan/edit/arsip/pulihkan tercatat di tabel audit_log |
 | 5 | **DB trigger rename** | Ubah nama proyek → semua tabel turunan ikut update otomatis via trigger |
-| 6 | **Save lebih aman** | Upsert menangkap UUID dari Supabase dan meneruskan ke semua insert turunan |
+| 6 | **Save lebih aman** | Upsert menangkap UUID dari Supabase dan meneruskan ke semua insert turunannya |
 
 ---
 
