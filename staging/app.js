@@ -1332,7 +1332,7 @@ function renderActivityListDetail() {
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
               <button class="btn-secondary btn-sm" style="font-size:11px;padding:4px 8px;margin-right:4px" title="Peserta Kegiatan"
-                onclick="openAddParticipantModal('${act.id}','${(act.title||'').replace(/'/g,\"\\\\'\")}','${currentProject?.name||''}')">
+                onclick="openAddParticipantModalById('${act.id}')">
                 <i class='fa-solid fa-users'></i>
                 <span id="pcount-${act.id}" style="font-size:10px"></span>
               </button>
@@ -1386,6 +1386,16 @@ window.loadAllParticipantBadges = async function () {
     if (el) el.textContent = countMap[id] > 0 ? countMap[id] : '';
   });
 };
+// Wrapper aman untuk buka modal peserta dari activity card
+window.openAddParticipantModalById = function (actId) {
+  const act = (window.allActivities || []).find(a => a.id === actId);
+  if (!act) return;
+  const projName = window.currentProject?.name || '';
+  if (typeof openAddParticipantModal === 'function') {
+    openAddParticipantModal(actId, act.title || '', projName);
+  }
+};
+
 
 
 function renderActNotes(notes) {
