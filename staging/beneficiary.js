@@ -14,41 +14,58 @@ window.loadBeneficiaries = async function () {
   const _client = window.client || client;
   showBenLoading(true);
 
-  // Hitung stats dulu
-  const [{ data: benData }, { data: partData }] = await Promise.all([
+  const [
+    { data: benData },
+    { data: partData },
+    { data: projData },
+  ] = await Promise.all([
     _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
     _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
+    _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
   ]);
 
-  _benAllData = benData || [];
+  _benAllData        = benData  || [];
   const participants = partData || [];
+  const benProjects  = projData || [];
 
-  // Hitung per-beneficiary: berapa kali hadir & di proyek apa saja
+  // Map: beneficiary_id → daftar proyek (dari beneficiary_projects)
+  const projMapBen = {};
+  benProjects.forEach(bp => {
+    if (!projMapBen[bp.beneficiary_id]) projMapBen[bp.beneficiary_id] = new Set();
+    projMapBen[bp.beneficiary_id].add(bp.project_name);
+  });
+
+  // Map: beneficiary_id → daftar partisipasi kegiatan
   const partMap = {};
   participants.forEach(p => {
     if (!partMap[p.beneficiary_id]) partMap[p.beneficiary_id] = [];
     partMap[p.beneficiary_id].push(p);
   });
 
-  // Hitung stats card
-  const totalUnique    = _benAllData.length;
-  const totalMale      = _benAllData.filter(b => b.gender === 'Laki-laki').length;
-  const totalFemale    = _benAllData.filter(b => b.gender === 'Perempuan').length;
-  const totalParticip  = participants.length;
-  const projectsSet    = new Set(participants.map(p => p.project_name).filter(Boolean));
+  // Stats
+  const totalUnique   = _benAllData.length;
+  const totalMale     = _benAllData.filter(b => b.gender === 'Laki-laki').length;
+  const totalFemale   = _benAllData.filter(b => b.gender === 'Perempuan').length;
+  const totalParticip = participants.length;
 
   document.getElementById('benStatUnique').textContent   = totalUnique.toLocaleString('id-ID');
   document.getElementById('benStatMale').textContent     = totalMale.toLocaleString('id-ID');
   document.getElementById('benStatFemale').textContent   = totalFemale.toLocaleString('id-ID');
   document.getElementById('benStatParticip').textContent = totalParticip.toLocaleString('id-ID');
 
-  // Gabungkan data + partisipasi
-  _benAllData = _benAllData.map(b => ({
-    ...b,
-    participations: partMap[b.id] || [],
-    totalKegiatan : (partMap[b.id] || []).length,
-    totalProyek   : new Set((partMap[b.id] || []).map(p => p.project_name)).size,
-  }));
+  // Gabungkan: proyek dari beneficiary_projects UNION proyek dari activity_participants
+  _benAllData = _benAllData.map(b => {
+    const fromProjTable = projMapBen[b.id] || new Set();
+    const fromParts     = new Set((partMap[b.id] || []).map(p => p.project_name).filter(Boolean));
+    const allProjects   = new Set([...fromProjTable, ...fromParts]);
+    return {
+      ...b,
+      projects      : [...allProjects],        // ← dipakai untuk filter
+      participations: partMap[b.id] || [],
+      totalKegiatan : (partMap[b.id] || []).length,
+      totalProyek   : allProjects.size,
+    };
+  });
 
   _benFilteredData = [..._benAllData];
   _benCurrentPage  = 1;
@@ -69,7 +86,9 @@ window.filterBeneficiaries = function () {
       (b.location||'').toLowerCase().includes(q) ||
       (b.occupation||'').toLowerCase().includes(q);
     const matchG = !gender || b.gender === gender;
-    const matchP = !project || b.participations.some(p => p.project_name === project);
+    // Filter proyek: cek dari b.projects (gabungan beneficiary_projects + activity_participants)
+    const matchP = !project || (b.projects || []).includes(project) ||
+                   b.participations.some(p => p.project_name === project);
     return matchQ && matchG && matchP;
   });
   _benCurrentPage = 1;
@@ -96,7 +115,7 @@ function renderBenTable() {
 
   tbody.innerHTML = rows.map((b, i) => {
     const usia = b.birth_year ? (new Date().getFullYear() - b.birth_year) + ' th' : '-';
-    const projs = [...new Set(b.participations.map(p => p.project_name))].filter(Boolean);
+    const projs = (b.projects && b.projects.length) ? b.projects : [...new Set(b.participations.map(p => p.project_name))].filter(Boolean);
     const projLabel = projs.length
       ? projs.map(p => `<span style="background:#eff6ff;color:#2563eb;border-radius:4px;padding:1px 6px;font-size:10px;white-space:nowrap">${p}</span>`).join(' ')
       : '<span style="color:#94a3b8">-</span>';
@@ -252,33 +271,43 @@ window.saveBeneficiary = async function () {
 
   if (error) { showBenFormMsg('❌ ' + error.message, 'error'); return; }
 
-  // ── Jika ada proyek & kegiatan dipilih → insert ke activity_participants ──
+  // ── Jika ada proyek dipilih → catat relasi beneficiary ↔ proyek ──
   const projName = document.getElementById('benF-project')?.value;
   const actSel   = document.getElementById('benF-activity');
   const actId    = actSel?.value;
   const actTitle = actSel?.options[actSel.selectedIndex]?.getAttribute('data-title') || '';
 
-  if (benId && projName && actId) {
-    const attendedDate = document.getElementById('benF-attended-date')?.value || null;
-    const attendNote   = document.getElementById('benF-attend-note')?.value.trim() || null;
-
+  if (benId && projName) {
     // Lookup project_id
     const { data: projData } = await _client.from('projects').select('id').eq('name', projName).single();
 
-    const { error: errPart } = await _client.from('activity_participants').upsert({
-      activity_id   : actId,
-      activity_name : actTitle,
+    // ① Selalu catat ke beneficiary_projects (agar filter proyek bisa bekerja)
+    await _client.from('beneficiary_projects').upsert({
+      beneficiary_id: benId,
       project_name  : projName,
       project_id    : projData?.id || null,
-      beneficiary_id: benId,
-      attended_date : attendedDate || null,
-      note          : attendNote,
-    }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
+    }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
 
-    if (errPart) {
-      showBenFormMsg('✅ Data tersimpan, tapi gagal daftarkan ke kegiatan: ' + errPart.message, 'error');
-      setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 1500);
-      return;
+    // ② Jika ada kegiatan → catat ke activity_participants juga
+    if (actId) {
+      const attendedDate = document.getElementById('benF-attended-date')?.value || null;
+      const attendNote   = document.getElementById('benF-attend-note')?.value.trim() || null;
+
+      const { error: errPart } = await _client.from('activity_participants').upsert({
+        activity_id   : actId,
+        activity_name : actTitle,
+        project_name  : projName,
+        project_id    : projData?.id || null,
+        beneficiary_id: benId,
+        attended_date : attendedDate || null,
+        note          : attendNote,
+      }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
+
+      if (errPart) {
+        showBenFormMsg('✅ Data tersimpan, tapi gagal daftarkan ke kegiatan: ' + errPart.message, 'error');
+        setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 1500);
+        return;
+      }
     }
   }
 
@@ -597,6 +626,15 @@ window.runBenImport = async function () {
       }
     }
 
+    // ── STEP 1b: Catat relasi beneficiary ↔ proyek ─────────────────
+    if (benId && r.project_name) {
+      await _client.from('beneficiary_projects').upsert({
+        beneficiary_id: benId,
+        project_name  : r.project_name,
+        project_id    : projMap[r.project_name.toLowerCase()] || null,
+      }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
+    }
+
     // ── STEP 2: Insert ke activity_participants ───────────────────
     if (benId && r.project_name && r.activity_name) {
       const actKey = `${r.project_name.toLowerCase()}|${r.activity_name.toLowerCase()}`;
@@ -782,6 +820,15 @@ window.addParticipant = async function (benId, benName) {
 
   if (error && !error.message.includes('unique') && !error.message.includes('duplicate')) {
     alert('Gagal tambah: ' + error.message); return;
+  }
+
+  // Catat relasi beneficiary ↔ proyek agar filter proyek bekerja
+  if (projName) {
+    await _client.from('beneficiary_projects').upsert({
+      beneficiary_id: benId,
+      project_name  : projName,
+      project_id    : projData?.id || null,
+    }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
   }
 
   window._benPickerExisting?.add(benId);
