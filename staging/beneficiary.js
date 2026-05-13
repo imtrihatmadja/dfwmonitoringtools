@@ -166,13 +166,54 @@ window.populateBenProjectFilter = async function () {
 };
 
 // ── Form Tambah Beneficiary ───────────────────────────────────────────
-window.openAddBenModal = function () {
+window.openAddBenModal = async function () {
+  const _client = window.client || client;
   document.getElementById('benFormOverlay').classList.remove('hidden');
   document.getElementById('benFormTitle').textContent = 'Tambah Penerima Manfaat';
-  document.getElementById('benForm').reset();
   document.getElementById('benFormId').value = '';
   document.getElementById('benFormMsg').className = 'form-msg hidden';
+  // Reset semua field manual
+  ['benF-name','benF-phone','benF-location','benF-occupation','benF-email','benF-note','benF-attend-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['benF-gender','benF-birthyear'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  // Reset dropdown proyek & aktivitas
+  const selProj = document.getElementById('benF-project');
+  const selAct  = document.getElementById('benF-activity');
+  const dateEl  = document.getElementById('benF-attended-date');
+  if (dateEl) dateEl.value = '';
+  if (selAct)  { selAct.innerHTML = '<option value="">-- Pilih Kegiatan --</option>'; selAct.disabled = true; }
+
+  // Load proyek aktif
+  if (selProj) {
+    const { data: projs } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
+    selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
+      (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+  }
 };
+
+window.loadActivitiesForBenForm = async function () {
+  const _client   = window.client || client;
+  const projName  = document.getElementById('benF-project')?.value;
+  const selAct    = document.getElementById('benF-activity');
+  if (!selAct) return;
+  if (!projName) {
+    selAct.innerHTML = '<option value="">-- Pilih Kegiatan --</option>';
+    selAct.disabled  = true;
+    return;
+  }
+  const { data: acts } = await _client
+    .from('project_activities')
+    .select('id,title')
+    .eq('project_name', projName)
+    .order('created_at', { ascending: true });
+  selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
+    (acts||[]).map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
+  selAct.disabled = false;
+};
+
 window.closeBenModal = function () {
   document.getElementById('benFormOverlay').classList.add('hidden');
 };
@@ -195,14 +236,52 @@ window.saveBeneficiary = async function () {
     note        : document.getElementById('benF-note').value.trim() || null,
   };
 
+  let benId = id;
   let error;
+
   if (id) {
     ({ error } = await _client.from('beneficiaries').update(payload).eq('id', id));
   } else {
-    ({ error } = await _client.from('beneficiaries').insert(payload));
+    const { data: inserted, error: errIns } = await _client
+      .from('beneficiaries')
+      .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: false })
+      .select('id').single();
+    error = errIns;
+    benId = inserted?.id;
   }
 
   if (error) { showBenFormMsg('❌ ' + error.message, 'error'); return; }
+
+  // ── Jika ada proyek & kegiatan dipilih → insert ke activity_participants ──
+  const projName = document.getElementById('benF-project')?.value;
+  const actSel   = document.getElementById('benF-activity');
+  const actId    = actSel?.value;
+  const actTitle = actSel?.options[actSel.selectedIndex]?.getAttribute('data-title') || '';
+
+  if (benId && projName && actId) {
+    const attendedDate = document.getElementById('benF-attended-date')?.value || null;
+    const attendNote   = document.getElementById('benF-attend-note')?.value.trim() || null;
+
+    // Lookup project_id
+    const { data: projData } = await _client.from('projects').select('id').eq('name', projName).single();
+
+    const { error: errPart } = await _client.from('activity_participants').upsert({
+      activity_id   : actId,
+      activity_name : actTitle,
+      project_name  : projName,
+      project_id    : projData?.id || null,
+      beneficiary_id: benId,
+      attended_date : attendedDate || null,
+      note          : attendNote,
+    }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
+
+    if (errPart) {
+      showBenFormMsg('✅ Data tersimpan, tapi gagal daftarkan ke kegiatan: ' + errPart.message, 'error');
+      setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 1500);
+      return;
+    }
+  }
+
   showBenFormMsg('✅ Tersimpan!', 'success');
   setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 800);
 };
@@ -637,25 +716,47 @@ window.closeBenPicker = function () {
 };
 
 window.renderBenPicker = function (q) {
-  const lower = q.toLowerCase();
-  const list  = (window._benPickerAll || []).filter(b =>
-    !q || (b.name||'').toLowerCase().includes(lower) || (b.phone||'').includes(lower)
+  const lower = (q||'').toLowerCase();
+  const all   = window._benPickerAll || [];
+  const list  = !q ? all : all.filter(b =>
+    (b.name||'').toLowerCase().includes(lower) || (b.phone||'').includes(lower) ||
+    (b.location||'').toLowerCase().includes(lower)
   );
   const container = document.getElementById('benPickerList');
-  if (!list.length) {
-    container.innerHTML = '<div style="padding:12px;color:#94a3b8;font-size:13px">Tidak ada hasil.</div>';
+  const badge     = document.getElementById('benPickerCountBadge');
+
+  const alreadyCount = list.filter(b => window._benPickerExisting?.has(b.id)).length;
+  if (badge) badge.textContent = `${list.length} orang${alreadyCount ? ' · ' + alreadyCount + ' sudah hadir' : ''}`;
+
+  if (!all.length) {
+    container.innerHTML = `<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px">
+      👤 Belum ada penerima manfaat.<br>
+      <button class="btn-primary btn-sm" style="margin-top:8px" onclick="closeBenPicker();openAddBenModal()">
+        + Tambah Dulu
+      </button>
+    </div>`;
     return;
   }
+  if (!list.length) {
+    container.innerHTML = `<div style="padding:16px;text-align:center;color:#94a3b8;font-size:13px">
+      🔍 Tidak ditemukan. <span style="color:#2563eb;cursor:pointer" onclick="document.getElementById('benPickerSearch').value='';renderBenPicker('')">Reset</span>
+    </div>`;
+    return;
+  }
+
   container.innerHTML = list.map(b => {
     const already = window._benPickerExisting?.has(b.id);
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;margin-bottom:3px;background:${already?'#f0fdf4':'#f8fafc'}">
-      <div>
+    const meta    = [b.phone, b.location].filter(Boolean).join(' · ');
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;margin-bottom:3px;background:${already?'#f0fdf4':'#f8fafc'};border:1px solid ${already?'#bbf7d0':'#f1f5f9'}">
+      <div style="min-width:0">
         <div style="font-weight:600;font-size:12px;color:#0f172a">${_esc(b.name)}</div>
-        <div style="font-size:11px;color:#94a3b8">${_esc(b.phone||'')}${b.location?' · '+_esc(b.location):''}</div>
+        ${meta ? `<div style="font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(meta)}</div>` : ''}
       </div>
-      ${already
-        ? `<span style="font-size:11px;color:#15803d;font-weight:600">✓ Sudah hadir</span>`
-        : `<button class="btn-primary btn-sm" onclick="addParticipant('${b.id}','${_esc(b.name).replace(/'/g,"\\\\'")}')">+ Tambah</button>`}
+      <div style="margin-left:8px;flex-shrink:0">
+        ${already
+          ? `<span style="font-size:11px;color:#15803d;font-weight:600;white-space:nowrap">✓ Sudah hadir</span>`
+          : `<button class="btn-primary btn-sm" onclick="addParticipant('${b.id}','${_esc(b.name).replace(/'/g,"\\'")}')">+ Tambah</button>`}
+      </div>
     </div>`;
   }).join('');
 };
@@ -670,21 +771,23 @@ window.addParticipant = async function (benId, benName) {
   // Cari project_id
   const { data: projData } = await _client.from('projects').select('id').eq('name', projName).single();
 
-  const { error } = await _client.from('activity_participants').insert({
+  const { error } = await _client.from('activity_participants').upsert({
     activity_id   : actId,
     activity_name : actName,
     project_name  : projName,
     project_id    : projData?.id || null,
     beneficiary_id: benId,
     attended_date : new Date().toISOString().split('T')[0],
-  });
+  }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
 
-  if (error && !error.message.includes('unique')) {
+  if (error && !error.message.includes('unique') && !error.message.includes('duplicate')) {
     alert('Gagal tambah: ' + error.message); return;
   }
-  window._benPickerExisting?.add(benId);
-  renderBenPicker(document.getElementById('benPickerSearch').value);
 
-  // Update badge jumlah peserta di modal aktivitas
+  window._benPickerExisting?.add(benId);
+  renderBenPicker(document.getElementById('benPickerSearch')?.value || '');
+
+  // Update badge jumlah peserta di card aktivitas
   if (typeof refreshParticipantBadge === 'function') refreshParticipantBadge(actId);
+  if (typeof window.refreshParticipantBadge === 'function') window.refreshParticipantBadge(actId);
 };

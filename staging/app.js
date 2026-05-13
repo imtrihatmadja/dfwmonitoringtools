@@ -756,6 +756,7 @@ document.getElementById("searchInput").addEventListener("input", function () {
 // ===================== DETAIL PROYEK =====================
 window.openProjectDetail = async function (proj) {
   currentProject    = proj;
+  window.currentProject = proj;
   currentActProject = proj.name;
   tabTitles.detail[1] = proj.name;
   document.getElementById("pageTitle").textContent    = "Detail Proyek";
@@ -1101,6 +1102,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
         project_name: a.project_name, progress: a.progress, status: a.status,
       }));
       currentProject = updated;
+      window.currentProject = updated;
       renderDetailHeader(currentProject);
       renderIndicatorUpdatePanel(currentProject);
     }
@@ -1275,6 +1277,7 @@ async function loadActivities(projectName) {
   const { data: acts  } = await client.from("project_activities").select().eq("project_name", projectName).order("sort_order").order("created_at");
   const { data: notes } = await client.from("activity_notes").select().eq("project_name", projectName).order("created_at", { ascending: false });
   allActivities   = acts  || [];
+  window.allActivities = allActivities;
   allActNotes     = notes || [];
   renderActivityListDetail();
   if (typeof loadAllParticipantBadges === "function") loadAllParticipantBadges();
