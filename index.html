@@ -5,16 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>DFW Indonesia — Monev Tools</title>
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="app.js" defer></script>
-  <script src="print-report.js" defer></script>
-  <script src="impact.js" defer></script>
 </head>
 <body>
-
-<!-- SIDEBAR OVERLAY (mobile) -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- SIDEBAR -->
 <aside class="sidebar" id="mainSidebar">
@@ -25,14 +20,16 @@
       <rect x="13" y="10" width="5" height="15" rx="2" fill="white" opacity=".85"/>
       <rect x="20" y="6"  width="5" height="19" rx="2" fill="white" opacity=".7"/>
     </svg>
-    <div class="sidebar-brand">DFW-I ME Tools</div>
   </div>
+  <div class="sidebar-brand">DFW-I ME Tools</div>
   <div>
     <ul class="nav-links">
-      <li class="active" data-tab="dashboard" onclick="closeSidebar()"><span class="nav-icon">🏠</span><span>Dashboard</span></li>
-      <li data-tab="projects" onclick="closeSidebar()"><span class="nav-icon">📁</span><span>Daftar Proyek</span></li>
+      <li class="active" data-tab="dashboard"><span class="nav-icon"><i class="fa-solid fa-gauge-high"></i></span><span>Dashboard</span></li>
+      <li data-tab="projects"><span class="nav-icon"><i class="fa-solid fa-table-cells-large"></i></span><span>Daftar Proyek</span></li>
       <ul class="nav-submenu" id="projectSubmenu"></ul>
-      <li data-tab="input" onclick="closeSidebar()"><span class="nav-icon">➕</span><span>Tambah Proyek</span></li>
+      <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
+      <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
+      <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
   </div>
   <div class="sidebar-footer">
@@ -51,21 +48,17 @@
 
   <!-- TOPBAR -->
   <div class="topbar">
-    <div style="display:flex;align-items:center;gap:10px">
-      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Toggle Menu">☰</button>
-      <div>
+    <div class="topbar-left">
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+      <div class="topbar-page-info">
         <div class="page-title" id="pageTitle">Dashboard</div>
         <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
       </div>
     </div>
     <div class="topbar-right">
       <span class="realtime-badge">🟢 Realtime ON</span>
-      <button class="btn-secondary btn-sm" id="refreshBtn">🔄 <span class="hide-mobile">Refresh</span></button>
-      <button class="btn-primary btn-sm" id="printReportBtn"
-        style="display:none;align-items:center;gap:6px"
-        onclick="openPrintModal()">
-        🖨️ <span class="btn-print-label">Cetak Laporan</span>
-      </button>
+      <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
+      <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
     </div>
   </div>
 
@@ -79,46 +72,41 @@
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div class="section-title" style="margin:0">Proyek <span id="projectCount" style="font-size:12px;color:#94a3b8;font-weight:500"></span></div>
-      <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ <span class="hide-mobile">Tambah Proyek</span></button>
+      <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ Tambah Proyek</button>
     </div>
+    <div id="projectLoadError" style="display:none;background:#fee2e2;color:#991b1b;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;font-weight:600;border:1px solid #fca5a5"></div>
     <div class="proj-card-grid" id="projectCards"></div>
-
   </div>
 
   <!-- TAB DAFTAR PROYEK -->
   <div id="tab-projects" class="tab-content">
     <div class="table-toolbar">
       <input type="text" class="search-input" id="searchInput" placeholder="🔍 Cari nama proyek, lokasi, PIC…">
-      <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ <span class="hide-mobile">Tambah Proyek</span></button>
+      <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ Tambah Proyek</button>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
-          <th>#</th>
-          <th>Nama Proyek</th>
-          <th class="hide-mobile">Lokasi</th>
-          <th class="hide-mobile">Penanggung Jawab</th>
-          <th>Status</th>
-          <th>Progress</th>
-          <th class="hide-mobile">Deadline</th>
-          <th class="hide-mobile">Update</th>
-          <th>Aksi</th>
-        </tr></thead>
+        <thead><tr><th>#</th><th>Nama Proyek</th><th>Lokasi</th><th>Penanggung Jawab</th><th>Status</th><th>Progress</th><th>Deadline</th><th>Update</th><th>Aksi</th></tr></thead>
         <tbody id="projectTable"></tbody>
       </table>
     </div>
   </div>
 
+  <!-- TAB DOKUMEN -->
+  <div id="tab-documents" class="tab-content">
+  </div>
+
   <!-- TAB INPUT / EDIT PROYEK -->
   <div id="tab-input" class="tab-content">
 
+    <!-- Step indicator (2 langkah) -->
     <div class="step-indicator">
       <div class="step-dot active" id="step-dot-1"><span>1</span><label>Info Proyek</label></div>
       <div class="step-line"></div>
       <div class="step-dot" id="step-dot-2"><span>2</span><label>Indikator &amp; Capaian</label></div>
     </div>
 
-    <!-- Step 1 -->
+    <!-- Step 1: Informasi Proyek -->
     <div id="form-step-1" class="active">
       <div class="form-card">
         <div class="form-card-title">📋 Informasi Proyek</div>
@@ -155,10 +143,10 @@
             <input type="date" id="f-deadline">
           </div>
           <div class="form-group">
-            <label>Progress Proyek</label>
-            <input type="text" id="f-progress" value="Dihitung otomatis dari aktivitas &amp; indikator"
-              readonly style="background:#f1f5f9;color:#64748b;cursor:default;font-style:italic;">
-          </div>
+          <label>Progress Proyek</label>
+          <input type="text" id="f-progress" value="Dihitung otomatis dari aktivitas &amp; indikator"
+            readonly style="background:#f1f5f9;color:#64748b;cursor:default;font-style:italic;">
+        </div>
           <div class="form-group">
             <label>Anggaran Disetujui (Rp)</label>
             <input type="number" id="f-budget-approved" placeholder="Contoh: 500000000" min="0">
@@ -193,7 +181,7 @@
       </div>
     </div>
 
-    <!-- Step 2 -->
+    <!-- Step 2: Indikator Kinerja + Capaian Awal -->
     <div id="form-step-2" class="hidden">
       <div class="form-card">
         <div class="form-card-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -238,7 +226,7 @@
           <span class="panel-title">📊 Update Capaian Indikator</span>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="panel-count" id="indCount">0 indikator</span>
-            <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit</button>
+            <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit Proyek</button>
           </div>
         </div>
         <div class="panel-scroll-wrap" id="indScrollWrap">
@@ -257,6 +245,37 @@
 
     </div>
   </div><!-- /tab-detail -->
+
+
+
+<!-- ===== TAB ARSIP PROYEK ===== -->
+<div class="tab-content" id="tab-archive">
+  <div class="table-toolbar">
+    <input type="text" class="search-input" id="archiveSearchInput"
+           placeholder="🔍 Cari nama proyek, PIC…"
+           oninput="filterArchivedProjects(this.value)">
+    <button class="btn-secondary btn-sm" onclick="loadArchivedProjects()">
+      <i class="fa-solid fa-rotate-right"></i> Refresh
+    </button>
+  </div>
+  <div class="table-wrap">
+    <table id="archiveTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama Proyek</th>
+          <th>Lokasi / PIC</th>
+          <th>Donor</th>
+          <th>Status</th>
+          <th>Diarsipkan</th>
+          <th>Oleh</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="archivedProjectList"></tbody>
+    </table>
+  </div>
+</div>
 
 </div><!-- /main -->
 
@@ -310,7 +329,7 @@
 
       <!-- Catatan -->
       <div style="margin-top:16px">
-        <div class="act-note-title">Catatan Pelaksanaan</div>
+        <div class="act-note-title">⚠️ Tantangan &amp; Hambatan</div>
         <div class="act-note-list" id="actNoteList" style="margin-bottom:10px;max-height:120px;overflow-y:auto"></div>
         <div style="display:flex;gap:8px;align-items:flex-end">
           <textarea id="act-new-note" rows="2" placeholder="Tulis catatan baru…"
@@ -323,7 +342,7 @@
       <div class="act-files-section">
         <div class="act-note-title">File Pendukung</div>
         <div class="file-dropzone" id="actDropzone" onclick="document.getElementById('actFileInput').click()">
-          <div class="file-dropzone-icon">📎</div>
+          <div class="file-dropzone-icon"></div>
           <div class="file-dropzone-text">Drag &amp; drop file di sini, atau <strong>klik untuk pilih</strong></div>
           <div class="file-dropzone-hint">PDF, Word, Excel, Gambar — maks 10 MB per file</div>
           <input type="file" id="actFileInput" multiple style="display:none">
@@ -346,38 +365,89 @@
   </div>
 </div>
 
-<!-- MODAL PILIH BAHASA CETAK -->
-<div id="printLangModal" class="modal-overlay hidden print-lang-modal">
-  <div class="modal-box">
-    <div class="modal-header">
-      <span>🖨️ Cetak Laporan Proyek</span>
-      <button class="modal-close" onclick="closePrintModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:#64748b;margin-bottom:18px">
-        Pilih bahasa laporan yang akan dicetak:
-      </p>
-      <button class="print-lang-btn" onclick="generateAndPrint('id')">
-        <span class="flag">🇮🇩</span>
-        <div>
-          <div>Bahasa Indonesia</div>
-          <div class="lang-desc">Laporan dalam Bahasa Indonesia</div>
+
+
+
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+  <script src="documents.js"></script>
+  <script src="impact.js"></script>
+  <script src="print-report.js"></script>
+<script>
+function toggleSidebar(){
+  const s=document.getElementById('mainSidebar');
+  const o=document.getElementById('sidebarOverlay');
+  if(s) s.classList.toggle('open');
+  if(o) o.classList.toggle('open');
+}
+function closeSidebar(){
+  const s=document.getElementById('mainSidebar');
+  const o=document.getElementById('sidebarOverlay');
+  if(s) s.classList.remove('open');
+  if(o) o.classList.remove('open');
+}
+</script>
+
+  <!-- PRINT LANGUAGE MODAL -->
+  <div id="printLangModal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-header">
+        <span style="font-size:15px;font-weight:700">🖨️ Generate Laporan Proyek</span>
+        <button class="modal-close" onclick="closePrintModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px 24px">
+
+        <!-- Preset periode -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;letter-spacing:.3px">📅 PERIODE LAPORAN</div>
+          <div class="print-preset-grid" id="printPresetGrid">
+            <button class="print-preset-btn" onclick="setPrintPreset('week',this)">Minggu Ini</button>
+            <button class="print-preset-btn" onclick="setPrintPreset('2week',this)">2 Minggu</button>
+            <button class="print-preset-btn active" onclick="setPrintPreset('month',this)">Bulan Ini</button>
+            <button class="print-preset-btn" onclick="setPrintPreset('quarter',this)">3 Bulan</button>
+            <button class="print-preset-btn" onclick="setPrintPreset('half',this)">6 Bulan</button>
+            <button class="print-preset-btn" onclick="setPrintPreset('custom',this)">Custom</button>
+          </div>
         </div>
-      </button>
-      <button class="print-lang-btn" onclick="generateAndPrint('en')">
-        <span class="flag">🇬🇧</span>
-        <div>
-          <div>English</div>
-          <div class="lang-desc">Report in English language</div>
+
+        <!-- Date range -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px">Dari Tanggal</label>
+            <input type="date" id="printDateFrom" class="form-control"
+              style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px"
+              onchange="clearPresetActive()" />
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px">Sampai Tanggal</label>
+            <input type="date" id="printDateTo" class="form-control"
+              style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px"
+              onchange="clearPresetActive()" />
+          </div>
         </div>
-      </button>
+
+        <!-- Info periode -->
+        <div id="printPeriodInfo" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#0369a1">
+          ℹ️ Laporan akan merangkum semua update data (indikator, aktivitas, anggaran, hambatan) yang tercatat pada periode yang dipilih.
+        </div>
+
+        <!-- Pilih bahasa -->
+        <div style="margin-bottom:4px">
+          <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;letter-spacing:.3px">🌐 BAHASA LAPORAN</div>
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" style="flex:1;padding:11px;font-size:13px"
+              onclick="generateAndPrint('id')">🇮🇩 Bahasa Indonesia</button>
+            <button class="btn-secondary" style="flex:1;padding:11px;font-size:13px"
+              onclick="generateAndPrint('en')">🇬🇧 English</button>
+          </div>
+        </div>
+
+      </div>
+      <div style="padding:10px 24px 16px;display:flex;justify-content:flex-end">
+        <button class="btn-secondary btn-sm" onclick="closePrintModal()">Batal</button>
+      </div>
     </div>
   </div>
-</div>
-
-<!-- PRINT REPORT CONTAINER -->
-<div id="print-report-container"></div>
-
-
 </body>
 </html>
