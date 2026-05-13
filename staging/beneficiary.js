@@ -322,24 +322,28 @@ window.handleBenImportFile = function (input) {
   reader.readAsArrayBuffer(file);
 };
 
-const BEN_COL_MAP = {
-  name       : ['name','nama','nama_lengkap','full_name'],
-  phone      : ['phone','telepon','no_hp','hp','nomor_hp','no_telepon','handphone'],
-  gender     : ['gender','jenis_kelamin','kelamin','sex'],
-  birth_year : ['birth_year','tahun_lahir','thn_lahir','lahir','year_of_birth'],
-  location   : ['location','lokasi','alamat','desa','kecamatan','domisili'],
-  occupation : ['occupation','pekerjaan','profesi','job'],
-  email      : ['email','e_mail','surel'],
-  note       : ['note','catatan','keterangan'],
+// ── Flat column mapping (1 sheet: Project | Aktivitas | Nama | ...) ──
+const FLAT_COL_MAP = {
+  project_name  : ['project','proyek','nama proyek','project name','nama_proyek','project_name'],
+  activity_name : ['aktivitas','kegiatan','activity','nama kegiatan','event','nama_kegiatan','activity_name'],
+  name          : ['name','nama','nama lengkap','full name','nama_lengkap','full_name'],
+  phone         : ['handphone','hp','no hp','no_hp','telepon','phone','nomor_hp','handphone'],
+  gender        : ['jenis kelamin','gender','kelamin','jenis_kelamin','sex'],
+  location      : ['asal','lokasi','desa','alamat','location','domisili','kecamatan','asal/lokasi'],
+  occupation    : ['pekerjaan','occupation','profesi','job'],
+  birth_year    : ['tahun lahir','birth_year','thn_lahir','tahun_lahir','lahir'],
+  email         : ['email','e_mail','surel'],
+  note          : ['catatan','note','keterangan'],
+  attended_date : ['tanggal','tanggal hadir','event date','date','attended_date','tanggal_hadir'],
 };
 
-function resolveBenField(row, aliases) {
-  for (const a of aliases) if (row[a] !== undefined && row[a] !== '') return row[a];
+function resolveFlatField(row, aliases) {
+  for (const a of aliases) if (row[a] !== undefined && String(row[a]).trim() !== '') return String(row[a]).trim();
   return '';
 }
-function mapBenRow(row) {
+function mapFlatRow(row) {
   const r = {};
-  Object.keys(BEN_COL_MAP).forEach(f => { r[f] = resolveBenField(row, BEN_COL_MAP[f]); });
+  Object.keys(FLAT_COL_MAP).forEach(f => { r[f] = resolveFlatField(row, FLAT_COL_MAP[f]); });
   return r;
 }
 function normGender(v) {
@@ -349,71 +353,224 @@ function normGender(v) {
   if (vl.startsWith('p') || vl === 'f' || vl.includes('perempuan') || vl.includes('wanita')) return 'Perempuan';
   return v;
 }
+function parseDate(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+  if (/^\d{4,5}$/.test(s)) {
+    const d = new Date(Math.round((parseInt(s) - 25569) * 86400 * 1000));
+    if (!isNaN(d)) return d.toISOString().split('T')[0];
+  }
+  return null;
+}
+function normalizeRow(r) {
+  const n = {};
+  Object.keys(r).forEach(k => { n[k.toLowerCase().trim().replace(/\s+/g,'_')] = String(r[k]||'').trim(); });
+  return n;
+}
 
+// ── handleBenImportFile ───────────────────────────────────────────────
+window.handleBenImportFile = function (input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb      = XLSX.read(e.target.result, { type: 'array', raw: false });
+      const ws      = wb.Sheets[wb.SheetNames[0]];
+      const raw     = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const rows    = raw.map(r => mapFlatRow(normalizeRow(r))).filter(r => r.name);
+      window._benImportRows = rows;
+      previewBenImport(rows);
+    } catch(err) {
+      showBenImportMsg('❌ Gagal baca file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+// ── previewBenImport ──────────────────────────────────────────────────
 function previewBenImport(rows) {
-  const mapped  = rows.map(r => mapBenRow(r)).filter(r => r.name);
-  const noName  = rows.length - mapped.length;
-  window._benImportRows = mapped;
-
   const area = document.getElementById('benImportPreview');
-  if (!mapped.length) {
-    area.innerHTML = '<div style="color:#ef4444;font-size:13px">Tidak ada data valid ditemukan.</div>';
+  if (!rows.length) {
+    area.innerHTML = '<div style="color:#ef4444;font-size:13px">Tidak ada data valid. Pastikan kolom Nama terisi.</div>';
     return;
   }
+  // Hitung unik
+  const uniquePeople   = new Set(rows.map(r => `${r.name}|${r.phone}`)).size;
+  const uniqueProjects = new Set(rows.map(r => r.project_name).filter(Boolean)).size;
+  const uniqueActs     = new Set(rows.map(r => `${r.project_name}|${r.activity_name}`).filter(Boolean)).size;
 
   area.innerHTML = `
-    <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:8px">
-      👤 Preview <span style="color:#64748b;font-weight:400">(${mapped.length} orang${noName ? ', '+noName+' baris dilewati (tanpa nama)' : ''})</span>
+    <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;color:#1d4ed8;font-weight:600">
+        👤 ${uniquePeople} orang unik
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:6px 12px;font-size:12px;color:#15803d;font-weight:600">
+        📁 ${uniqueProjects} proyek
+      </div>
+      <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:6px;padding:6px 12px;font-size:12px;color:#7e22ce;font-weight:600">
+        📋 ${uniqueActs} kegiatan
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 12px;font-size:12px;color:#475569;font-weight:600">
+        📊 ${rows.length} total baris
+      </div>
     </div>
-    <div class="table-wrap" style="max-height:240px;overflow-y:auto">
-      <table style="font-size:12px">
-        <thead><tr><th>#</th><th>Nama</th><th>No HP</th><th>Gender</th><th>Thn Lahir</th><th>Lokasi</th><th>Pekerjaan</th></tr></thead>
-        <tbody>${mapped.map((r,i) => `
+    <div class="table-wrap" style="max-height:220px;overflow-y:auto">
+      <table style="font-size:11px">
+        <thead>
           <tr>
+            <th>#</th><th>Proyek</th><th>Aktivitas</th><th>Nama</th>
+            <th>Gender</th><th>Asal</th><th>HP</th><th>Pekerjaan</th><th>Tanggal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i) => `<tr>
             <td style="color:#94a3b8">${i+1}</td>
+            <td style="color:#2563eb;font-size:10px;font-weight:600">${_esc(r.project_name||'-')}</td>
+            <td style="font-size:10px">${_esc(r.activity_name||'-')}</td>
             <td style="font-weight:600">${_esc(r.name)}</td>
-            <td style="color:#475569">${_esc(r.phone||'-')}</td>
             <td>${r.gender ? normGender(r.gender) : '-'}</td>
-            <td style="color:#475569">${r.birth_year||'-'}</td>
-            <td style="color:#475569">${_esc(r.location||'-')}</td>
-            <td style="color:#475569">${_esc(r.occupation||'-')}</td>
+            <td style="font-size:10px">${_esc(r.location||'-')}</td>
+            <td style="font-size:10px">${_esc(r.phone||'-')}</td>
+            <td style="font-size:10px">${_esc(r.occupation||'-')}</td>
+            <td style="font-size:10px;color:#64748b">${r.attended_date ? parseDate(r.attended_date)||r.attended_date : '-'}</td>
           </tr>`).join('')}
         </tbody>
       </table>
     </div>`;
 
-  showBenImportMsg(`✅ ${mapped.length} penerima manfaat siap diimport.`, 'success');
+  showBenImportMsg(`✅ ${rows.length} baris siap diimport (${uniquePeople} penerima manfaat unik).`, 'success');
   document.getElementById('benImportConfirmBtn').classList.remove('hidden');
 }
 
+// ── runBenImport ──────────────────────────────────────────────────────
 window.runBenImport = async function () {
-  const rows = window._benImportRows;
-  if (!rows?.length) return;
+  const rows = window._benImportRows || [];
+  if (!rows.length) return;
+
   const btn = document.getElementById('benImportConfirmBtn');
-  btn.disabled = true; btn.textContent = '⏳ Mengimport...';
+  btn.disabled = true;
   const _client = window.client || client;
-  let ok = 0, skip = 0;
+
+  // Progress bar
+  let processed = 0;
+  const total   = rows.length;
+  const updateProgress = () => {
+    btn.textContent = `⏳ ${processed}/${total}...`;
+  };
+  updateProgress();
+
+  // Load semua proyek & aktivitas satu kali (lebih efisien)
+  const [{ data: allProjs }, { data: allActs }] = await Promise.all([
+    _client.from('projects').select('id, name'),
+    _client.from('project_activities').select('id, title, project_name'),
+  ]);
+
+  const projMap = {};
+  (allProjs || []).forEach(p => { projMap[(p.name||'').toLowerCase()] = p.id; });
+  const actMap = {};
+  (allActs || []).forEach(a => {
+    const key = `${(a.project_name||'').toLowerCase()}|${(a.title||'').toLowerCase()}`;
+    actMap[key] = a;
+  });
+
+  let okBen = 0, okPart = 0, skipPart = 0;
+  const warnPart   = [];
+  const benIdCache = {}; // "name|phone" → uuid
 
   for (const r of rows) {
-    const payload = {
-      name       : r.name,
-      phone      : r.phone || null,
-      gender     : normGender(r.gender) || null,
-      birth_year : parseInt(r.birth_year) || null,
-      location   : r.location || null,
-      occupation : r.occupation || null,
-      email      : r.email || null,
-      note       : r.note || null,
-    };
-    const { error } = await _client
-      .from('beneficiaries')
-      .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: true });
-    if (error) skip++; else ok++;
+    // ── STEP 1: Upsert beneficiary ────────────────────────────────
+    const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
+    let benId = benIdCache[cacheKey];
+
+    if (!benId) {
+      const payload = {
+        name       : r.name,
+        phone      : r.phone || null,
+        gender     : normGender(r.gender) || null,
+        birth_year : parseInt(r.birth_year) || null,
+        location   : r.location || null,
+        occupation : r.occupation || null,
+        email      : r.email || null,
+        note       : r.note || null,
+      };
+      const { data: upserted, error: errBen } = await _client
+        .from('beneficiaries')
+        .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: false })
+        .select('id')
+        .single();
+
+      if (!errBen && upserted) {
+        benId = upserted.id;
+        benIdCache[cacheKey] = benId;
+        okBen++;
+      } else {
+        // Mungkin sudah ada — coba select
+        const { data: existing } = await _client
+          .from('beneficiaries').select('id')
+          .eq('name', r.name)
+          .eq('phone', r.phone || '')
+          .single();
+        if (existing) { benId = existing.id; benIdCache[cacheKey] = benId; }
+      }
+    }
+
+    // ── STEP 2: Insert ke activity_participants ───────────────────
+    if (benId && r.project_name && r.activity_name) {
+      const actKey = `${r.project_name.toLowerCase()}|${r.activity_name.toLowerCase()}`;
+      const act    = actMap[actKey];
+
+      if (!act) {
+        warnPart.push(`Kegiatan "${r.activity_name}" (${r.project_name}) tidak ditemukan`);
+        skipPart++;
+      } else {
+        const projId = projMap[r.project_name.toLowerCase()] || null;
+        const { error: errPart } = await _client
+          .from('activity_participants')
+          .upsert({
+            activity_id   : act.id,
+            activity_name : act.title,
+            project_name  : r.project_name,
+            project_id    : projId,
+            beneficiary_id: benId,
+            attended_date : parseDate(r.attended_date) || null,
+            note          : r.note || null,
+          }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
+
+        if (!errPart) okPart++; else skipPart++;
+      }
+    } else if (benId && (!r.project_name || !r.activity_name)) {
+      // Hanya data orang tanpa kegiatan — tetap tersimpan
+    }
+
+    processed++;
+    updateProgress();
   }
 
   btn.disabled = false; btn.textContent = 'Import Sekarang';
-  showBenImportMsg(`🎉 ${ok} berhasil${skip ? ', '+skip+' dilewati (duplikat).' : '.'}`, 'success');
-  setTimeout(() => { closeBenImport(); loadBeneficiaries(); }, 1500);
+  const uniqueBen = Object.keys(benIdCache).length;
+
+  let msg = `🎉 ${uniqueBen} penerima manfaat tersimpan`;
+  if (okPart)  msg += ` • ${okPart} partisipasi terekam`;
+  if (skipPart) msg += ` • ${skipPart} dilewati`;
+  showBenImportMsg(msg + '.', 'success');
+
+  if (warnPart.length) {
+    const uniqueW = [...new Set(warnPart)].slice(0, 5);
+    document.getElementById('benImportPreview').innerHTML += `
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 12px;font-size:11px;color:#991b1b;margin-top:8px">
+        <strong>⚠️ Kegiatan tidak ditemukan (${warnPart.length} baris):</strong><br>
+        ${uniqueW.map(w=>`• ${_esc(w)}`).join('<br>')}
+        ${warnPart.length > 5 ? `<br>… dan ${warnPart.length-5} lainnya` : ''}
+        <br><small style="margin-top:4px;display:block">Pastikan Nama Proyek & Nama Kegiatan sama persis dengan yang ada di sistem.</small>
+      </div>`;
+  }
+
+  setTimeout(() => { if (!warnPart.length) closeBenImport(); loadBeneficiaries(); },
+    warnPart.length ? 0 : 1500);
 };
 
 function showBenImportMsg(msg, type) {
@@ -424,14 +581,28 @@ function showBenImportMsg(msg, type) {
 // ── Download template beneficiary ─────────────────────────────────────
 window.downloadBenTemplate = function () {
   const wb = XLSX.utils.book_new();
-  const data = [
-    ['Nama*','No HP','Jenis Kelamin','Tahun Lahir','Lokasi/Desa','Pekerjaan','Email','Catatan'],
-    ['Ahmad Fauzi','081234567890','Laki-laki','1985','Bali / Jembrana','Nelayan','',''],
-    ['Siti Rahma','082345678901','Perempuan','1990','Sulawesi Utara / Manado','Pengolah Ikan','siti@gmail.com',''],
-    ['Budi Santoso','083456789012','Laki-laki','1978','Kalimantan Timur / Balikpapan','Nelayan','','Anggota KUB'],
+
+  // Satu sheet flat — Project | Aktivitas | Nama | ...
+  const headers = [
+    'Project', 'Aktivitas', 'Nama*', 'Jenis Kelamin',
+    'Asal', 'Handphone', 'Pekerjaan', 'Tahun Lahir', 'Tanggal Hadir', 'Catatan'
   ];
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [25,18,15,12,25,20,25,20].map(w=>({wch:w}));
+  const examples = [
+    ['Project ATLI FIP x DFW Indonesia','Pelatihan Pengawas Perikanan','Ahmad Fauzi','Laki-laki','Bali / Jembrana','081234567890','Nelayan','1985','2026-03-15',''],
+    ['Project ATLI FIP x DFW Indonesia','Pelatihan Pengawas Perikanan','Siti Rahma','Perempuan','Sulawesi Utara / Manado','082345678901','Pengolah Ikan','1990','2026-03-15',''],
+    ['Project ATLI FIP x DFW Indonesia','Workshop Rekrutmen Adil','Ahmad Fauzi','Laki-laki','Bali / Jembrana','081234567890','Nelayan','1985','2026-04-10','Hadir penuh'],
+    ['Project ATLI FIP x DFW Indonesia','Workshop Rekrutmen Adil','Budi Santoso','Laki-laki','Kalimantan Timur / Balikpapan','083456789012','Nelayan','1978','2026-04-10',''],
+    ['Project ATLI FIP x DFW Indonesia','Sosialisasi C188','Laode Hardiani','Laki-laki','Bali / Jembrana','084567890123','Nelayan','1982','2026-05-01',''],
+    ['ENABLe Project - DFW Indonesia','Sosialisasi Hak Pekerja','Siti Rahma','Perempuan','Sulawesi Utara / Manado','082345678901','Pengolah Ikan','1990','2026-05-05',''],
+  ];
+
+  const wsData = [headers, ...examples];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [35,30,25,15,25,15,18,12,14,20].map(w=>({wch:w}));
+
+  // Freeze row pertama (header)
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
   XLSX.utils.book_append_sheet(wb, ws, 'Penerima Manfaat');
   XLSX.writeFile(wb, 'Template_PenerimManfaat_PMIS_DFW.xlsx');
 };

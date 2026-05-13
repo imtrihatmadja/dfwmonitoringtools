@@ -653,14 +653,24 @@ function closeSidebar(){
       <button class="modal-close" onclick="closeBenImport()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <div style="font-size:12px;color:#1d4ed8;line-height:1.7">
-          <strong>Kolom yang dikenali:</strong> Nama*, No HP, Jenis Kelamin, Tahun Lahir, Lokasi, Pekerjaan, Email, Catatan<br>
-          <strong>Duplikat</strong> (nama + HP sama) akan dilewati otomatis.
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div style="font-size:12px;color:#1d4ed8;line-height:1.9">
+            <strong>📋 Format kolom:</strong>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Project</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Aktivitas</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Nama*</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Jenis Kelamin</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Asal</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Handphone</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Pekerjaan</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Catatan</code><br>
+            <span style="color:#6b7280">Satu baris = satu orang di satu kegiatan. Orang yang sama di banyak kegiatan akan dihitung <strong>1x</strong> sebagai penerima manfaat unik.</span>
+          </div>
+          <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()" style="white-space:nowrap">
+            <i class="fa-solid fa-download"></i> Download Template
+          </button>
         </div>
-        <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()">
-          <i class="fa-solid fa-download"></i> Download Template
-        </button>
       </div>
       <label style="display:block;padding:20px;border:2px dashed #e2e8f0;border-radius:8px;text-align:center;cursor:pointer;color:#64748b;font-size:13px">
         📊 Klik untuk pilih file Excel (.xlsx / .csv)
