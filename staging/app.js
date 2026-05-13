@@ -208,6 +208,7 @@ const tabTitles = {
   projects  : ["Daftar Proyek", "Semua data proyek yang dimonitor"],
   documents : ["Dokumen",       "Manajemen dokumen proyek via Google Drive"],
   input     : ["Tambah Proyek", "Tambah proyek baru"],
+  beneficiary: ["Penerima Manfaat", "Data penerima manfaat unik & riwayat partisipasi kegiatan"],
   archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
   detail    : ["Detail Proyek", ""]
 };
@@ -228,6 +229,7 @@ function switchTab(tab) {
   if (tab === "projects" || tab === "dashboard") loadProjects();
   if (tab === "input") renderOutcomeList();
   if (tab === "archive") loadArchivedProjects();
+  if (tab === "beneficiary") { loadBeneficiaries(); populateBenProjectFilter(); }
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
@@ -1275,6 +1277,7 @@ async function loadActivities(projectName) {
   allActivities   = acts  || [];
   allActNotes     = notes || [];
   renderActivityListDetail();
+  if (typeof loadAllParticipantBadges === "function") loadAllParticipantBadges();
   updateFileCountBadges();
   // Refresh header progress setelah aktivitas dimuat (data activities_summary fresh)
   if (currentProject) {
@@ -1328,6 +1331,11 @@ function renderActivityListDetail() {
               </div>
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
+              <button class="btn-secondary btn-sm" style="font-size:11px;padding:4px 8px;margin-right:4px" title="Peserta Kegiatan"
+                onclick="openAddParticipantModal('${act.id}','${(act.title||'').replace(/'/g,\"\\\\'\")}','${currentProject?.name||''}')">
+                <i class='fa-solid fa-users'></i>
+                <span id="pcount-${act.id}" style="font-size:10px"></span>
+              </button>
               <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class='fa-solid fa-pen-to-square'></i></button>
               <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class='fa-solid fa-xmark'></i></button>
             </div>
@@ -1348,6 +1356,37 @@ function renderActivityListDetail() {
         </div>`;
     }).join("")}`;
 }
+
+// Update badge jumlah peserta di card aktivitas
+window.refreshParticipantBadge = async function (activityId) {
+  const _client = window.client || client;
+  const { count } = await _client
+    .from('activity_participants')
+    .select('id', { count: 'exact', head: true })
+    .eq('activity_id', activityId);
+  const el = document.getElementById('pcount-' + activityId);
+  if (el) el.textContent = count > 0 ? count : '';
+};
+
+// Load semua badge peserta setelah render activity list
+window.loadAllParticipantBadges = async function () {
+  if (!window.allActivities?.length) return;
+  const _client = window.client || client;
+  const ids = allActivities.map(a => a.id);
+  const { data } = await _client
+    .from('activity_participants')
+    .select('activity_id')
+    .in('activity_id', ids);
+  if (!data) return;
+  // Hitung per activity
+  const countMap = {};
+  data.forEach(r => { countMap[r.activity_id] = (countMap[r.activity_id]||0) + 1; });
+  ids.forEach(id => {
+    const el = document.getElementById('pcount-' + id);
+    if (el) el.textContent = countMap[id] > 0 ? countMap[id] : '';
+  });
+};
+
 
 function renderActNotes(notes) {
   if (!notes.length) return `<div class="history-empty">Belum ada catatan.</div>`;
