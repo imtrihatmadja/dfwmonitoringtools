@@ -2,6 +2,7 @@
 const SUPABASE_URL      = "https://zdfxcxkgmksaeigyuibe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZnhjeGtnbWtzYWVpZ3l1aWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3Mjc0NjAsImV4cCI6MjA5MjMwMzQ2MH0.baUlaWNvN3wMKHL05E71aSxedjKvWhfVQXHGXraWyVU";
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.client = client; // expose ke window agar documents.js & file lain bisa akses
 
 // ===================== STATE =====================
 let currentProject  = null;
@@ -12,7 +13,11 @@ let currentActId    = null;
 let currentActProject = "";
 let stagedFiles     = [];
 let outcomes        = [];
-let savedFiles      = [];
+let editingProjectOriginalName = null;
+let editingProjectId          = null;
+let originalIndicatorIds      = [];
+let savedFiles                = [];
+const AUDIT_USER              = "Tim";
 const BUCKET        = "activity-files";
 
 // ===================== PROGRESS HELPERS =====================
@@ -132,7 +137,7 @@ function renderPriorityIndicators(item, projIndex) {
   return `
     <div class="priority-ind-section">
       <div class="priority-ind-title">
-        <span class="priority-ind-icon">⚠️</span>
+        <span class="priority-ind-icon">âš ï¸</span>
         <span>Prioritas Kerja</span>
         <span class="priority-ind-badges">
           ${critCount > 0 ? `<span class="priority-tier-badge kritis">${critCount} Kritis</span>` : ""}
@@ -201,7 +206,9 @@ window.jumpToProject = async function(projIndex, event) {
 const tabTitles = {
   dashboard : ["Dashboard",     "Selamat datang, pantau semua proyek Anda"],
   projects  : ["Daftar Proyek", "Semua data proyek yang dimonitor"],
+  documents : ["Dokumen",       "Manajemen dokumen proyek via Google Drive"],
   input     : ["Tambah Proyek", "Tambah proyek baru"],
+  archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
   detail    : ["Detail Proyek", ""]
 };
 
@@ -209,6 +216,8 @@ function switchTab(tab) {
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
   if (tab !== "detail") currentProject = null;
+  const printBtn = document.getElementById('topbarPrintBtn');
+  if (printBtn) printBtn.style.display = (tab === "detail") ? 'inline-flex' : 'none';
   const li = document.querySelector(`[data-tab="${tab}"]`);
   if (li) li.classList.add("active");
   const targetTab = document.getElementById("tab-" + tab);
@@ -218,6 +227,7 @@ function switchTab(tab) {
   document.getElementById("pageSubtitle").textContent = t ? t[1] : "";
   if (tab === "projects" || tab === "dashboard") loadProjects();
   if (tab === "input") renderOutcomeList();
+  if (tab === "archive") loadArchivedProjects();
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
@@ -259,7 +269,7 @@ document.getElementById("backStep1Btn").addEventListener("click", () => setStep(
 
 // ===================== INDICATOR BUILDER =====================
 document.getElementById("addIndicatorBtn").addEventListener("click", () => {
-  indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, update_note: "", history: [], evidence: [] });
+  indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, previous_actual: 0, update_note: "", history: [], evidence: [] });
   renderIndicatorList();
 });
 
@@ -280,7 +290,7 @@ function renderIndicatorList() {
           <span class="badge badge-${(ind.type || "Output").toLowerCase()}">${ind.type || "Output"}</span>
           ${ind.name || `Indikator ${i + 1}`}
         </div>
-        <button class="btn-remove" onclick="removeIndicator(${i})">✕</button>
+        <button class="btn-remove" onclick="removeIndicator(${i})"><i class='fa-solid fa-xmark'></i></button>
       </div>
       <div class="indicator-input-row">
         <div class="form-group">
@@ -411,57 +421,122 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
     const prevProj = (window.allProjects || []).find(x => x.name === p.name);
     const prevBudgetActual = prevProj ? (prevProj.budget_actual || 0) : -1;
 
-    const { error: pErr } = await client.from("projects").upsert(p, { onConflict: "name" });
+    const upsertPayload = { ...p };
+    if (editingProjectId) upsertPayload.id = editingProjectId;
+    const { data: pSaved, error: pErr } = await client
+      .from("projects").upsert(upsertPayload, { onConflict: "name" }).select("id").single();
     if (pErr) throw new Error("Gagal simpan proyek: " + pErr.message);
+    const savedProjectId = pSaved?.id || editingProjectId || null;
+    if (savedProjectId) editingProjectId = savedProjectId;
+    client.from("audit_log").insert({
+      project_id: savedProjectId, project_name: p.name,
+      entity_type: "project", action: editingProjectOriginalName ? "update" : "create",
+      changed_by: AUDIT_USER,
+      new_values: { name: p.name, status: p.status, budget_approved: p.budget_approved, budget_actual: p.budget_actual },
+    }).then(()=>{}).catch(()=>{});
 
     // Catat histori budget_actual jika berubah (atau pertama kali & > 0)
     if (p.budget_actual > 0 && p.budget_actual !== prevBudgetActual) {
       await client.from("budget_updates").insert({
         project_name : p.name,
+        project_id   : savedProjectId || editingProjectId || null,
         actual_value : p.budget_actual,
         note         : null,
-        updated_by   : "Tim",
+        updated_by   : AUDIT_USER,
       });
+      client.from("audit_log").insert({
+        project_id: savedProjectId||editingProjectId||null, project_name: p.name,
+        entity_type: "budget", action: "update", changed_by: AUDIT_USER,
+        new_values: { budget_approved: p.budget_approved, budget_actual: p.budget_actual },
+      }).then(()=>{}).catch(()=>{});
     }
 
         // Simpan outcomes: hapus lama, insert baru
-    await client.from("project_outcomes").delete().eq("project_name", p.name);
+    const activeProjectName = editingProjectOriginalName || p.name;
+
+    await client.from("project_outcomes").delete().eq("project_name", activeProjectName);
     const validOutcomes = outcomes.filter(oc => oc.text && oc.text.trim());
     if (validOutcomes.length) {
       await client.from("project_outcomes").insert(
-        validOutcomes.map((oc, idx) => ({ project_name: p.name, outcome_text: oc.text.trim(), sort_order: idx }))
+        validOutcomes.map((oc, idx) => ({ project_name: p.name, project_id: savedProjectId||editingProjectId||null, outcome_text: oc.text.trim(), sort_order: idx }))
       );
     }
 
-    await client.from("project_indicators").delete().eq("project_name", p.name);
+    const keptIndicatorIds = [];
 
     for (let i = 0; i < indicators.length; i++) {
       const ind = indicators[i];
-      if (!ind.name) continue;
-      const { data: indData, error: indErr } = await client
-        .from("project_indicators")
-        .insert({
-          project_name   : p.name,
-          indicator_name : ind.name,
-          type           : ind.type,
-          target         : Number(ind.target) || 0,
-          unit           : ind.unit   || null,
-          actual         : ind.actual || 0,
-        })
-        .select().single();
-      if (indErr) { console.warn(indErr.message); continue; }
-      if (ind.actual > 0 || ind.update_note) {
-        await client.from("indicator_updates").insert({
-          indicator_id   : indData.id,
-          project_name   : p.name,
-          indicator_name : ind.name,
-          actual_value   : ind.actual    || 0,
-          note           : ind.update_note || null,
-          updated_by     : "Tim",
-        });
+      if (!ind.name || !ind.name.trim()) continue;
+
+      const payload = {
+        project_name   : p.name,
+        project_id     : savedProjectId || editingProjectId || null,
+        indicator_name : ind.name.trim(),
+        type           : ind.type,
+        target         : Number(ind.target) || 0,
+        unit           : ind.unit || null,
+        actual         : Number(ind.actual) || 0,
+      };
+
+      if (ind.id) {
+        const { error: updErr } = await client
+          .from("project_indicators")
+          .update(payload)
+          .eq("id", ind.id);
+        if (updErr) { console.warn(updErr.message); continue; }
+        keptIndicatorIds.push(ind.id);
+
+        const prevActual = Number(ind.previous_actual ?? 0);
+        const nextActual = Number(ind.actual ?? 0);
+        const nextNote   = ind.update_note ? ind.update_note.trim() : "";
+        const shouldAddHistory = nextNote || nextActual !== prevActual;
+
+        if (shouldAddHistory) {
+          const { data: histSaved } = await client.from("indicator_updates").insert({
+            indicator_id   : ind.id,
+            project_id     : savedProjectId || editingProjectId || null,
+            project_name   : p.name,
+            indicator_name : ind.name.trim(),
+            actual_value   : nextActual,
+            note           : nextNote || null,
+            updated_by     : AUDIT_USER,
+          }).select().single();
+          indicators[i].history = [...(indicators[i].history||[]), histSaved||{indicator_id:ind.id,actual_value:nextActual,note:nextNote||null,updated_by:AUDIT_USER,created_at:new Date().toISOString()}];
+          indicators[i].previous_actual = nextActual;
+          indicators[i].update_note = "";
+        }
+      } else {
+        const { data: indData, error: indErr } = await client
+          .from("project_indicators")
+          .insert(payload)
+          .select().single();
+        if (indErr) { console.warn(indErr.message); continue; }
+        indicators[i].id = indData.id;
+        indicators[i].previous_actual = Number(ind.actual) || 0;
+        keptIndicatorIds.push(indData.id);
+
+        if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
+          const { data: newHistSaved } = await client.from("indicator_updates").insert({
+            indicator_id   : indData.id,
+            project_id     : savedProjectId || editingProjectId || null,
+            project_name   : p.name,
+            indicator_name : ind.name.trim(),
+            actual_value   : Number(ind.actual) || 0,
+            note           : ind.update_note ? ind.update_note.trim() : null,
+            updated_by     : AUDIT_USER,
+          }).select().single();
+          indicators[i].history = [...(indicators[i].history||[]), newHistSaved||{indicator_id:indData.id,actual_value:Number(ind.actual)||0,updated_by:AUDIT_USER,created_at:new Date().toISOString()}];
+          indicators[i].update_note = "";
+        }
       }
-      indicators[i].id = indData.id;
     }
+
+    const removedIds = (originalIndicatorIds || []).filter(id => !keptIndicatorIds.includes(id));
+    if (removedIds.length) {
+      await client.from("project_indicators").delete().in("id", removedIds);
+    }
+
+    // Rename propagasi otomatis via DB trigger: sync_project_name_on_rename
 
     msg.textContent = "✅ Data berhasil disimpan!";
     msg.className   = "form-msg success";
@@ -469,6 +544,9 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       msg.className = "form-msg hidden";
       resetForm(); setStep(1); switchTab("dashboard");
     }, 1800);
+    editingProjectOriginalName = p.name;
+    editingProjectId = savedProjectId || editingProjectId || null;
+    originalIndicatorIds = indicators.map(ind => ind.id).filter(Boolean);
     await loadProjects();
 
   } catch (err) {
@@ -490,6 +568,9 @@ function resetForm() {
   document.getElementById("f-goal").value = "";
   outcomes = [];
   renderOutcomeList();
+  editingProjectOriginalName = null;
+  editingProjectId          = null;
+  originalIndicatorIds      = [];
   // progress dihitung otomatis
   indicators = [];
 }
@@ -497,7 +578,14 @@ function resetForm() {
 // ===================== LOAD PROJECTS =====================
 async function loadProjects() {
   const { data: projects, error } = await client.from("projects").select().order("updated_at", { ascending: false });
-  if (error) { console.error(error); return; }
+  if (error) {
+    console.error("loadProjects error:", error);
+    const msg = document.getElementById("projectLoadError");
+    if (msg) { msg.textContent = "Gagal memuat proyek: " + (error.message || JSON.stringify(error)); msg.style.display = "block"; }
+    return;
+  }
+  const msg = document.getElementById("projectLoadError");
+  if (msg) msg.style.display = "none";
   const { data: inds  } = await client.from("project_indicators").select();
   const { data: upds  } = await client.from("indicator_updates").select().order("created_at", { ascending: true });
   const { data: evids } = await client.from("indicator_evidence").select();
@@ -505,7 +593,9 @@ async function loadProjects() {
   const { data: budgetHist } = await client.from("budget_updates").select().order("created_at", { ascending: true });
   const { data: outcomesData } = await client.from("project_outcomes").select().order("sort_order");
 
-  const items = projects.map(proj => ({
+  // filter client-side: tampilkan yang archived=false atau archived tidak ada
+  const activeProjects = (projects || []).filter(proj => !proj.archived);
+  const items = activeProjects.map(proj => ({
     ...proj,
     project_indicators: (inds || []).filter(ind => ind.project_name === proj.name).map(ind => ({
       ...ind,
@@ -592,7 +682,7 @@ function renderCards(items) {
             ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">🎯 Goal:</span> ${item.goal}</div>` : ""}
             ${item.project_outcomes && item.project_outcomes.length ? `
               <div style="font-size:11px;color:#475569">
-                <span style="font-weight:700;color:#7c3aed">🏆 Outcomes (${item.project_outcomes.length}):</span>
+                <span style="font-weight:700;color:#7c3aed">ðŸ† Outcomes (${item.project_outcomes.length}):</span>
                 <ul style="margin:3px 0 0 14px;padding:0;line-height:1.6">
                   ${item.project_outcomes.map(o => `<li>${o.outcome_text}</li>`).join("")}
                 </ul>
@@ -671,6 +761,9 @@ window.openProjectDetail = async function (proj) {
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
   document.getElementById("tab-detail").classList.add("active");
+  // Tampilkan tombol print di topbar
+  const _pb = document.getElementById("topbarPrintBtn");
+  if (_pb) _pb.style.display = "inline-flex";
   renderDetailHeader(proj);
   await loadActivities(proj.name);
   renderIndicatorUpdatePanel(proj);
@@ -686,7 +779,6 @@ function renderDetailHeader(proj) {
     return pct >= 100;
   }).length;
   const cls    = proj.status.toLowerCase().replace(/\s+/g, "-");
-  // Avg capaian = rata-rata % pencapaian masing-masing indikator (cap 100%)
   const avgInd = inds.length
     ? Math.round(
         inds.reduce((a, ind) => {
@@ -703,41 +795,55 @@ function renderDetailHeader(proj) {
   const avgIndPct = calcAvgIndikator(proj);
 
   document.getElementById("detailHeader").innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-      <div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
-          <span class="badge badge-${cls}">${proj.status}</span>
-        </div>
+    <!-- Tombol Kembali + badge status -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+      <span class="badge badge-${cls}">${proj.status}</span>
+      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()" style="margin-left:auto">✏️ Edit Proyek</button>
+      <button class="btn-danger btn-sm" onclick="deleteProject('${proj.id}','${proj.name.replace(/'/g,"\\'")}')">🗑️ Arsipkan</button>
+    </div>
+
+    <!-- 2-card layout -->
+    <div class="detail-header-grid">
+
+      <!-- ── KIRI: Identitas + Goal + Outcomes ── -->
+      <div class="detail-card detail-card-left">
         <div class="detail-project-name">${proj.name}</div>
-        <div class="detail-meta">
-          <span>${proj.location}</span>
-          <span>${proj.owner}</span>
-          ${proj.donor    ? `<span>${proj.donor}</span>`            : ""}
-          ${proj.deadline ? `<span>Deadline: ${proj.deadline}</span>` : ""}
+        <div class="detail-meta" style="margin-top:6px;margin-bottom:10px">
+          <span>📍 ${proj.location}</span>
+          <span>👤 ${proj.owner}</span>
+          ${proj.donor    ? `<span>🏦 ${proj.donor}</span>`              : ""}
+          ${proj.deadline ? `<span>📅 Deadline: ${proj.deadline}</span>` : ""}
         </div>
-        ${proj.description ? `<p style="font-size:13px;color:#64748b;max-width:600px">${proj.description}</p>` : ""}
+        ${proj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${proj.description}</p>` : ""}
+
         ${proj.goal ? `
-          <div style="margin-top:8px;padding:10px 12px;background:#eff6ff;border-radius:8px;border-left:3px solid #2563eb;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#2563eb;margin-bottom:3px;letter-spacing:.4px">🎯 GOAL</div>
-            <div style="font-size:13px;color:#1e3a5f;line-height:1.5">${proj.goal}</div>
+          <div class="dh-goal-box">
+            <div class="dh-section-label dh-label-blue">🎯 GOAL</div>
+            <div style="font-size:13px;color:#1e3a5f;line-height:1.6">Goal: ${proj.goal}</div>
           </div>
         ` : ""}
+
         ${proj.project_outcomes && proj.project_outcomes.length ? `
-          <div style="margin-top:8px;padding:10px 12px;background:#f5f3ff;border-radius:8px;border-left:3px solid #7c3aed;max-width:600px">
-            <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;letter-spacing:.4px">🏆 OUTCOMES</div>
-            ${proj.project_outcomes.map((o, i) => `
-              <div style="font-size:13px;color:#3b0764;display:flex;gap:6px;margin-bottom:4px;line-height:1.4">
-                <span style="color:#7c3aed;font-weight:700;min-width:16px">${i+1}.</span>
-                <span>${o.outcome_text}</span>
-              </div>
-            `).join("")}
+          <div class="dh-outcomes-box" style="margin-top:10px">
+            <div class="dh-section-label dh-label-purple">🏆 OUTCOMES</div>
+            <ol style="margin:6px 0 0;padding-left:18px">
+              ${proj.project_outcomes.map(o => `
+                <li style="font-size:13px;color:#3b0764;line-height:1.5;margin-bottom:5px">
+                  <span style="color:#64748b;font-size:11px;display:block;margin-bottom:1px">Component / Outcome:</span>
+                  ${o.outcome_text}
+                </li>
+              `).join("")}
+            </ol>
           </div>
         ` : ""}
       </div>
-      <div style="min-width:280px">
-        <!-- Progress Keseluruhan (kalkulasi otomatis) -->
-        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08">
+
+      <!-- ── KANAN: Progress + Stats + Anggaran ── -->
+      <div class="detail-card detail-card-right">
+
+        <!-- Progress Keseluruhan -->
+        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08;margin-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
             <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
@@ -749,8 +855,7 @@ function renderDetailHeader(proj) {
           <div class="overall-progress-bar">
             <div class="overall-progress-fill" style="width:${overall}%;background:${ovColor}"></div>
           </div>
-          <!-- Breakdown komponen -->
-          <div class="overall-breakdown">
+          <div class="overall-breakdown" style="margin-top:8px">
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#6366f1"></span>
               <span>Aktivitas</span>
@@ -765,12 +870,16 @@ function renderDetailHeader(proj) {
             <div class="overall-breakdown-sep">÷ 2</div>
           </div>
         </div>
-        <div class="detail-stats" style="margin-top:12px">
+
+        <!-- Stat cards -->
+        <div class="detail-stats" style="margin-bottom:12px">
           <div class="detail-stat"><div class="detail-stat-label">Total Indikator</div><div class="detail-stat-value">${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${new Date(proj.updated_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div></div>
         </div>
+
+        <!-- Anggaran -->
         ${(proj.budget_approved > 0 || proj.budget_actual > 0) ? `
         <div class="detail-budget-box">
           <div class="detail-budget-title">💰 Anggaran Proyek</div>
@@ -799,6 +908,7 @@ function renderDetailHeader(proj) {
             ${proj.budget_updates.length > 5 ? `<div class="mini-history-more">${proj.budget_updates.length - 5} update lainnya</div>` : ""}
           </div>` : ""}
         </div>` : ""}
+
       </div>
     </div>`;
 }
@@ -809,7 +919,7 @@ function renderIndicatorUpdatePanel(proj) {
   const inds      = proj.project_indicators;
   if (!inds.length) {
     container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center">
-      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:32px;margin-bottom:8px">ðŸ“Š</div>
       <div style="font-weight:600;color:#0f172a;margin-bottom:4px">Belum ada indikator</div>
       <small style="color:#94a3b8">Edit proyek untuk menambah indikator</small>
     </div>`;
@@ -858,14 +968,14 @@ function renderIndicatorUpdatePanel(proj) {
         </div>
         <div class="ind-last-update" id="ind-ts-${i}">
           ${lastTs
-            ? `🕐 Update terakhir: <strong>${lastTs}</strong>`
+            ? `ðŸ• Update terakhir: <strong>${lastTs}</strong>`
             : `<span style="color:#94a3b8;font-style:italic">Belum pernah diupdate</span>`}
         </div>
 
         <!-- Input update kumulatif -->
         <div class="ind-kumul-box">
           <div class="ind-kumul-header">
-            <span>➕ Tambah Capaian Baru</span>
+            <span><i class='fa-solid fa-plus'></i> Tambah Capaian Baru</span>
             <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
           </div>
           <div class="ind-kumul-row">
@@ -898,7 +1008,7 @@ function renderIndicatorUpdatePanel(proj) {
         ${sortedUpd.length ? `
         <div class="mini-history" style="margin-top:10px">
           <div class="mini-history-title" style="display:flex;justify-content:space-between;align-items:center">
-            <span>📋 ${sortedUpd.length} Riwayat Update</span>
+            <span>ðŸ“‹ ${sortedUpd.length} Riwayat Update</span>
             <button class="btn-danger btn-sm" style="font-size:10px;padding:3px 8px"
               onclick="clearIndicatorHistory('${ind.id}')">Hapus Semua</button>
           </div>
@@ -945,7 +1055,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
 
   // Wajib ada tambahan atau catatan
   if (addVal === 0 && !note) {
-    msgEl.textContent = "⚠️ Isi tambahan nilai atau catatan terlebih dahulu.";
+    msgEl.textContent = "âš ï¸ Isi tambahan nilai atau catatan terlebih dahulu.";
     msgEl.className   = "form-msg error";
     msgEl.style.display = "block";
     setTimeout(() => { msgEl.className = "form-msg hidden"; msgEl.style.display = ""; }, 3000);
@@ -969,7 +1079,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
       indicator_name : indName,
       actual_value   : newTotal,
       note,
-      updated_by     : "Tim",
+      updated_by     : AUDIT_USER,
     });
 
     // Kosongkan input
@@ -994,7 +1104,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
     }
 
   } catch (err) {
-    msgEl.textContent   = "❌ " + err.message;
+    msgEl.textContent   = "âŒ " + err.message;
     msgEl.className     = "form-msg error";
     msgEl.style.display = "block";
   } finally {
@@ -1022,6 +1132,9 @@ document.getElementById("editProjectBtn").addEventListener("click", () => {
 // ===================== FILL FORM EDIT =====================
 window.fillFormEdit = function (idx) {
   const item = window.allProjects[idx];
+  editingProjectOriginalName = item.name;
+  editingProjectId          = item.id || null;
+  originalIndicatorIds = (item.project_indicators || []).map(ind => ind.id).filter(Boolean);
   document.getElementById("f-name").value       = item.name;
   document.getElementById("f-location").value   = item.location;
   document.getElementById("f-owner").value      = item.owner;
@@ -1029,7 +1142,6 @@ window.fillFormEdit = function (idx) {
   document.getElementById("f-start-date").value = item.start_date  || "";
   document.getElementById("f-deadline").value   = item.deadline    || "";
   document.getElementById("f-status").value     = item.status;
-  // progress tidak diisi manual
   document.getElementById("f-desc").value            = item.description    || "";
   document.getElementById("f-note").value            = item.note           || "";
   document.getElementById("f-budget-approved").value = item.budget_approved || "";
@@ -1037,17 +1149,22 @@ window.fillFormEdit = function (idx) {
   document.getElementById("f-goal").value = item.goal || "";
   outcomes = (item.project_outcomes || []).map(o => ({ text: o.outcome_text }));
   renderOutcomeList();
-  indicators = item.project_indicators.map(ind => ({
-    id          : ind.id,
-    name        : ind.indicator_name,
-    type        : ind.type,
-    target      : ind.target,
-    unit        : ind.unit,
-    actual      : ind.actual || 0,
-    update_note : "",
-    history     : ind.indicator_updates  || [],
-    evidence    : ind.indicator_evidence || [],
-  }));
+  indicators = item.project_indicators.map(ind => {
+    const latestActual = getLatestActual(ind);
+    return {
+      id              : ind.id,
+      name            : ind.indicator_name,
+      type            : ind.type,
+      target          : ind.target,
+      unit            : ind.unit,
+      actual          : latestActual,
+      previous_actual : latestActual,
+      update_note     : "",
+      history         : ind.indicator_updates  || [],
+      evidence        : ind.indicator_evidence || [],
+    };
+  });
+  renderIndicatorList();
   document.getElementById("pageTitle").textContent    = "Edit Proyek";
   document.getElementById("pageSubtitle").textContent = item.name;
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
@@ -1056,6 +1173,99 @@ window.fillFormEdit = function (idx) {
   document.getElementById("tab-input").classList.add("active");
   setStep(1);
   window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+
+// ===================== RESTORE & ARSIP =====================
+window.restoreProject = async function (id, name) {
+  if (!confirm(`Pulihkan proyek "${name}" dari arsip?`)) return;
+  const { error } = await client.from("projects").update({
+    archived: false, archived_at: null, archived_by: null
+  }).eq("name", name);
+  if (error) { alert("Gagal pulihkan: " + error.message); return; }
+  client.from("audit_log").insert({
+    project_id: id||null, project_name: name, entity_type: "project", action: "restore", changed_by: AUDIT_USER,
+  }).then(()=>{}).catch(()=>{});
+  await loadProjects();
+  if (document.getElementById("archivedProjectList")) loadArchivedProjects();
+};
+
+window._archivedData = [];
+window.loadArchivedProjects = async function () {
+  const tbody = document.getElementById("archivedProjectList");
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#94a3b8;font-size:13px;">⏳ Memuat data...</td></tr>';
+  const _client = window.client || client;
+  if (!_client || typeof _client.from !== 'function') {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#ef4444;font-size:13px;">⚠️ Koneksi database belum siap. Coba refresh halaman.</td></tr>';
+    return;
+  }
+  const { data, error } = await _client.from("projects")
+    .select("id, name, location, owner, donor, status, archived_at, archived_by")
+    .eq("archived", true)
+    .order("archived_at", { ascending: false });
+  if (error) { console.error(error); tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;color:#ef4444;">${error.message}</td></tr>`; return; }
+  window._archivedData = data || [];
+  renderArchivedRows(window._archivedData);
+};
+
+function renderArchivedRows(rows) {
+  const tbody = document.getElementById("archivedProjectList");
+  if (!tbody) return;
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#94a3b8;font-size:13px;">📦 Tidak ada proyek yang diarsipkan.</td></tr>';
+    return;
+  }
+  const statusClass = s => {
+    if (!s) return 'badge badge-ditangguhkan';
+    const sl = s.toLowerCase();
+    if (sl.includes('aktif') || sl.includes('on-track') || sl.includes('on track')) return 'badge badge-aktif';
+    if (sl.includes('terlambat') || sl.includes('at risk')) return 'badge badge-terlambat';
+    if (sl.includes('selesai') || sl.includes('completed')) return 'badge badge-selesai';
+    return 'badge badge-ditangguhkan';
+  };
+  tbody.innerHTML = rows.map((p, i) => `
+    <tr>
+      <td style="color:#94a3b8;font-size:12px">${i + 1}</td>
+      <td>
+        <div style="font-weight:600;font-size:13px;color:#0f172a">${p.name}</div>
+        ${p.donor ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${p.donor}</div>` : ''}
+      </td>
+      <td style="font-size:12px;color:#475569">${p.location || '-'}<br><span style="color:#94a3b8">${p.owner || '-'}</span></td>
+      <td style="font-size:12px;color:#475569">${p.donor || '-'}</td>
+      <td><span class="${statusClass(p.status)}">${p.status || 'N/A'}</span></td>
+      <td style="font-size:12px;color:#475569;white-space:nowrap">${p.archived_at ? new Date(p.archived_at).toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}) : '-'}</td>
+      <td style="font-size:12px;color:#475569">${p.archived_by || '-'}</td>
+      <td>
+        <button class="btn-secondary btn-sm" style="white-space:nowrap"
+          onclick="restoreProject('${p.id}','${p.name.replace(/'/g,"\\'")}')">
+          <i class="fa-solid fa-rotate-left"></i> Pulihkan
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+window.filterArchivedProjects = function(q) {
+  if (!q) { renderArchivedRows(window._archivedData); return; }
+  const lower = q.toLowerCase();
+  const filtered = (window._archivedData || []).filter(p =>
+    (p.name||'').toLowerCase().includes(lower) ||
+    (p.owner||'').toLowerCase().includes(lower) ||
+    (p.location||'').toLowerCase().includes(lower)
+  );
+  renderArchivedRows(filtered);
+};
+
+// ===================== AUDIT LOG VIEWER =====================
+window.loadProjectAuditLog = async function (projectId, projectName) {
+  const { data, error } = await client.from("audit_log")
+    .select("entity_type, action, changed_by, new_values, note, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) { console.error(error); return []; }
+  return data || [];
 };
 
 // ===================== AKTIVITAS =====================
@@ -1100,14 +1310,14 @@ function renderActivityListDetail() {
           <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
             <div class="act-check ${checked ? "checked" : ""}"
               onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
-              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "✓" : ""}</div>
+              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "<i class='fa-solid fa-check'></i>" : ""}</div>
             <div class="activity-card-info">
               <div class="activity-card-title ${checked ? "done" : ""}">${act.title}</div>
               <div class="activity-card-meta">
                 ${act.pic      ? `<span>${act.pic}</span>`      : ""}
                 ${act.due_date ? `<span>${act.due_date}</span>` : ""}
                 <span><span class="badge ${badgeCls}" style="font-size:10px">${act.status}</span></span>
-                ${notes.length ? `<span>${notes.length} 📝</span>` : ""}
+                ${notes.length ? `<span>${notes.length} ðŸ“</span>` : ""}
                 <span class="file-count-badge" id="filecount-${act.id}"></span>
               </div>
             </div>
@@ -1118,19 +1328,19 @@ function renderActivityListDetail() {
               </div>
             </div>
             <div class="activity-card-actions" onclick="event.stopPropagation()">
-              <button class="btn-edit"   onclick="openActModal('${act.id}')">✏️</button>
-              <button class="btn-remove" onclick="deleteActivity('${act.id}')">✕</button>
+              <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class='fa-solid fa-pen-to-square'></i></button>
+              <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class='fa-solid fa-xmark'></i></button>
             </div>
           </div>
           <div class="activity-card-body" id="actbody-${act.id}">
             ${act.description ? `<p style="font-size:12px;color:#475569;margin:10px 0 6px">${act.description}</p>` : ""}
             <div class="act-note-section">
-              <div class="act-note-title">Catatan</div>
+              <div class="act-note-title">⚠️ Tantangan &amp; Hambatan</div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
                 <textarea id="inline-note-${act.id}" rows="2"
                   placeholder="Tulis catatan pelaksanaan…"
                   style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical"></textarea>
-                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">＋</button>
+                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">+</button>
               </div>
               <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
             </div>
@@ -1186,7 +1396,7 @@ async function updateFileCountBadges() {
   (data || []).forEach(r => { counts[r.activity_id] = (counts[r.activity_id] || 0) + 1; });
   allActivities.forEach(act => {
     const el = document.getElementById("filecount-" + act.id);
-    if (el) el.textContent = counts[act.id] ? `📎 ${counts[act.id]}` : "";
+    if (el) el.textContent = counts[act.id] ? `ðŸ“Ž ${counts[act.id]}` : "";
   });
 }
 
@@ -1286,11 +1496,11 @@ document.getElementById("saveActivityBtn").addEventListener("click", async () =>
 
 // ===================== FILE UPLOAD =====================
 function getFileIcon(n) {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "🖼️"
-       : /\.pdf$/i.test(n) ? "📄"
-       : /\.(doc|docx)$/i.test(n) ? "📝"
-       : /\.(xls|xlsx|csv)$/i.test(n) ? "📊"
-       : /\.(ppt|pptx)$/i.test(n) ? "📑" : "📎";
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "ðŸ–¼ï¸"
+       : /\.pdf$/i.test(n) ? "ðŸ“„"
+       : /\.(doc|docx)$/i.test(n) ? "ðŸ“"
+       : /\.(xls|xlsx|csv)$/i.test(n) ? "ðŸ“Š"
+       : /\.(ppt|pptx)$/i.test(n) ? "ðŸ“‘" : "ðŸ“Ž";
 }
 function formatBytes(b) {
   if (!b) return "";
@@ -1319,7 +1529,7 @@ function renderStagingList() {
           <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?"100":"0"}%"></div></div>
         </div>
         <span class="file-staging-status ${sf.status}">${statusMap[sf.status]}</span>
-        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')">✕</button>` : ""}
+        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')"><i class='fa-solid fa-xmark'></i></button>` : ""}
       </div>`;
   }).join("");
 }
@@ -1345,7 +1555,7 @@ function renderSavedFiles() {
         </div>
         <div class="file-saved-actions">
           <a href="${f.file_url}" target="_blank" class="file-btn-view">Lihat</a>
-          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')">✕</button>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')"><i class='fa-solid fa-xmark'></i></button>
         </div>
       </div>`;
   }).join("");
@@ -1429,34 +1639,22 @@ window.deleteSavedFile = async function (fileId, fileUrl) {
 
 // ===================== HAPUS PROYEK =====================
 window.deleteProject = async function (id, name) {
-  if (!confirm(`Hapus proyek "${name}"?\nIndikator, aktivitas, dan file terkait juga akan terhapus.`)) return;
-  const { data: indList } = await client.from("project_indicators").select("id").eq("project_name", name);
-  const indIds = (indList || []).map(i => i.id);
-  if (indIds.length) {
-    await client.from("indicator_evidence").delete().in("indicator_id", indIds);
-    await client.from("indicator_updates").delete().in("indicator_id", indIds);
-  }
-  await client.from("budget_updates").delete().eq("project_name", name);
-  await client.from("project_indicators").delete().eq("project_name", name);
-  const { data: actList } = await client.from("project_activities").select("id").eq("project_name", name);
-  const actIds = (actList || []).map(a => a.id);
-  if (actIds.length) {
-    await client.from("activity_notes").delete().in("activity_id", actIds);
-    const { data: files } = await client.from("activity_files").select("file_url").in("activity_id", actIds);
-    if (files && files.length) {
-      await client.storage.from(BUCKET).remove(files.map(f => {
-        const p = f.file_url.split(BUCKET + "/");
-        return p[1] ? decodeURIComponent(p[1]) : null;
-      }).filter(Boolean));
-    }
-    await client.from("activity_files").delete().in("activity_id", actIds);
-  }
-  await client.from("project_activities").delete().eq("project_name", name);
-  const { error } = await client.from("projects").delete().eq("id", id);
-  if (error) { alert("Gagal hapus proyek: " + error.message); return; }
-  if (currentProject && currentProject.name === name) { currentProject = null; switchTab("dashboard"); }
+  if (!confirm(`Arsipkan proyek "${name}"?\n\nOK = Arsipkan (data tetap aman)\nCancel = Batal`)) return;
+  const { error } = await client.from("projects").update({
+    archived    : true,
+    archived_at : new Date().toISOString(),
+    archived_by : AUDIT_USER,
+  }).eq("name", name);
+  if (error) { alert("Gagal arsipkan proyek: " + error.message); return; }
+  client.from("audit_log").insert({
+    project_id: id||null, project_name: name,
+    entity_type: "project", action: "archive", changed_by: AUDIT_USER,
+  }).then(()=>{}).catch(()=>{});
+  currentProject = null;
   await loadProjects();
+  switchTab("archive");
 };
+
 
 // ===================== HAPUS RIWAYAT INDIKATOR =====================
 window.clearIndicatorHistory = async function (indicatorId) {

@@ -1,5 +1,6 @@
 // ============================================================
-// IMPACT PER PROJECT — inject dampak ke setiap project card
+// PMIS DFW Indonesia — Impact per Project Card (v2)
+// Dipanggil setelah renderCards() selesai
 // ============================================================
 
 function impactIcon(unit) {
@@ -17,177 +18,93 @@ function impactIcon(unit) {
   return '🎯';
 }
 
-// Hitung dampak per proyek dari project_indicators yang sudah ada di allProjects
 function calcProjectImpact(proj) {
-  const inds = proj.project_indicators || [];
   const grouped = {};
-
-  inds.forEach(ind => {
+  (proj.project_indicators || []).forEach(ind => {
     const rawUnit = (ind.unit || '').trim();
     if (!rawUnit) return;
-    const unitKey = rawUnit.toLowerCase();
-
-    const upds   = ind.indicator_updates || [];
+    const k    = rawUnit.toLowerCase();
+    const upds = ind.indicator_updates || [];
     const actVal = upds.length
-      ? Number([...upds].sort((a, b) =>
-          new Date(b.created_at) - new Date(a.created_at)
-        )[0].actual_value) || 0
+      ? Number([...upds].sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0].actual_value) || 0
       : Number(ind.actual) || 0;
-
-    if (!grouped[unitKey]) {
-      grouped[unitKey] = { unitDisplay: rawUnit, total: 0, count: 0 };
-    }
-    grouped[unitKey].total += actVal;
-    grouped[unitKey].count += 1;
+    if (!grouped[k]) grouped[k] = { unitDisplay: rawUnit, total: 0, count: 0 };
+    grouped[k].total += actVal;
+    grouped[k].count += 1;
   });
-
   return grouped;
 }
 
-// Buat HTML impact row untuk 1 proyek
 function buildImpactRow(proj) {
   const grouped = calcProjectImpact(proj);
-  const entries = Object.entries(grouped).sort((a, b) => b[1].total - a[1].total);
+  const entries = Object.entries(grouped).sort((a,b) => b[1].total - a[1].total);
   if (!entries.length) return '';
-
-  const chips = entries.map(([unitKey, d]) => {
-    const icon  = impactIcon(unitKey);
+  const chips = entries.slice(0, 4).map(([k, d]) => {
+    const icon  = impactIcon(k);
     const total = Number(d.total).toLocaleString('id-ID');
-    return `<span class="impact-chip" title="${d.count} indikator berkontribusi">
-      <span class="impact-chip-icon">${icon}</span>
-      <span class="impact-chip-val">${total}</span>
-      <span class="impact-chip-unit">${d.unitDisplay}</span>
-    </span>`;
+    return `<span style="
+      display:inline-flex;align-items:center;gap:5px;
+      background:#f0fdf4;border:1px solid #86efac;border-radius:8px;
+      padding:3px 9px;font-size:11px;font-weight:600;color:#15803d;
+      white-space:nowrap">${icon} ${total} ${d.unitDisplay}</span>`;
   }).join('');
-
-  return `<div class="impact-row">
-    <span class="impact-row-label">🌍 Dampak:</span>
-    <div class="impact-chips">${chips}</div>
+  const more = entries.length > 4
+    ? `<span style="font-size:11px;color:#94a3b8">+${entries.length - 4} lainnya</span>` : '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;
+    border-top:1px solid #f1f5f9;padding-top:8px;margin-top:6px">
+    ${chips}${more}
   </div>`;
 }
 
-// Inject impact row ke setiap card
-
-// ============================================================
-// COMPACT CARD PATCH — batasi goal/outcomes agar card tidak terlalu panjang
-// ============================================================
-function patchCardCompact() {
-  document.querySelectorAll('#projectCards .proj-card').forEach(card => {
-    if (card.dataset.compactPatched) return;
-    card.dataset.compactPatched = '1';
-
-    // ── Goal text: tambahkan class untuk line-clamp ──
-    card.querySelectorAll('div[style*="font-size:11px"][style*="color:#475569"]').forEach(el => {
-      if (el.textContent.includes('Goal:') || el.querySelector('span[style*="color:#2563eb"]')) {
-        el.classList.add('proj-card-goal-text-wrap');
-        // Tambah class ke teks setelah span
-        const spans = el.querySelectorAll('span');
-        if (spans.length === 1) {
-          // Teks goal ada sebagai text node — wrap dengan span
-          const goalSpan = el.querySelector('span');
-          if (goalSpan) {
-            const goalText = el.childNodes;
-            el.classList.add('proj-card-goal-outer');
-          }
-        }
-      }
-    });
-
-    // ── Outcomes ul: tambahkan class ──
-    card.querySelectorAll('ul').forEach(ul => {
-      ul.classList.add('proj-card-outcomes-ul');
-      // Sembunyikan li ke-3 ke atas
-      const items = ul.querySelectorAll('li');
-      const MAX = 2;
-      if (items.length > MAX) {
-        items.forEach((li, i) => {
-          if (i >= MAX) li.style.display = 'none';
-        });
-        // Tambah "lihat semua" toggle jika belum ada
-        if (!ul.nextElementSibling || !ul.nextElementSibling.classList.contains('outcomes-more-btn')) {
-          const moreBtn = document.createElement('button');
-          moreBtn.className = 'outcomes-more-btn';
-          moreBtn.textContent = `+${items.length - MAX} lainnya`;
-          moreBtn.onclick = (e) => {
-            e.stopPropagation();
-            items.forEach(li => li.style.display = '');
-            moreBtn.style.display = 'none';
-          };
-          ul.insertAdjacentElement('afterend', moreBtn);
-        }
-      }
-    });
-  });
-}
-
-// CSS inject untuk outcomes-more-btn (tidak bisa di style.css karena dinamis)
-(function injectCompactCSS() {
-  if (document.getElementById('pmis-compact-style')) return;
-  const s = document.createElement('style');
-  s.id = 'pmis-compact-style';
-  s.textContent = `
-    .proj-card-goal-outer { display: flex; gap: 4px; align-items: flex-start; }
-    .proj-card-goal-outer > span:last-child {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      font-size: 11px;
-      color: #475569;
-      line-height: 1.5;
-      flex: 1;
-    }
-    .outcomes-more-btn {
-      background: none; border: none; cursor: pointer;
-      font-size: 10px; color: #2563eb; padding: 0;
-      margin-top: 2px; font-weight: 600;
-    }
-    .outcomes-more-btn:hover { text-decoration: underline; }
-  `;
-  document.head.appendChild(s);
-})();
-
+// Inject impact ke setiap project card setelah renderCards()
 function injectImpactToCards() {
-  if (!window.allProjects || !window.allProjects.length) return;
-
-  document.querySelectorAll('#projectCards .proj-card').forEach(card => {
-    if (card.querySelector('.impact-row')) return; // sudah ada, skip
-
-    const nameEl = card.querySelector('.proj-card-name');
-    if (!nameEl) return;
-
-    const proj = window.allProjects.find(p => p.name === nameEl.textContent.trim());
-    if (!proj) return;
-
-    const html = buildImpactRow(proj);
-    if (!html) return;
-
-    // Sisipkan sebelum footer card, atau di akhir card
+  if (!window.allProjects) return;
+  window.allProjects.forEach((proj, i) => {
+    const impHtml = buildImpactRow(proj);
+    if (!impHtml) return;
+    const cards = document.getElementById('projectCards');
+    if (!cards) return;
+    const allCards = cards.querySelectorAll('.proj-card');
+    const card = allCards[i];
+    if (!card) return;
+    // Hindari duplikasi
+    if (card.querySelector('.impact-row-injected')) return;
+    const div = document.createElement('div');
+    div.className = 'impact-row-injected';
+    div.innerHTML = impHtml;
+    // Sisipkan sebelum footer card
     const footer = card.querySelector('.proj-card-footer');
-    if (footer) footer.insertAdjacentHTML('beforebegin', html);
-    else card.insertAdjacentHTML('beforeend', html);
-  });
-  patchCardCompact();
-}
-
-// Observer: auto inject setiap kali #projectCards dirender ulang
-(function initImpactObserver() {
-  document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('projectCards');
-    if (!container) return;
-
-    // Watch projectCards childList changes
-    new MutationObserver(() => {
-      setTimeout(injectImpactToCards, 60);
-    }).observe(container, { childList: true });
-
-    // Watch saat tab dashboard aktif
-    const dashTab = document.getElementById('tab-dashboard');
-    if (dashTab) {
-      new MutationObserver(() => {
-        if (dashTab.classList.contains('active'))
-          setTimeout(injectImpactToCards, 120);
-      }).observe(dashTab, { attributes: true, attributeFilter: ['class'] });
+    if (footer) {
+      card.insertBefore(div, footer);
+    } else {
+      card.appendChild(div);
     }
   });
-})();
+}
+
+// Patch renderCards agar auto-inject setelah render selesai
+const _origRenderCards = window.renderCards;
+if (typeof _origRenderCards === 'function') {
+  window.renderCards = function(items) {
+    _origRenderCards(items);
+    setTimeout(injectImpactToCards, 50);
+  };
+} else {
+  // Fallback: tunggu renderCards tersedia
+  document.addEventListener('DOMContentLoaded', () => {
+    const checkInterval = setInterval(() => {
+      if (typeof window.renderCards === 'function') {
+        clearInterval(checkInterval);
+        const orig = window.renderCards;
+        window.renderCards = function(items) {
+          orig(items);
+          setTimeout(injectImpactToCards, 50);
+        };
+      }
+    }, 100);
+  });
+}
+
+window.injectImpactToCards = injectImpactToCards;
+window.buildImpactRow      = buildImpactRow;
+window.calcProjectImpact   = calcProjectImpact;
