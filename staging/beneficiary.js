@@ -18,15 +18,25 @@ window.loadBeneficiaries = async function () {
     { data: benData },
     { data: partData },
     { data: projData },
+    { data: logData },
   ] = await Promise.all([
     _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
     _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
     _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
+    _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source'),
   ]);
 
   _benAllData        = benData  || [];
   const participants = partData || [];
   const benProjects  = projData || [];
+  const actLogs      = logData  || [];
+
+  // Map: beneficiary_id → log entries (aktivitas free text)
+  window._benActLogMap = {};
+  actLogs.forEach(l => {
+    if (!window._benActLogMap[l.beneficiary_id]) window._benActLogMap[l.beneficiary_id] = [];
+    window._benActLogMap[l.beneficiary_id].push(l);
+  });
 
   // Map: beneficiary_id → Set<project_name>
   const projMapBen = {};
@@ -46,12 +56,16 @@ window.loadBeneficiaries = async function () {
   _benAllData = _benAllData.map(b => {
     const fromProjTable = projMapBen[b.id] || new Set();
     const fromParts     = new Set((partMap[b.id] || []).map(p => p.project_name).filter(Boolean));
-    const allProjects   = new Set([...fromProjTable, ...fromParts]);
+    const fromLogs      = new Set((window._benActLogMap[b.id] || []).map(l => l.project_name).filter(Boolean));
+    const allProjects   = new Set([...fromProjTable, ...fromParts, ...fromLogs]);
+    const linkedActs    = partMap[b.id] || [];
+    const logActs       = window._benActLogMap[b.id] || [];
     return {
       ...b,
       projects      : [...allProjects],
-      participations: partMap[b.id] || [],
-      totalKegiatan : (partMap[b.id] || []).length,
+      participations: linkedActs,
+      activityLogs  : logActs,
+      totalKegiatan : linkedActs.length + logActs.length,
       totalProyek   : allProjects.size,
     };
   });
@@ -417,21 +431,38 @@ window.openBenDetail = async function (id) {
     [ben.gender, ben.birth_year ? (new Date().getFullYear()-ben.birth_year)+' tahun' : null,
      ben.location, ben.occupation].filter(Boolean).join(' · ');
 
-  // Load riwayat partisipasi
-  const { data: parts } = await _client
-    .from('activity_participants')
-    .select('activity_name, project_name, attended_date, note')
-    .eq('beneficiary_id', id)
-    .order('attended_date', { ascending: false });
+  // Load riwayat dari kedua tabel paralel
+  const [{ data: parts }, { data: logs }] = await Promise.all([
+    _client.from('activity_participants')
+      .select('activity_name, project_name, attended_date, note')
+      .eq('beneficiary_id', id)
+      .order('attended_date', { ascending: false }),
+    _client.from('beneficiary_activity_log')
+      .select('activity_name, project_name, attended_date, source, note')
+      .eq('beneficiary_id', id)
+      .order('attended_date', { ascending: false }),
+  ]);
 
-  const list = parts || [];
+  // Gabungkan: linked + log, beri label
+  const linked = (parts||[]).map(p => ({ ...p, _type: 'linked' }));
+  const free   = (logs ||[]).map(l => ({ ...l, _type: 'log'    }));
+  const list   = [...linked, ...free].sort((a,b) => {
+    if (!a.attended_date) return 1;
+    if (!b.attended_date) return -1;
+    return b.attended_date.localeCompare(a.attended_date);
+  });
+
+  const allProjects = new Set(list.map(p=>p.project_name).filter(Boolean));
   document.getElementById('benDetailStats').innerHTML = `
     <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
       ${list.length}x kegiatan
     </span>
     <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      ${new Set(list.map(p=>p.project_name)).size} proyek
-    </span>`;
+      ${allProjects.size} proyek
+    </span>
+    ${free.length ? `<span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+      📝 ${free.length} log bebas
+    </span>` : ''}`;
 
   if (!list.length) {
     document.getElementById('benDetailHistory').innerHTML =
@@ -453,9 +484,12 @@ window.openBenDetail = async function (id) {
         📁 ${_esc(proj)} <span style="color:#94a3b8;font-weight:400">(${items.length} kegiatan)</span>
       </div>
       ${items.map(it => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-radius:6px;background:#f8fafc;margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-radius:6px;background:${it._type==='log'?'#fffbeb':'#f8fafc'};margin-bottom:4px;border:1px solid ${it._type==='log'?'#fde68a':'transparent'}">
           <div>
-            <div style="font-size:12px;font-weight:600;color:#334155">${_esc(it.activity_name||'-')}</div>
+            <div style="font-size:12px;font-weight:600;color:#334155">
+              ${_esc(it.activity_name||'-')}
+              ${it._type==='log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : ''}
+            </div>
             ${it.note ? `<div style="font-size:11px;color:#94a3b8">${_esc(it.note)}</div>` : ''}
           </div>
           <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">
@@ -667,7 +701,7 @@ window.runBenImport = async function () {
     actMap[key] = a;
   });
 
-  let okBen = 0, okPart = 0, skipPart = 0;
+  let okBen = 0, okPart = 0, skipPart = 0, logPart = 0;
   const warnPart   = [];
   const benIdCache = {}; // "name|phone" → uuid
 
@@ -717,32 +751,42 @@ window.runBenImport = async function () {
       }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
     }
 
-    // ── STEP 2: Insert ke activity_participants ───────────────────
-    if (benId && r.project_name && r.activity_name) {
-      const actKey = `${r.project_name.toLowerCase()}|${r.activity_name.toLowerCase()}`;
+    // ── STEP 2: Insert ke activity_participants atau activity_log ──
+    if (benId && r.activity_name) {
+      const actKey = `${(r.project_name||'').toLowerCase()}|${r.activity_name.toLowerCase()}`;
       const act    = actMap[actKey];
+      const projId = r.project_name ? projMap[r.project_name.toLowerCase()] || null : null;
 
-      if (!act) {
-        warnPart.push(`Kegiatan "${r.activity_name}" (${r.project_name}) tidak ditemukan`);
-        skipPart++;
-      } else {
-        const projId = projMap[r.project_name.toLowerCase()] || null;
+      if (act) {
+        // Aktivitas ditemukan di sistem → linked ke project_activities
         const { error: errPart } = await _client
           .from('activity_participants')
           .upsert({
             activity_id   : act.id,
             activity_name : act.title,
-            project_name  : r.project_name,
+            project_name  : r.project_name || null,
             project_id    : projId,
             beneficiary_id: benId,
             attended_date : parseDate(r.attended_date) || null,
             note          : r.note || null,
           }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
-
         if (!errPart) okPart++; else skipPart++;
+      } else {
+        // Aktivitas TIDAK ada di sistem → simpan sebagai free-text log
+        const { error: errLog } = await _client
+          .from('beneficiary_activity_log')
+          .upsert({
+            beneficiary_id: benId,
+            project_name  : r.project_name || null,
+            project_id    : projId,
+            activity_name : r.activity_name,
+            attended_date : parseDate(r.attended_date) || null,
+            source        : 'import',
+            note          : r.note || null,
+          }, { onConflict: 'beneficiary_id,project_name,activity_name', ignoreDuplicates: true });
+        if (!errLog) { okPart++; logPart++; }
+        else skipPart++;
       }
-    } else if (benId && (!r.project_name || !r.activity_name)) {
-      // Hanya data orang tanpa kegiatan — tetap tersimpan
     }
 
     processed++;
@@ -753,23 +797,21 @@ window.runBenImport = async function () {
   const uniqueBen = Object.keys(benIdCache).length;
 
   let msg = `🎉 ${uniqueBen} penerima manfaat tersimpan`;
-  if (okPart)  msg += ` • ${okPart} partisipasi terekam`;
-  if (skipPart) msg += ` • ${skipPart} dilewati`;
+  if (okPart)   msg += ` • ${okPart} partisipasi terekam`;
+  if (logPart)  msg += ` (${logPart} sebagai log bebas)`;
+  if (skipPart) msg += ` • ${skipPart} gagal`;
   showBenImportMsg(msg + '.', 'success');
 
-  if (warnPart.length) {
-    const uniqueW = [...new Set(warnPart)].slice(0, 5);
+  if (logPart) {
     document.getElementById('benImportPreview').innerHTML += `
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 12px;font-size:11px;color:#991b1b;margin-top:8px">
-        <strong>⚠️ Kegiatan tidak ditemukan (${warnPart.length} baris):</strong><br>
-        ${uniqueW.map(w=>`• ${_esc(w)}`).join('<br>')}
-        ${warnPart.length > 5 ? `<br>… dan ${warnPart.length-5} lainnya` : ''}
-        <br><small style="margin-top:4px;display:block">Pastikan Nama Proyek & Nama Kegiatan sama persis dengan yang ada di sistem.</small>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;font-size:11px;color:#92400e;margin-top:8px">
+        <strong>📝 ${logPart} kegiatan tersimpan sebagai catatan bebas</strong><br>
+        Nama aktivitas tidak cocok dengan sistem, namun kehadiran tetap direkam di log.
+        Data ini tetap terlihat di halaman detail penerima manfaat.
       </div>`;
   }
 
-  setTimeout(() => { if (!warnPart.length) closeBenImport(); loadBeneficiaries(); },
-    warnPart.length ? 0 : 1500);
+  setTimeout(() => { closeBenImport(); loadBeneficiaries(); }, logPart ? 2000 : 1500);
 };
 
 function showBenImportMsg(msg, type) {
