@@ -256,10 +256,27 @@
 <!-- ===== TAB PENERIMA MANFAAT ===== -->
 <div class="tab-content" id="tab-beneficiary">
 
+  <!-- Project Selector Bar -->
+  <div id="benProjectSelectorBar" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px">
+      <i class="fa-solid fa-folder-open" style="color:#2563eb;font-size:16px"></i>
+      <div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Tampilkan Data</div>
+        <div id="benActiveProjectLabel" style="font-size:14px;font-weight:700;color:#0f172a">Semua Proyek</div>
+      </div>
+    </div>
+    <select id="benProjectSelector"
+      style="padding:9px 14px;border:2px solid #2563eb;border-radius:8px;font-size:13px;font-weight:600;color:#1d4ed8;background:#eff6ff;cursor:pointer;min-width:200px"
+      onchange="onBenProjectSelectorChange(this.value)">
+      <option value="">📊 Semua Proyek</option>
+    </select>
+    <div id="benSelectorStats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
   <!-- Stat Cards -->
   <div class="stat-grid" style="margin-bottom:20px">
     <div class="stat-card blue">
-      <div class="stat-label">Total Unik</div>
+      <div class="stat-label" id="benStatUniqueLabel">Total Unik</div>
       <div class="stat-value" id="benStatUnique">–</div>
     </div>
     <div class="stat-card green">

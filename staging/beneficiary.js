@@ -28,44 +28,58 @@ window.loadBeneficiaries = async function () {
   const participants = partData || [];
   const benProjects  = projData || [];
 
-  // Map: beneficiary_id → daftar proyek (dari beneficiary_projects)
+  // Map: beneficiary_id → Set<project_name>
   const projMapBen = {};
   benProjects.forEach(bp => {
     if (!projMapBen[bp.beneficiary_id]) projMapBen[bp.beneficiary_id] = new Set();
     projMapBen[bp.beneficiary_id].add(bp.project_name);
   });
 
-  // Map: beneficiary_id → daftar partisipasi kegiatan
+  // Map: beneficiary_id → partisipasi kegiatan
   const partMap = {};
   participants.forEach(p => {
     if (!partMap[p.beneficiary_id]) partMap[p.beneficiary_id] = [];
     partMap[p.beneficiary_id].push(p);
   });
 
-  // Stats
-  const totalUnique   = _benAllData.length;
-  const totalMale     = _benAllData.filter(b => b.gender === 'Laki-laki').length;
-  const totalFemale   = _benAllData.filter(b => b.gender === 'Perempuan').length;
-  const totalParticip = participants.length;
-
-  document.getElementById('benStatUnique').textContent   = totalUnique.toLocaleString('id-ID');
-  document.getElementById('benStatMale').textContent     = totalMale.toLocaleString('id-ID');
-  document.getElementById('benStatFemale').textContent   = totalFemale.toLocaleString('id-ID');
-  document.getElementById('benStatParticip').textContent = totalParticip.toLocaleString('id-ID');
-
-  // Gabungkan: proyek dari beneficiary_projects UNION proyek dari activity_participants
+  // Gabungkan data
   _benAllData = _benAllData.map(b => {
     const fromProjTable = projMapBen[b.id] || new Set();
     const fromParts     = new Set((partMap[b.id] || []).map(p => p.project_name).filter(Boolean));
     const allProjects   = new Set([...fromProjTable, ...fromParts]);
     return {
       ...b,
-      projects      : [...allProjects],        // ← dipakai untuk filter
+      projects      : [...allProjects],
       participations: partMap[b.id] || [],
       totalKegiatan : (partMap[b.id] || []).length,
       totalProyek   : allProjects.size,
     };
   });
+
+  // Kumpulkan semua proyek unik dari data
+  const allProjNames = [...new Set(
+    _benAllData.flatMap(b => b.projects)
+  )].filter(Boolean).sort();
+
+  // Populate benProjectSelector (selector bar utama)
+  const selMain = document.getElementById('benProjectSelector');
+  if (selMain) {
+    const curVal = selMain.value;
+    selMain.innerHTML = '<option value="">📊 Semua Proyek</option>' +
+      allProjNames.map(p => `<option value="${p}" ${p===curVal?'selected':''}>${p}</option>`).join('');
+  }
+
+  // Populate benFilterProject (filter di toolbar)
+  const selFilter = document.getElementById('benFilterProject');
+  if (selFilter) {
+    const curF = selFilter.value;
+    selFilter.innerHTML = '<option value="">Semua Proyek</option>' +
+      allProjNames.map(p => `<option value="${p}" ${p===curF?'selected':''}>${p}</option>`).join('');
+  }
+
+  // Hitung & tampilkan stats (gunakan selektor aktif)
+  const activeSel = selMain?.value || '';
+  updateBenStats(activeSel);
 
   _benFilteredData = [..._benAllData];
   _benCurrentPage  = 1;
@@ -73,11 +87,80 @@ window.loadBeneficiaries = async function () {
   showBenLoading(false);
 };
 
+// Hitung ulang stat cards berdasarkan proyek yang dipilih
+function updateBenStats(projectFilter) {
+  const subset = projectFilter
+    ? _benAllData.filter(b => (b.projects||[]).includes(projectFilter))
+    : _benAllData;
+  const parts  = projectFilter
+    ? subset.flatMap(b => b.participations.filter(p => p.project_name === projectFilter))
+    : subset.flatMap(b => b.participations);
+
+  document.getElementById('benStatUnique').textContent    = subset.length.toLocaleString('id-ID');
+  document.getElementById('benStatMale').textContent      = subset.filter(b=>b.gender==='Laki-laki').length.toLocaleString('id-ID');
+  document.getElementById('benStatFemale').textContent    = subset.filter(b=>b.gender==='Perempuan').length.toLocaleString('id-ID');
+  document.getElementById('benStatParticip').textContent  = parts.length.toLocaleString('id-ID');
+
+  // Label stat card sesuai konteks
+  const lbl = document.getElementById('benStatUniqueLabel');
+  if (lbl) lbl.textContent = projectFilter ? `Penerima — ${projectFilter.length > 25 ? projectFilter.slice(0,25)+'…' : projectFilter}` : 'Total Unik';
+}
+
+// Handler saat project selector bar berubah
+window.onBenProjectSelectorChange = function (val) {
+  // Update label
+  const lbl = document.getElementById('benActiveProjectLabel');
+  if (lbl) lbl.textContent = val || 'Semua Proyek';
+
+  // Sync filter toolbar
+  const selFilter = document.getElementById('benFilterProject');
+  if (selFilter) selFilter.value = val;
+
+  // Update stats
+  updateBenStats(val);
+
+  // Update tabel
+  filterBeneficiaries();
+
+  // Warna selector bar — biru jika proyek dipilih
+  const bar = document.getElementById('benProjectSelectorBar');
+  if (bar) {
+    bar.style.background   = val ? 'linear-gradient(135deg,#eff6ff,#dbeafe)' : '#fff';
+    bar.style.borderColor  = val ? '#93c5fd' : '#e2e8f0';
+  }
+  const sel = document.getElementById('benProjectSelector');
+  if (sel) {
+    sel.style.background  = val ? '#dbeafe' : '#eff6ff';
+    sel.style.borderColor = val ? '#1d4ed8' : '#2563eb';
+  }
+};
+
 // ── Filter & Search ───────────────────────────────────────────────────
 window.filterBeneficiaries = function () {
   const q       = (document.getElementById('benSearchInput')?.value || '').toLowerCase();
   const gender  = document.getElementById('benFilterGender')?.value || '';
-  const project = document.getElementById('benFilterProject')?.value || '';
+  // Project filter: ambil dari toolbar ATAU dari selector bar (mana yang berisi)
+  const project = document.getElementById('benFilterProject')?.value ||
+                  document.getElementById('benProjectSelector')?.value || '';
+
+  // Sync kedua selector agar konsisten
+  const selFilter = document.getElementById('benFilterProject');
+  const selMain   = document.getElementById('benProjectSelector');
+  if (selFilter && selFilter.value !== project) selFilter.value = project;
+  if (selMain   && selMain.value   !== project) {
+    selMain.value = project;
+    // Update label & warna selector bar
+    const lbl = document.getElementById('benActiveProjectLabel');
+    if (lbl) lbl.textContent = project || 'Semua Proyek';
+    const bar = document.getElementById('benProjectSelectorBar');
+    if (bar) {
+      bar.style.background  = project ? 'linear-gradient(135deg,#eff6ff,#dbeafe)' : '#fff';
+      bar.style.borderColor = project ? '#93c5fd' : '#e2e8f0';
+    }
+  }
+
+  // Update stat cards sesuai proyek
+  if (typeof updateBenStats === 'function') updateBenStats(project);
 
   _benFilteredData = _benAllData.filter(b => {
     const matchQ = !q ||
@@ -86,7 +169,6 @@ window.filterBeneficiaries = function () {
       (b.location||'').toLowerCase().includes(q) ||
       (b.occupation||'').toLowerCase().includes(q);
     const matchG = !gender || b.gender === gender;
-    // Filter proyek: cek dari b.projects (gabungan beneficiary_projects + activity_participants)
     const matchP = !project || (b.projects || []).includes(project) ||
                    b.participations.some(p => p.project_name === project);
     return matchQ && matchG && matchP;
