@@ -7,6 +7,14 @@
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    @media (max-width: 640px) {
+      #benChartsContainer { grid-template-columns: 1fr !important; }
+      #benChartsContainer > div:last-child { grid-column: 1 !important; }
+    }
+  </style>
 </head>
 <body>
 <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -28,6 +36,7 @@
       <li data-tab="projects"><span class="nav-icon"><i class="fa-solid fa-table-cells-large"></i></span><span>Daftar Proyek</span></li>
       <ul class="nav-submenu" id="projectSubmenu"></ul>
       <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
+      <li data-tab="beneficiary" onclick="loadBeneficiaries();populateBenProjectFilter()"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Penerima Manfaat</span></li>
       <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
@@ -82,6 +91,9 @@
   <div id="tab-projects" class="tab-content">
     <div class="table-toolbar">
       <input type="text" class="search-input" id="searchInput" placeholder="🔍 Cari nama proyek, lokasi, PIC…">
+      <button class="btn-secondary btn-sm" onclick="openImportModal()">
+        <i class="fa-solid fa-file-import"></i> Import Excel/CSV
+      </button>
       <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ Tambah Proyek</button>
     </div>
     <div class="table-wrap">
@@ -248,6 +260,140 @@
 
 
 
+
+<!-- ===== TAB PENERIMA MANFAAT ===== -->
+<div class="tab-content" id="tab-beneficiary">
+
+  <!-- Project Selector Bar -->
+  <div id="benProjectSelectorBar" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px">
+      <i class="fa-solid fa-folder-open" style="color:#2563eb;font-size:16px"></i>
+      <div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Tampilkan Data</div>
+        <div id="benActiveProjectLabel" style="font-size:14px;font-weight:700;color:#0f172a">Semua Proyek</div>
+      </div>
+    </div>
+    <select id="benProjectSelector"
+      style="padding:9px 14px;border:2px solid #2563eb;border-radius:8px;font-size:13px;font-weight:600;color:#1d4ed8;background:#eff6ff;cursor:pointer;min-width:200px"
+      onchange="onBenProjectSelectorChange(this.value)">
+      <option value="">📊 Semua Proyek</option>
+    </select>
+    <div id="benSelectorStats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stat-grid" style="margin-bottom:20px">
+    <div class="stat-card blue">
+      <div class="stat-label" id="benStatUniqueLabel">Total Unik</div>
+      <div class="stat-value" id="benStatUnique">–</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Laki-laki</div>
+      <div class="stat-value" id="benStatMale">–</div>
+    </div>
+    <div class="stat-card purple" style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border-color:#e9d5ff">
+      <div class="stat-label" style="color:#7e22ce">Perempuan</div>
+      <div class="stat-value" style="color:#7e22ce" id="benStatFemale">–</div>
+    </div>
+    <div class="stat-card yellow" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
+      <div class="stat-label" style="color:#92400e">Total Partisipasi</div>
+      <div class="stat-value" style="color:#92400e" id="benStatParticip">–</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="table-toolbar" style="flex-wrap:wrap;gap:8px">
+    <input type="text" class="search-input" id="benSearchInput"
+           placeholder="🔍 Cari nama, no HP, lokasi…"
+           oninput="filterBeneficiaries()">
+    <select id="benFilterGender" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff" onchange="filterBeneficiaries()">
+      <option value="">Semua Gender</option>
+      <option value="Laki-laki">Laki-laki</option>
+      <option value="Perempuan">Perempuan</option>
+    </select>
+    <select id="benFilterProject" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;max-width:220px" onchange="filterBeneficiaries()">
+      <option value="">Semua Proyek</option>
+    </select>
+    <button class="btn-secondary btn-sm" onclick="openBenImport()">
+      <i class="fa-solid fa-file-import"></i> Import Excel
+    </button>
+    <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()">
+      <i class="fa-solid fa-download"></i> Template
+    </button>
+    <button class="btn-primary btn-sm" onclick="openAddBenModal()">
+      <i class="fa-solid fa-user-plus"></i> Tambah Manual
+    </button>
+  </div>
+
+  <!-- Count Label -->
+  <div id="benCountLabel" style="font-size:12px;color:#94a3b8;margin-bottom:8px"></div>
+
+  <!-- Chart Dashboard -->
+  <div id="benChartSection" style="margin-bottom:20px">
+    <!-- Toggle show/hide charts -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-chart-pie" style="color:#2563eb"></i> Analisis Penerima Manfaat
+        <span id="benChartProjectBadge" style="font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;border-radius:20px;padding:2px 10px;display:none"></span>
+      </div>
+      <button id="benChartToggleBtn" onclick="toggleBenCharts()"
+        style="font-size:12px;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 12px;cursor:pointer">
+        <i class="fa-solid fa-chevron-up" id="benChartToggleIcon"></i> Sembunyikan
+      </button>
+    </div>
+    <div id="benChartsContainer" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <!-- Chart 1: Donut pekerjaan -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          🍩 Distribusi Pekerjaan
+        </div>
+        <div style="position:relative;height:220px;display:flex;align-items:center;justify-content:center">
+          <canvas id="benChartOccupation"></canvas>
+        </div>
+      </div>
+      <!-- Chart 2: Bar horizontal pekerjaan -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          📊 Jumlah per Pekerjaan
+        </div>
+        <div style="position:relative;height:220px">
+          <canvas id="benChartOccupationBar"></canvas>
+        </div>
+      </div>
+      <!-- Chart 3: Stacked bar gender per pekerjaan (full width) -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04);grid-column:1/-1">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          👥 Gender per Pekerjaan
+        </div>
+        <div style="position:relative;height:180px">
+          <canvas id="benChartGenderOccupation"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabel -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama / No HP</th>
+          <th>Gender</th>
+          <th>Usia</th>
+          <th>Lokasi</th>
+          <th>Pekerjaan</th>
+          <th>Kegiatan</th>
+          <th>Proyek</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="benTableBody"></tbody>
+    </table>
+  </div>
+  <div id="benPagination"></div>
+</div>
+
 <!-- ===== TAB ARSIP PROYEK ===== -->
 <div class="tab-content" id="tab-archive">
   <div class="table-toolbar">
@@ -371,6 +517,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="import.js"></script>
+  <script src="beneficiary.js"></script>
   <script src="documents.js"></script>
   <script src="impact.js"></script>
   <script src="print-report.js"></script>
@@ -449,5 +598,215 @@ function closeSidebar(){
       </div>
     </div>
   </div>
+
+<!-- ===== MODAL IMPORT EXCEL/CSV ===== -->
+<div id="importModalOverlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:780px;width:95vw">
+    <div class="modal-header">
+      <span><i class="fa-solid fa-file-import" style="color:#2563eb;margin-right:8px"></i>Import Data dari Excel / CSV</span>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div style="font-size:12px;color:#1d4ed8;line-height:1.6">
+          <strong>📥 Format yang didukung:</strong> .xlsx, .xls, .csv<br>
+          File Excel harus memiliki 2 sheet: <strong>Proyek</strong> dan <strong>Indikator</strong>
+        </div>
+        <button class="btn-secondary btn-sm" onclick="downloadImportTemplate()">
+          <i class="fa-solid fa-download"></i> Download Template
+        </button>
+      </div>
+      <div id="importDropzone" class="file-dropzone"
+           onclick="document.getElementById('importFileInput').click()"
+           style="margin-bottom:16px;cursor:pointer">
+        <div class="file-dropzone-icon">📊</div>
+        <div class="file-dropzone-text">Drag &amp; drop file Excel/CSV di sini, atau <strong>klik untuk pilih</strong></div>
+        <div class="file-dropzone-hint">.xlsx, .xls, atau .csv — maks 5 MB</div>
+        <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+      </div>
+      <div id="importStatusMsg" class="form-msg hidden"></div>
+      <div id="importPreviewArea"></div>
+      <div class="form-actions" style="margin-top:16px">
+        <button class="btn-secondary" onclick="closeImportModal()">Batal</button>
+        <button class="btn-primary hidden" id="importConfirmBtn" onclick="runImport()">
+          <i class="fa-solid fa-upload"></i> Import Sekarang
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== MODAL: FORM TAMBAH/EDIT PENERIMA MANFAAT ===== -->
+<div id="benFormOverlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:540px">
+    <div class="modal-header">
+      <span id="benFormTitle">Tambah Penerima Manfaat</span>
+      <button class="modal-close" onclick="closeBenModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="benFormId">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Nama Lengkap <span class="required">*</span></label>
+          <input type="text" id="benF-name" placeholder="Nama lengkap penerima manfaat">
+        </div>
+        <div class="form-group">
+          <label>No HP / Telepon</label>
+          <input type="text" id="benF-phone" placeholder="08xxxxxxxxxx">
+        </div>
+        <div class="form-group">
+          <label>Jenis Kelamin</label>
+          <select id="benF-gender">
+            <option value="">-- Pilih --</option>
+            <option value="Laki-laki">Laki-laki</option>
+            <option value="Perempuan">Perempuan</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tahun Lahir</label>
+          <input type="number" id="benF-birthyear" placeholder="Contoh: 1985" min="1940" max="2010">
+        </div>
+        <div class="form-group">
+          <label>Lokasi / Desa</label>
+          <input type="text" id="benF-location" placeholder="Desa / Kecamatan / Kota">
+        </div>
+        <div class="form-group">
+          <label>Pekerjaan</label>
+          <input type="text" id="benF-occupation" placeholder="Nelayan, Pengolah Ikan, dll">
+        </div>
+        <div class="form-group full">
+          <label>Email</label>
+          <input type="email" id="benF-email" placeholder="email@contoh.com">
+        </div>
+        <div class="form-group full">
+          <label>Catatan</label>
+          <textarea id="benF-note" rows="2" placeholder="Keterangan tambahan…"></textarea>
+        </div>
+      </div>
+      <!-- Pilihan Proyek & Aktivitas (opsional) -->
+      <div id="benFormProjectSection" style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:10px">
+          📋 Daftarkan ke Kegiatan <span style="font-weight:400;color:#94a3b8">(opsional)</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Proyek</label>
+            <select id="benF-project" onchange="loadActivitiesForBenForm()">
+              <option value="">-- Pilih Proyek --</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Kegiatan / Aktivitas</label>
+            <select id="benF-activity" disabled>
+              <option value="">-- Pilih Kegiatan --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tanggal Hadir</label>
+            <input type="date" id="benF-attended-date">
+          </div>
+          <div class="form-group">
+            <label>Catatan Kehadiran</label>
+            <input type="text" id="benF-attend-note" placeholder="Opsional">
+          </div>
+        </div>
+      </div>
+      <div id="benFormMsg" class="form-msg hidden"></div>
+      <div class="form-actions">
+        <button class="btn-secondary" onclick="closeBenModal()">Batal</button>
+        <button class="btn-primary" onclick="saveBeneficiary()">Simpan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: DETAIL RIWAYAT KEGIATAN ===== -->
+<div id="benDetailOverlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-header">
+      <div>
+        <div id="benDetailName" style="font-weight:700;font-size:16px;color:#0f172a"></div>
+        <div id="benDetailMeta" style="font-size:12px;color:#94a3b8;margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeBenDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="benDetailStats" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"></div>
+      <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:10px">📋 Riwayat Kegiatan</div>
+      <div id="benDetailHistory" style="max-height:360px;overflow-y:auto"></div>
+      <div class="form-actions" style="margin-top:16px">
+        <button class="btn-secondary" onclick="closeBenDetail()">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: IMPORT EXCEL PENERIMA MANFAAT ===== -->
+<div id="benImportOverlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:700px">
+    <div class="modal-header">
+      <span><i class="fa-solid fa-file-import" style="color:#2563eb;margin-right:8px"></i>Import Penerima Manfaat dari Excel</span>
+      <button class="modal-close" onclick="closeBenImport()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div style="font-size:12px;color:#1d4ed8;line-height:1.9">
+            <strong>📋 Format kolom:</strong>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Project</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Aktivitas</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Nama*</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Jenis Kelamin</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Asal</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Handphone</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Pekerjaan</code>
+            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Catatan</code><br>
+            <span style="color:#6b7280">Satu baris = satu orang di satu kegiatan. Orang yang sama di banyak kegiatan akan dihitung <strong>1x</strong> sebagai penerima manfaat unik.</span>
+          </div>
+          <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()" style="white-space:nowrap">
+            <i class="fa-solid fa-download"></i> Download Template
+          </button>
+        </div>
+      </div>
+      <label style="display:block;padding:20px;border:2px dashed #e2e8f0;border-radius:8px;text-align:center;cursor:pointer;color:#64748b;font-size:13px">
+        📊 Klik untuk pilih file Excel (.xlsx / .csv)
+        <input type="file" id="benImportFileInput" accept=".xlsx,.xls,.csv"
+               style="display:none" onchange="handleBenImportFile(this)">
+      </label>
+      <div id="benImportMsg" class="form-msg hidden" style="margin-top:10px"></div>
+      <div id="benImportPreview" style="margin-top:12px"></div>
+      <div class="form-actions" style="margin-top:14px">
+        <button class="btn-secondary" onclick="closeBenImport()">Batal</button>
+        <button class="btn-primary hidden" id="benImportConfirmBtn" onclick="runBenImport()">
+          <i class="fa-solid fa-upload"></i> Import Sekarang
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: PILIH PESERTA (dari halaman aktivitas) ===== -->
+<div id="benPickerOverlay" class="modal-overlay hidden" data-act-id="" data-act-name="" data-proj-name="">
+  <div class="modal-box" style="max-width:500px">
+    <div class="modal-header">
+      <span id="benPickerTitle">Tambah Peserta</span>
+      <button class="modal-close" onclick="closeBenPicker()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="search-input" id="benPickerSearch"
+             placeholder="🔍 Cari nama atau no HP…"
+             oninput="renderBenPicker(this.value)"
+             style="width:100%;margin-bottom:8px">
+      <div id="benPickerMsg" class="form-msg hidden"></div>
+      <div id="benPickerList" style="max-height:300px;overflow-y:auto"></div>
+      <div class="form-actions" style="margin-top:12px;justify-content:space-between">
+        <button class="btn-secondary" onclick="closeBenPicker()">Tutup</button>
+        <div id="benPickerCountBadge" style="font-size:12px;color:#64748b;align-self:center"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
