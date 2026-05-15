@@ -98,6 +98,7 @@ window.loadBeneficiaries = async function () {
   _benFilteredData = [..._benAllData];
   _benCurrentPage  = 1;
   renderBenTable();
+  window.initBenModalStability && window.initBenModalStability();
   showBenLoading(false);
 };
 
@@ -287,74 +288,117 @@ window.populateBenProjectFilter = async function () {
 };
 
 // ── Form Tambah Beneficiary ───────────────────────────────────────────
-window.openAddBenModal = async function () {
-  const _client = window.client || client;
-  document.getElementById('benFormOverlay').classList.remove('hidden');
-  document.getElementById('benFormTitle').textContent = 'Tambah Penerima Manfaat';
-  document.getElementById('benFormId').value = '';
-  document.getElementById('benFormMsg').className = 'form-msg hidden';
+
+window.resetBenModalState = function () {
+  const idsText = ['benF-name','benF-phone','benF-location','benF-occupation','benF-email','benF-note','benF-attend-note'];
+  idsText.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['benF-gender','benF-birthyear','benF-project'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const dateEl = document.getElementById('benF-attended-date');
+  if (dateEl) dateEl.value = '';
+  const actSel = document.getElementById('benF-activity');
+  if (actSel) {
+    actSel.innerHTML = '<option value="">-- Pilih Kegiatan --</option>';
+    actSel.disabled = true;
+  }
+  const msg = document.getElementById('benFormMsg');
+  if (msg) {
+    msg.className = 'form-msg hidden';
+    msg.textContent = '';
+  }
+  const title = document.getElementById('benFormTitle');
+  if (title && !document.getElementById('benFormId')?.value) title.textContent = 'Tambah Penerima Manfaat';
+  const idField = document.getElementById('benFormId');
+  if (idField) idField.value = '';
   const projSec = document.getElementById('benFormProjectSection');
   if (projSec) {
     projSec.style.display = '';
     projSec.dataset.editMode = 'false';
   }
-  // Reset semua field manual
-  ['benF-name','benF-phone','benF-location','benF-occupation','benF-email','benF-note','benF-attend-note'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  ['benF-gender','benF-birthyear'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  // Reset dropdown proyek & aktivitas
-  const selProj = document.getElementById('benF-project');
-  const selAct  = document.getElementById('benF-activity');
-  const dateEl  = document.getElementById('benF-attended-date');
-  if (dateEl) dateEl.value = '';
-  if (selAct)  { selAct.innerHTML = '<option value="">-- Pilih Kegiatan --</option>'; selAct.disabled = true; }
+  const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = 'Simpan';
+  }
+};
 
-  // Load proyek aktif
+window.openAddBenModal = async function () {
+  const _client = window.client || client;
+  window.resetBenModalState();
+  document.getElementById('benFormOverlay').classList.remove('hidden');
+  document.getElementById('benFormTitle').textContent = 'Tambah Penerima Manfaat';
+
+  const selProj = document.getElementById('benF-project');
   if (selProj) {
-    const { data: projs } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
-    selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
-      (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    selProj.disabled = true;
+    selProj.innerHTML = '<option value="">Memuat proyek…</option>';
+    const { data: projs, error } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
+    if (error) {
+      selProj.innerHTML = '<option value="">Gagal memuat proyek</option>';
+      showBenFormMsg('Gagal memuat daftar proyek. Silakan tutup dan coba lagi.', 'error');
+    } else {
+      selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
+        (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    }
+    selProj.disabled = false;
   }
 };
 
 window.loadActivitiesForBenForm = async function () {
-  const _client   = window.client || client;
-  const projName  = document.getElementById('benF-project')?.value;
-  const selAct    = document.getElementById('benF-activity');
+  const _client  = window.client || client;
+  const projName = document.getElementById('benF-project')?.value;
+  const selAct   = document.getElementById('benF-activity');
   if (!selAct) return;
+
   if (!projName) {
     selAct.innerHTML = '<option value="">-- Pilih Kegiatan --</option>';
-    selAct.disabled  = true;
+    selAct.disabled = true;
     return;
   }
-  const { data: acts } = await _client
+
+  selAct.disabled = true;
+  selAct.innerHTML = '<option value="">Memuat kegiatan…</option>';
+  const { data: acts, error } = await _client
     .from('project_activities')
     .select('id,title')
     .eq('project_name', projName)
     .order('created_at', { ascending: true });
+
+  if (error) {
+    selAct.innerHTML = '<option value="">Gagal memuat kegiatan</option>';
+    showBenFormMsg('Gagal memuat kegiatan proyek.', 'error');
+    return;
+  }
+
+  if (!acts || !acts.length) {
+    selAct.innerHTML = '<option value="">Belum ada kegiatan untuk proyek ini</option>';
+    selAct.disabled = true;
+    return;
+  }
+
   selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
-    (acts||[]).map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
+    acts.map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
   selAct.disabled = false;
 };
 
 window.closeBenModal = function () {
   document.getElementById('benFormOverlay').classList.add('hidden');
-  const projSec = document.getElementById('benFormProjectSection');
-  if (projSec) {
-    projSec.style.display = '';
-    projSec.dataset.editMode = 'false';
-  }
+  window.resetBenModalState();
 };
 
 window.saveBeneficiary = async function () {
   const _client = window.client || client;
+  const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = 'Menyimpan…'; }
   const id   = document.getElementById('benFormId').value;
   const name = document.getElementById('benF-name').value.trim();
   const phone= document.getElementById('benF-phone').value.trim();
-  if (!name) { showBenFormMsg('Nama wajib diisi.', 'error'); return; }
+  if (!name) { showBenFormMsg('Nama wajib diisi.', 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
 
   const payload = {
     name,
@@ -381,7 +425,7 @@ window.saveBeneficiary = async function () {
     benId = inserted?.id;
   }
 
-  if (error) { showBenFormMsg('❌ ' + error.message, 'error'); return; }
+  if (error) { showBenFormMsg('❌ ' + error.message, 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
 
   // ── Jika ada proyek dipilih → catat relasi beneficiary ↔ proyek ──
   const projName = document.getElementById('benF-project')?.value;
@@ -1283,32 +1327,30 @@ window.exportBenToExcel = async function () {
 // EDIT PENERIMA MANFAAT — openEditBenModal
 // ══════════════════════════════════════════════════════════════
 window.openEditBenModal = async function (id) {
-  const _client = window.client || client;
   const b = _benAllData.find(x => x.id === id);
   if (!b) return;
 
-  // Buka form yang sama, isi dengan data existing
+  window.resetBenModalState();
   document.getElementById('benFormOverlay').classList.remove('hidden');
   document.getElementById('benFormTitle').textContent = 'Edit Penerima Manfaat';
   document.getElementById('benFormId').value = id;
-  document.getElementById('benFormMsg').className = 'form-msg hidden';
 
-  // Isi field
-  document.getElementById('benF-name').value        = b.name        || '';
-  document.getElementById('benF-phone').value       = b.phone       || '';
-  document.getElementById('benF-gender').value      = b.gender      || '';
-  document.getElementById('benF-birthyear').value   = b.birth_year  || '';
-  document.getElementById('benF-location').value    = b.location    || '';
-  document.getElementById('benF-occupation').value  = b.occupation  || '';
-  document.getElementById('benF-email').value       = b.email       || '';
-  document.getElementById('benF-note').value        = b.note        || '';
+  document.getElementById('benF-name').value       = b.name || '';
+  document.getElementById('benF-phone').value      = b.phone || '';
+  document.getElementById('benF-gender').value     = b.gender || '';
+  document.getElementById('benF-birthyear').value  = b.birth_year || '';
+  document.getElementById('benF-location').value   = b.location || '';
+  document.getElementById('benF-occupation').value = b.occupation || '';
+  document.getElementById('benF-email').value      = b.email || '';
+  document.getElementById('benF-note').value       = b.note || '';
 
-  // Sembunyikan section proyek/aktivitas saat edit (tidak ubah partisipasi)
   const projSec = document.getElementById('benFormProjectSection');
   if (projSec) {
     projSec.style.display = 'none';
     projSec.dataset.editMode = 'true';
   }
+  const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  if (saveBtn) saveBtn.innerHTML = 'Update';
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -1468,4 +1510,15 @@ window.applyDupDecisions = async function (dupList) {
   decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
 
   window.runBenImport();
+};
+
+
+window.initBenModalStability = function () {
+  const overlay = document.getElementById('benFormOverlay');
+  if (overlay && !overlay.dataset.boundClose) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) window.closeBenModal();
+    });
+    overlay.dataset.boundClose = 'true';
+  }
 };
