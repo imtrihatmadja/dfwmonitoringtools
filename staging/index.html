@@ -317,6 +317,9 @@
     <button class="btn-secondary btn-sm" onclick="openBenImport()">
       <i class="fa-solid fa-file-import"></i> Import Excel
     </button>
+    <button id="benExportBtn" class="btn-secondary btn-sm" onclick="exportBenToExcel()">
+      <i class="fa-solid fa-file-export"></i> Export Excel
+    </button>
     <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()">
       <i class="fa-solid fa-download"></i> Template
     </button>
@@ -778,7 +781,7 @@ function closeSidebar(){
       <div id="benImportPreview" style="margin-top:12px"></div>
       <div class="form-actions" style="margin-top:14px">
         <button class="btn-secondary" onclick="closeBenImport()">Batal</button>
-        <button class="btn-primary hidden" id="benImportConfirmBtn" onclick="runBenImport()">
+        <button class="btn-primary hidden" id="benImportConfirmBtn" onclick="checkBenDuplicates()">
           <i class="fa-solid fa-upload"></i> Import Sekarang
         </button>
       </div>
