@@ -293,6 +293,11 @@ window.openAddBenModal = async function () {
   document.getElementById('benFormTitle').textContent = 'Tambah Penerima Manfaat';
   document.getElementById('benFormId').value = '';
   document.getElementById('benFormMsg').className = 'form-msg hidden';
+  const projSec = document.getElementById('benFormProjectSection');
+  if (projSec) {
+    projSec.style.display = '';
+    projSec.dataset.editMode = 'false';
+  }
   // Reset semua field manual
   ['benF-name','benF-phone','benF-location','benF-occupation','benF-email','benF-note','benF-attend-note'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
@@ -337,6 +342,11 @@ window.loadActivitiesForBenForm = async function () {
 
 window.closeBenModal = function () {
   document.getElementById('benFormOverlay').classList.add('hidden');
+  const projSec = document.getElementById('benFormProjectSection');
+  if (projSec) {
+    projSec.style.display = '';
+    projSec.dataset.editMode = 'false';
+  }
 };
 
 window.saveBeneficiary = async function () {
