@@ -202,6 +202,10 @@ function renderBenTable() {
   document.getElementById('benCountLabel').textContent =
     `Menampilkan ${Math.min(start+1, total)}–${Math.min(start+BEN_PAGE_SIZE, total)} dari ${total} orang`;
 
+  // Update charts dengan data yang sedang difilter
+  const _activeProj = document.getElementById('benProjectSelector')?.value || '';
+  if (typeof renderBenCharts === 'function') renderBenCharts(_benFilteredData, _activeProj);
+
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:#94a3b8;">
       ${_benAllData.length ? '🔍 Tidak ada data yang cocok.' : '👤 Belum ada penerima manfaat. Tambah atau import dari Excel.'}</td></tr>`;
@@ -961,4 +965,191 @@ window.addParticipant = async function (benId, benName) {
   // Update badge jumlah peserta di card aktivitas
   if (typeof refreshParticipantBadge === 'function') refreshParticipantBadge(actId);
   if (typeof window.refreshParticipantBadge === 'function') window.refreshParticipantBadge(actId);
+};
+
+// ══════════════════════════════════════════════════════════════
+// CHART DASHBOARD — Penerima Manfaat
+// ══════════════════════════════════════════════════════════════
+
+// Palet warna konsisten
+const BEN_CHART_COLORS = [
+  '#2563eb','#0891b2','#059669','#d97706','#dc2626',
+  '#7c3aed','#db2777','#ea580c','#65a30d','#0284c7',
+  '#6366f1','#14b8a6','#f59e0b','#ef4444','#8b5cf6',
+];
+
+let _benChartOcc     = null;
+let _benChartOccBar  = null;
+let _benChartGender  = null;
+let _benChartsVisible = true;
+
+// Toggle tampilkan/sembunyikan charts
+window.toggleBenCharts = function () {
+  _benChartsVisible = !_benChartsVisible;
+  const container = document.getElementById('benChartsContainer');
+  const icon      = document.getElementById('benChartToggleIcon');
+  const btn       = document.getElementById('benChartToggleBtn');
+  if (container) container.style.display = _benChartsVisible ? 'grid' : 'none';
+  if (icon) icon.className = _benChartsVisible ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+  if (btn)  btn.innerHTML  = `<i class="${icon?.className}"></i> ${_benChartsVisible ? 'Sembunyikan' : 'Tampilkan'}`;
+};
+
+// Update semua chart berdasarkan dataset yang sedang ditampilkan
+window.renderBenCharts = function (data, projectFilter) {
+  if (!window.Chart) return;
+  if (!data || !data.length) {
+    ['benChartOccupation','benChartOccupationBar','benChartGenderOccupation'].forEach(id => {
+      const ctx = document.getElementById(id);
+      if (ctx) ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height);
+    });
+    return;
+  }
+
+  // Update badge proyek aktif
+  const badge = document.getElementById('benChartProjectBadge');
+  if (badge) {
+    badge.textContent    = projectFilter || '';
+    badge.style.display  = projectFilter ? 'inline' : 'none';
+  }
+
+  // ── Hitung distribusi pekerjaan ──────────────────────────────
+  const occMap = {};
+  data.forEach(b => {
+    const occ = (b.occupation || 'Tidak Diketahui').trim();
+    occMap[occ] = (occMap[occ] || 0) + 1;
+  });
+
+  // Sort desc, gabungkan yang < 2% jadi "Lainnya"
+  const total    = data.length;
+  const sorted   = Object.entries(occMap).sort((a,b) => b[1]-a[1]);
+  const mainOccs = [], otherCount = { label:'Lainnya', count:0 };
+  sorted.forEach(([label,count]) => {
+    if (count / total < 0.02 && sorted.length > 6) {
+      otherCount.count += count;
+    } else {
+      mainOccs.push({ label, count });
+    }
+  });
+  if (otherCount.count > 0) mainOccs.push({ label: otherCount.label, count: otherCount.count });
+
+  const occLabels = mainOccs.map(o => o.label);
+  const occCounts = mainOccs.map(o => o.count);
+  const occColors = BEN_CHART_COLORS.slice(0, occLabels.length);
+
+  // ── Chart 1: Donut ───────────────────────────────────────────
+  const ctx1 = document.getElementById('benChartOccupation');
+  if (ctx1) {
+    if (_benChartOcc) _benChartOcc.destroy();
+    _benChartOcc = new Chart(ctx1, {
+      type: 'doughnut',
+      data: {
+        labels  : occLabels,
+        datasets: [{ data: occCounts, backgroundColor: occColors, borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { font: { size: 11 }, padding: 10, boxWidth: 12,
+              generateLabels: (chart) => {
+                const ds = chart.data.datasets[0];
+                return chart.data.labels.map((label, i) => ({
+                  text        : `${label} (${ds.data[i]}, ${Math.round(ds.data[i]/total*100)}%)`,
+                  fillStyle   : ds.backgroundColor[i],
+                  strokeStyle : ds.backgroundColor[i],
+                  hidden      : false, index: i,
+                }));
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.label}: ${ctx.raw} orang (${Math.round(ctx.raw/total*100)}%)`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Chart 2: Bar Horizontal ──────────────────────────────────
+  const ctx2 = document.getElementById('benChartOccupationBar');
+  if (ctx2) {
+    if (_benChartOccBar) _benChartOccBar.destroy();
+    _benChartOccBar = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels  : occLabels,
+        datasets: [{
+          label          : 'Jumlah',
+          data           : occCounts,
+          backgroundColor: occColors.map(c => c + 'cc'),
+          borderColor    : occColors,
+          borderWidth    : 1,
+          borderRadius   : 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.raw} orang (${Math.round(ctx.raw/total*100)}%)`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, stepSize: 1 } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  }
+
+  // ── Chart 3: Stacked Bar Gender per Pekerjaan ────────────────
+  const ctx3 = document.getElementById('benChartGenderOccupation');
+  if (ctx3) {
+    const genderMap = {};
+    data.forEach(b => {
+      const occ = (b.occupation || 'Tidak Diketahui').trim();
+      if (!genderMap[occ]) genderMap[occ] = { 'Laki-laki': 0, 'Perempuan': 0, 'Lainnya': 0 };
+      const g = b.gender === 'Laki-laki' ? 'Laki-laki'
+              : b.gender === 'Perempuan' ? 'Perempuan' : 'Lainnya';
+      genderMap[occ][g]++;
+    });
+
+    // Urutkan sesuai occLabels (konsisten dengan chart 1 & 2)
+    const gLabels = occLabels.filter(l => genderMap[l]);
+    const maleData   = gLabels.map(l => genderMap[l]?.['Laki-laki'] || 0);
+    const femaleData = gLabels.map(l => genderMap[l]?.['Perempuan'] || 0);
+    const otherData  = gLabels.map(l => genderMap[l]?.['Lainnya']   || 0);
+
+    if (_benChartGender) _benChartGender.destroy();
+    _benChartGender = new Chart(ctx3, {
+      type: 'bar',
+      data: {
+        labels  : gLabels,
+        datasets: [
+          { label:'Laki-laki', data: maleData,   backgroundColor:'#2563ebcc', borderColor:'#2563eb', borderWidth:1, borderRadius:3 },
+          { label:'Perempuan', data: femaleData,  backgroundColor:'#db2777cc', borderColor:'#db2777', borderWidth:1, borderRadius:3 },
+          ...(otherData.some(v=>v>0) ? [{ label:'Lainnya', data: otherData, backgroundColor:'#94a3b8cc', borderColor:'#94a3b8', borderWidth:1, borderRadius:3 }] : []),
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 11 }, padding: 12, boxWidth: 12 } },
+          tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: { stacked: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, stepSize: 1 } }
+        }
+      }
+    });
+  }
 };

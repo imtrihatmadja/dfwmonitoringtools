@@ -7,6 +7,14 @@
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    @media (max-width: 640px) {
+      #benChartsContainer { grid-template-columns: 1fr !important; }
+      #benChartsContainer > div:last-child { grid-column: 1 !important; }
+    }
+  </style>
 </head>
 <body>
 <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
@@ -319,6 +327,50 @@
 
   <!-- Count Label -->
   <div id="benCountLabel" style="font-size:12px;color:#94a3b8;margin-bottom:8px"></div>
+
+  <!-- Chart Dashboard -->
+  <div id="benChartSection" style="margin-bottom:20px">
+    <!-- Toggle show/hide charts -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-chart-pie" style="color:#2563eb"></i> Analisis Penerima Manfaat
+        <span id="benChartProjectBadge" style="font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;border-radius:20px;padding:2px 10px;display:none"></span>
+      </div>
+      <button id="benChartToggleBtn" onclick="toggleBenCharts()"
+        style="font-size:12px;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 12px;cursor:pointer">
+        <i class="fa-solid fa-chevron-up" id="benChartToggleIcon"></i> Sembunyikan
+      </button>
+    </div>
+    <div id="benChartsContainer" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <!-- Chart 1: Donut pekerjaan -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          🍩 Distribusi Pekerjaan
+        </div>
+        <div style="position:relative;height:220px;display:flex;align-items:center;justify-content:center">
+          <canvas id="benChartOccupation"></canvas>
+        </div>
+      </div>
+      <!-- Chart 2: Bar horizontal pekerjaan -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          📊 Jumlah per Pekerjaan
+        </div>
+        <div style="position:relative;height:220px">
+          <canvas id="benChartOccupationBar"></canvas>
+        </div>
+      </div>
+      <!-- Chart 3: Stacked bar gender per pekerjaan (full width) -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04);grid-column:1/-1">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          👥 Gender per Pekerjaan
+        </div>
+        <div style="position:relative;height:180px">
+          <canvas id="benChartGenderOccupation"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Tabel -->
   <div class="table-wrap">
