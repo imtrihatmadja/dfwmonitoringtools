@@ -98,6 +98,7 @@ window.loadBeneficiaries = async function () {
   _benFilteredData = [..._benAllData];
   _benCurrentPage  = 1;
   renderBenTable();
+  window.initBenModalStability && window.initBenModalStability();
   showBenLoading(false);
 };
 
@@ -238,6 +239,8 @@ function renderBenTable() {
       <td>
         <button class="btn-secondary btn-sm" style="margin-right:4px"
           onclick="openBenDetail('${b.id}')">Detail</button>
+        <button class="btn-secondary btn-sm" style="margin-right:4px;color:#d97706;border-color:#fde68a"
+          onclick="openEditBenModal('${b.id}')"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
         <button class="btn-danger btn-sm"
           onclick="deleteBeneficiary('${b.id}','${_esc(b.name).replace(/'/g,"\\\\'")}')">Hapus</button>
       </td>
@@ -285,64 +288,117 @@ window.populateBenProjectFilter = async function () {
 };
 
 // ── Form Tambah Beneficiary ───────────────────────────────────────────
+
+window.resetBenModalState = function () {
+  const idsText = ['benF-name','benF-phone','benF-location','benF-occupation','benF-email','benF-note','benF-attend-note'];
+  idsText.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['benF-gender','benF-birthyear','benF-project'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const dateEl = document.getElementById('benF-attended-date');
+  if (dateEl) dateEl.value = '';
+  const actSel = document.getElementById('benF-activity');
+  if (actSel) {
+    actSel.innerHTML = '<option value="">-- Pilih Kegiatan --</option>';
+    actSel.disabled = true;
+  }
+  const msg = document.getElementById('benFormMsg');
+  if (msg) {
+    msg.className = 'form-msg hidden';
+    msg.textContent = '';
+  }
+  const title = document.getElementById('benFormTitle');
+  if (title && !document.getElementById('benFormId')?.value) title.textContent = 'Tambah Penerima Manfaat';
+  const idField = document.getElementById('benFormId');
+  if (idField) idField.value = '';
+  const projSec = document.getElementById('benFormProjectSection');
+  if (projSec) {
+    projSec.style.display = '';
+    projSec.dataset.editMode = 'false';
+  }
+  const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = 'Simpan';
+  }
+};
+
 window.openAddBenModal = async function () {
   const _client = window.client || client;
+  window.resetBenModalState();
   document.getElementById('benFormOverlay').classList.remove('hidden');
   document.getElementById('benFormTitle').textContent = 'Tambah Penerima Manfaat';
-  document.getElementById('benFormId').value = '';
-  document.getElementById('benFormMsg').className = 'form-msg hidden';
-  // Reset semua field manual
-  ['benF-name','benF-phone','benF-location','benF-occupation','benF-email','benF-note','benF-attend-note'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  ['benF-gender','benF-birthyear'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  // Reset dropdown proyek & aktivitas
-  const selProj = document.getElementById('benF-project');
-  const selAct  = document.getElementById('benF-activity');
-  const dateEl  = document.getElementById('benF-attended-date');
-  if (dateEl) dateEl.value = '';
-  if (selAct)  { selAct.innerHTML = '<option value="">-- Pilih Kegiatan --</option>'; selAct.disabled = true; }
 
-  // Load proyek aktif
+  const selProj = document.getElementById('benF-project');
   if (selProj) {
-    const { data: projs } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
-    selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
-      (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    selProj.disabled = true;
+    selProj.innerHTML = '<option value="">Memuat proyek…</option>';
+    const { data: projs, error } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
+    if (error) {
+      selProj.innerHTML = '<option value="">Gagal memuat proyek</option>';
+      showBenFormMsg('Gagal memuat daftar proyek. Silakan tutup dan coba lagi.', 'error');
+    } else {
+      selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
+        (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    }
+    selProj.disabled = false;
   }
 };
 
 window.loadActivitiesForBenForm = async function () {
-  const _client   = window.client || client;
-  const projName  = document.getElementById('benF-project')?.value;
-  const selAct    = document.getElementById('benF-activity');
+  const _client  = window.client || client;
+  const projName = document.getElementById('benF-project')?.value;
+  const selAct   = document.getElementById('benF-activity');
   if (!selAct) return;
+
   if (!projName) {
     selAct.innerHTML = '<option value="">-- Pilih Kegiatan --</option>';
-    selAct.disabled  = true;
+    selAct.disabled = true;
     return;
   }
-  const { data: acts } = await _client
+
+  selAct.disabled = true;
+  selAct.innerHTML = '<option value="">Memuat kegiatan…</option>';
+  const { data: acts, error } = await _client
     .from('project_activities')
     .select('id,title')
     .eq('project_name', projName)
     .order('created_at', { ascending: true });
+
+  if (error) {
+    selAct.innerHTML = '<option value="">Gagal memuat kegiatan</option>';
+    showBenFormMsg('Gagal memuat kegiatan proyek.', 'error');
+    return;
+  }
+
+  if (!acts || !acts.length) {
+    selAct.innerHTML = '<option value="">Belum ada kegiatan untuk proyek ini</option>';
+    selAct.disabled = true;
+    return;
+  }
+
   selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
-    (acts||[]).map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
+    acts.map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
   selAct.disabled = false;
 };
 
 window.closeBenModal = function () {
   document.getElementById('benFormOverlay').classList.add('hidden');
+  window.resetBenModalState();
 };
 
 window.saveBeneficiary = async function () {
   const _client = window.client || client;
+  const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = 'Menyimpan…'; }
   const id   = document.getElementById('benFormId').value;
   const name = document.getElementById('benF-name').value.trim();
   const phone= document.getElementById('benF-phone').value.trim();
-  if (!name) { showBenFormMsg('Nama wajib diisi.', 'error'); return; }
+  if (!name) { showBenFormMsg('Nama wajib diisi.', 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
 
   const payload = {
     name,
@@ -369,7 +425,7 @@ window.saveBeneficiary = async function () {
     benId = inserted?.id;
   }
 
-  if (error) { showBenFormMsg('❌ ' + error.message, 'error'); return; }
+  if (error) { showBenFormMsg('❌ ' + error.message, 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
 
   // ── Jika ada proyek dipilih → catat relasi beneficiary ↔ proyek ──
   const projName = document.getElementById('benF-project')?.value;
@@ -710,13 +766,15 @@ window.runBenImport = async function () {
   const benIdCache = {}; // "name|phone" → uuid
 
   for (const r of rows) {
+    const dupDecision = (window._benDupDecisions || {})[r.name] || '';
+    if (dupDecision === 'skip') { processed++; updateProgress(); continue; }
     // ── STEP 1: Upsert beneficiary ────────────────────────────────
     const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
     let benId = benIdCache[cacheKey];
 
     if (!benId) {
       const payload = {
-        name       : r.name,
+        name       : (dupDecision === 'new' ? forceNewName : r.name),
         phone      : r.phone || null,
         gender     : normGender(r.gender) || null,
         birth_year : parseInt(r.birth_year) || null,
@@ -815,6 +873,7 @@ window.runBenImport = async function () {
       </div>`;
   }
 
+  window._benDupDecisions = {};
   setTimeout(() => { closeBenImport(); loadBeneficiaries(); }, logPart ? 2000 : 1500);
 };
 
@@ -1151,5 +1210,315 @@ window.renderBenCharts = function (data, projectFilter) {
         }
       }
     });
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// EXPORT EXCEL — Penerima Manfaat
+// ══════════════════════════════════════════════════════════════
+window.exportBenToExcel = async function () {
+  const _client   = window.client || client;
+  const projFilter = document.getElementById('benProjectSelector')?.value || '';
+
+  // Tampilkan loading di tombol
+  const btn = document.getElementById('benExportBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…'; }
+
+  try {
+    // Load data lengkap dari DB (termasuk activity log)
+    const [{ data: bens }, { data: parts }, { data: logs }] = await Promise.all([
+      _client.from('beneficiaries').select('*').order('name'),
+      _client.from('activity_participants').select('beneficiary_id,project_name,activity_name,attended_date,note'),
+      _client.from('beneficiary_activity_log').select('beneficiary_id,project_name,activity_name,attended_date,note,source'),
+    ]);
+
+    // Filter per proyek jika ada
+    let benList = bens || [];
+    if (projFilter) {
+      const { data: bp } = await _client.from('beneficiary_projects')
+        .select('beneficiary_id').eq('project_name', projFilter);
+      const bpIds = new Set((bp||[]).map(r=>r.beneficiary_id));
+      benList = benList.filter(b => bpIds.has(b.id));
+    }
+
+    const partMap = {};
+    (parts||[]).forEach(p => { if(!partMap[p.beneficiary_id]) partMap[p.beneficiary_id]=[]; partMap[p.beneficiary_id].push(p); });
+    const logMap = {};
+    (logs||[]).forEach(l => { if(!logMap[l.beneficiary_id]) logMap[l.beneficiary_id]=[]; logMap[l.beneficiary_id].push(l); });
+
+    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: Master Penerima Manfaat ──────────────────────
+    const headers1 = ['No','Nama','No HP','Jenis Kelamin','Tahun Lahir','Usia',
+                       'Lokasi/Asal','Pekerjaan','Email','Total Kegiatan','Proyek','Catatan'];
+    const now = new Date().getFullYear();
+    const rows1 = benList.map((b, i) => {
+      const allParts = [...(partMap[b.id]||[]), ...(logMap[b.id]||[])];
+      const projs    = [...new Set(allParts.map(p=>p.project_name).filter(Boolean))].join(', ');
+      return [
+        i+1, b.name, b.phone||'', b.gender||'', b.birth_year||'',
+        b.birth_year ? now - b.birth_year : '',
+        b.location||'', b.occupation||'', b.email||'',
+        allParts.length, projs, b.note||''
+      ];
+    });
+    const ws1 = XLSX.utils.aoa_to_sheet([headers1, ...rows1]);
+    ws1['!cols'] = [5,25,15,14,12,8,25,18,25,14,40,20].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws1, 'Penerima Manfaat');
+
+    // ── Sheet 2: Riwayat Kegiatan (flat) ──────────────────────
+    const headers2 = ['No','Nama','No HP','Proyek','Kegiatan','Tanggal Hadir','Sumber','Catatan'];
+    const rows2 = [];
+    let no2 = 1;
+    benList.forEach(b => {
+      const allParts = [
+        ...(partMap[b.id]||[]).map(p=>({...p,_src:'Sistem'})),
+        ...(logMap[b.id] ||[]).map(l=>({...l,_src:'Log Bebas'})),
+      ].sort((a,c) => (b.attended_date||'').localeCompare(c.attended_date||''));
+      allParts.forEach(p => {
+        rows2.push([no2++, b.name, b.phone||'', p.project_name||'', p.activity_name||'',
+          p.attended_date ? new Date(p.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'}) : '',
+          p._src, p.note||'']);
+      });
+    });
+    if (rows2.length) {
+      const ws2 = XLSX.utils.aoa_to_sheet([headers2, ...rows2]);
+      ws2['!cols'] = [5,25,15,35,35,14,12,25].map(w=>({wch:w}));
+      XLSX.utils.book_append_sheet(wb, ws2, 'Riwayat Kegiatan');
+    }
+
+    // ── Sheet 3: Statistik ringkas ─────────────────────────────
+    const totalL   = benList.filter(b=>b.gender==='Laki-laki').length;
+    const totalP   = benList.filter(b=>b.gender==='Perempuan').length;
+    const occMap   = {};
+    benList.forEach(b => { const o=b.occupation||'Tidak Diketahui'; occMap[o]=(occMap[o]||0)+1; });
+    const occRows  = Object.entries(occMap).sort((a,c)=>c[1]-a[1])
+                       .map(([occ,cnt])=>[occ, cnt, `${Math.round(cnt/benList.length*100)}%`]);
+
+    const statsData = [
+      ['RINGKASAN PENERIMA MANFAAT'],
+      projFilter ? ['Proyek', projFilter] : ['Scope', 'Semua Proyek'],
+      ['Tanggal Export', new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})],
+      [],
+      ['Total Penerima Manfaat Unik', benList.length],
+      ['Laki-laki', totalL, totalL ? `${Math.round(totalL/benList.length*100)}%` : ''],
+      ['Perempuan',  totalP, totalP ? `${Math.round(totalP/benList.length*100)}%` : ''],
+      [],
+      ['DISTRIBUSI PEKERJAAN','Jumlah','Persentase'],
+      ...occRows,
+    ];
+    const ws3 = XLSX.utils.aoa_to_sheet(statsData);
+    ws3['!cols'] = [{wch:35},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Statistik');
+
+    const fname = projFilter
+      ? `PenerimManfaat_${projFilter.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${new Date().toISOString().slice(0,10)}.xlsx`
+      : `PenerimManfaat_SemuaProyek_${new Date().toISOString().slice(0,10)}.xlsx`;
+    XLSX.writeFile(wb, fname);
+
+  } catch(err) {
+    alert('Gagal export: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-export"></i> Export Excel'; }
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// EDIT PENERIMA MANFAAT — openEditBenModal
+// ══════════════════════════════════════════════════════════════
+window.openEditBenModal = async function (id) {
+  const b = _benAllData.find(x => x.id === id);
+  if (!b) return;
+
+  window.resetBenModalState();
+  document.getElementById('benFormOverlay').classList.remove('hidden');
+  document.getElementById('benFormTitle').textContent = 'Edit Penerima Manfaat';
+  document.getElementById('benFormId').value = id;
+
+  document.getElementById('benF-name').value       = b.name || '';
+  document.getElementById('benF-phone').value      = b.phone || '';
+  document.getElementById('benF-gender').value     = b.gender || '';
+  document.getElementById('benF-birthyear').value  = b.birth_year || '';
+  document.getElementById('benF-location').value   = b.location || '';
+  document.getElementById('benF-occupation').value = b.occupation || '';
+  document.getElementById('benF-email').value      = b.email || '';
+  document.getElementById('benF-note').value       = b.note || '';
+
+  const projSec = document.getElementById('benFormProjectSection');
+  if (projSec) {
+    projSec.style.display = 'none';
+    projSec.dataset.editMode = 'true';
+  }
+  const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  if (saveBtn) saveBtn.innerHTML = 'Update';
+};
+
+// ══════════════════════════════════════════════════════════════
+// VALIDASI DUPLIKAT — cek sebelum import
+// ══════════════════════════════════════════════════════════════
+window.checkBenDuplicates = async function () {
+  const rows = window._benImportRows || [];
+  if (!rows.length) return;
+
+  const _client = window.client || client;
+  const btn = document.getElementById('benImportConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; }
+
+  // Ambil semua nama yang ada di import
+  const importNames = [...new Set(rows.map(r => r.name.toLowerCase().trim()))];
+
+  // Cari yang sudah ada di DB dengan nama sama tapi HP berbeda
+  const { data: existing } = await _client.from('beneficiaries')
+    .select('id,name,phone,gender,location,occupation')
+    .in('name', rows.map(r => r.name));
+
+  const existMap = {};
+  (existing||[]).forEach(e => { existMap[e.name.toLowerCase()] = existMap[e.name.toLowerCase()] || []; existMap[e.name.toLowerCase()].push(e); });
+
+  // Deteksi duplikat potensial: nama sama, HP berbeda
+  const dupList = [];
+  rows.forEach(r => {
+    const key = r.name.toLowerCase().trim();
+    const inDB = existMap[key] || [];
+    inDB.forEach(db => {
+      if (db.phone !== (r.phone||'') && !dupList.find(d => d.importName === r.name && d.dbId === db.id)) {
+        dupList.push({
+          importName  : r.name,
+          importPhone : r.phone || '-',
+          importLoc   : r.location || '-',
+          dbId        : db.id,
+          dbPhone     : db.phone || '-',
+          dbLoc       : db.location || '-',
+          dbGender    : db.gender || '-',
+        });
+      }
+    });
+  });
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
+
+  if (!dupList.length) {
+    // Tidak ada duplikat — langsung import
+    window.runBenImport();
+    return;
+  }
+
+  // Tampilkan modal konfirmasi duplikat
+  showDuplicateConfirm(dupList);
+};
+
+function showDuplicateConfirm(dupList) {
+  // Buat overlay konfirmasi duplikat
+  let overlay = document.getElementById('benDupOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id        = 'benDupOverlay';
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:580px">
+      <div class="modal-header">
+        <span>⚠️ Potensi Data Duplikat Ditemukan</span>
+        <button class="modal-close" onclick="document.getElementById('benDupOverlay').classList.add('hidden')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400e">
+          <strong>${dupList.length} orang</strong> dalam file Excel memiliki nama yang sama dengan data di sistem, namun nomor HP berbeda.
+          Pilih tindakan untuk masing-masing:
+        </div>
+        <div style="max-height:320px;overflow-y:auto">
+          ${dupList.map((d,i) => `
+            <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;background:#f8fafc">
+              <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:8px">👤 ${_esc(d.importName)}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+                <div style="background:#eff6ff;border-radius:6px;padding:8px">
+                  <div style="font-weight:700;color:#2563eb;margin-bottom:4px">📥 Data Import</div>
+                  <div>HP: ${_esc(d.importPhone)}</div>
+                  <div>Lokasi: ${_esc(d.importLoc)}</div>
+                </div>
+                <div style="background:#f0fdf4;border-radius:6px;padding:8px">
+                  <div style="font-weight:700;color:#15803d;margin-bottom:4px">💾 Data di Sistem</div>
+                  <div>HP: ${_esc(d.dbPhone)}</div>
+                  <div>Lokasi: ${_esc(d.dbLoc)}</div>
+                  <div>Gender: ${_esc(d.dbGender)}</div>
+                </div>
+              </div>
+              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="dup_${i}" value="skip" checked>
+                  Pakai data di sistem (lewati import)
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="dup_${i}" value="update">
+                  Update data di sistem dengan data import
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                  <input type="radio" name="dup_${i}" value="new">
+                  Simpan sebagai orang baru (beda HP)
+                </label>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div id="benDupMsg" class="form-msg hidden"></div>
+        <div class="form-actions" style="margin-top:14px">
+          <button class="btn-secondary" onclick="document.getElementById('benDupOverlay').classList.add('hidden')">Batal</button>
+          <button class="btn-primary" onclick="applyDupDecisions(${JSON.stringify(dupList).replace(/</g,'\u003c')})">
+            ✅ Lanjutkan Import
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  overlay.classList.remove('hidden');
+}
+
+window.applyDupDecisions = async function (dupList) {
+  const _client = window.client || client;
+  // Baca pilihan user
+  const decisions = dupList.map((d, i) => {
+    const radio = document.querySelector(`input[name="dup_${i}"]:checked`);
+    return { ...d, decision: radio?.value || 'skip' };
+  });
+
+  // Terapkan keputusan: update data di sistem jika 'update'
+  for (const d of decisions) {
+    if (d.decision === 'update') {
+      const rowData = (window._benImportRows||[]).find(r => r.name === d.importName);
+      if (rowData) {
+        await _client.from('beneficiaries').update({
+          phone      : rowData.phone || null,
+          gender     : normGender(rowData.gender) || null,
+          location   : rowData.location || null,
+          occupation : rowData.occupation || null,
+          birth_year : parseInt(rowData.birth_year) || null,
+          note       : rowData.note || null,
+        }).eq('id', d.dbId);
+      }
+    } else if (d.decision === 'new') {
+      // Hapus constraint UNIQUE agar bisa simpan sebagai baru — force phone berbeda tetap tersimpan
+      // Import tetap jalan normal untuk nama ini
+    }
+    // 'skip' → tidak lakukan apapun, upsert normal akan merge ke data existing
+  }
+
+  document.getElementById('benDupOverlay')?.classList.add('hidden');
+
+  // Tandai rows yang harus di-'new' agar tidak di-merge saat upsert
+  window._benDupDecisions = {};
+  decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
+
+  window.runBenImport();
+};
+
+
+window.initBenModalStability = function () {
+  const overlay = document.getElementById('benFormOverlay');
+  if (overlay && !overlay.dataset.boundClose) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) window.closeBenModal();
+    });
+    overlay.dataset.boundClose = 'true';
   }
 };
