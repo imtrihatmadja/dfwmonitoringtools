@@ -3,7 +3,7 @@
 // PMIS DFW Indonesia
 // =========================================================
 
-https://zdfxcxkgmksaeigyuibe.supabase.co/functions/v1/hyper-worker
+const RSS_PROXY_URL = 'https://zdfxcxkgmksaeigyuibe.supabase.co/functions/v1/rss-proxy';
 
 const DEFAULT_FEEDS = [
   { name: 'Perikanan Indonesia', url: 'https://news.google.com/rss/search?q=perikanan+indonesia&hl=id-ID&gl=ID&ceid=ID:id' },
