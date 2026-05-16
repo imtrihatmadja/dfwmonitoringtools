@@ -1778,3 +1778,97 @@ document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
 loadProjects();
+
+/* ===== RSS CONFIG & UI PATCH START ===== */
+const DEFAULT_FEEDS = [
+  { category: 'Pemerintah', name: 'KKP', url: 'https://kkp.go.id/feed', tags: ['Pemerintah', 'Perikanan', 'Ocean Right'] },
+  { category: 'Pemerintah', name: 'Antara - Perikanan', url: 'https://www.antaranews.com/rss/ekonomi/perikanan', tags: ['Pemerintah', 'Media nasional', 'Perikanan'] },
+
+  { category: 'Media nasional', name: 'Antara - Ekonomi', url: 'https://www.antaranews.com/rss/ekonomi', tags: ['Media nasional'] },
+  { category: 'Media nasional', name: 'Tempo - Lingkungan', url: 'https://rss.tempo.co/lingkungan', tags: ['Media nasional', 'Ocean Right'] },
+  { category: 'Media nasional', name: 'CNN Indonesia - Nasional', url: 'https://www.cnnindonesia.com/rss/nasional', tags: ['Media nasional'] },
+
+  { category: 'Organisasi internasional', name: 'FAO Fisheries and Aquaculture News', url: 'https://www.fao.org/fishery/rss/en', tags: ['Organisasi internasional', 'Perikanan', 'Ocean Right'] },
+  { category: 'Organisasi internasional', name: 'ILO Newsroom', url: 'https://www.ilo.org/global/about-the-ilo/newsroom/news/WCMS_RSS_EN/rss.xml', tags: ['Organisasi internasional', 'Human rights/labor', 'Social Protection'] },
+  { category: 'Organisasi internasional', name: 'UN Women - News', url: 'https://www.un.org/womenwatch/feeds/', tags: ['Organisasi internasional', 'Human rights/labor', 'Social Protection'] },
+
+  { category: 'Human rights/labor', name: 'Human Rights Watch', url: 'https://www.hrw.org/cgi-bin/rss.cgi?t=news_rss', tags: ['Human rights/labor'] },
+  { category: 'Human rights/labor', name: 'ILO Newsroom', url: 'https://www.ilo.org/global/about-the-ilo/newsroom/news/WCMS_RSS_EN/rss.xml', tags: ['Human rights/labor', 'Social Protection'] },
+
+  { category: 'Perikanan', name: 'FAO Fisheries and Aquaculture News', url: 'https://www.fao.org/fishery/rss/en', tags: ['Perikanan', 'Organisasi internasional'] },
+  { category: 'Perikanan', name: 'SeafoodSource', url: 'https://www.seafoodsource.com/rss.xml', tags: ['Perikanan'] },
+  { category: 'Perikanan', name: 'Global Fishing Watch', url: 'https://globalfishingwatch.org/feed/', tags: ['Perikanan', 'Ocean Right'] },
+
+  { category: 'Social Protection', name: 'ILO Newsroom', url: 'https://www.ilo.org/global/about-the-ilo/newsroom/news/WCMS_RSS_EN/rss.xml', tags: ['Social Protection', 'Human rights/labor'] },
+  { category: 'Social Protection', name: 'social-protection.org', url: 'https://www.social-protection.org/gimi/RssFeed.action', tags: ['Social Protection'] },
+
+  { category: 'Ocean Right', name: 'Global Fishing Watch', url: 'https://globalfishingwatch.org/feed/', tags: ['Ocean Right', 'Perikanan'] },
+  { category: 'Ocean Right', name: 'FAO Fisheries and Aquaculture News', url: 'https://www.fao.org/fishery/rss/en', tags: ['Ocean Right', 'Perikanan', 'Organisasi internasional'] },
+  { category: 'Ocean Right', name: 'Human Rights Watch', url: 'https://www.hrw.org/cgi-bin/rss.cgi?t=news_rss', tags: ['Ocean Right', 'Human rights/labor'] }
+];
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function normalizeFeedInput(input) {
+  const text = String(input || '').trim();
+  if (!text) return null;
+  return (text.startsWith('http') ? text : `https://${text}`).replace(/\s+/g, '');
+}
+
+function renderRSSFeedOptions(feeds = DEFAULT_FEEDS) {
+  const groups = feeds.reduce((acc, f) => {
+    (acc[f.category] ||= []).push(f);
+    return acc;
+  }, {});
+  return Object.entries(groups)
+    .map(([cat, items]) => `
+      <optgroup label="${escapeHtml(cat)}">
+        ${items.map(f => `<option value="${escapeHtml(f.url)}">${escapeHtml(f.name)}</option>`).join('')}
+      </optgroup>
+    `)
+    .join('');
+}
+
+function initRssUI() {
+  const select = document.getElementById('rssSourceSelect');
+  if (select) select.innerHTML = renderRSSFeedOptions();
+
+  const form = document.getElementById('rssAddForm');
+  const urlInput = document.getElementById('rssUrlInput');
+  const nameInput = document.getElementById('rssNameInput');
+  const catInput = document.getElementById('rssCategoryInput');
+  const addBtn = document.getElementById('rssAddBtn');
+
+  if (addBtn && urlInput && nameInput) {
+    addBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = normalizeFeedInput(urlInput.value);
+      const name = nameInput.value.trim();
+      const category = (catInput?.value || 'Lainnya').trim();
+      if (!url || !name) return alert('Nama dan URL RSS wajib diisi.');
+      const item = { category, name, url, tags: [category] };
+      DEFAULT_FEEDS.push(item);
+      if (select) select.innerHTML = renderRSSFeedOptions();
+      urlInput.value = '';
+      nameInput.value = '';
+      if (catInput) catInput.value = 'Lainnya';
+    });
+  }
+
+  if (form) form.addEventListener('submit', e => e.preventDefault());
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initRssUI);
+} else {
+  initRssUI();
+}
+/* ===== RSS CONFIG & UI PATCH END ===== */
+
