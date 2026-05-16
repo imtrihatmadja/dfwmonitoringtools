@@ -3,7 +3,7 @@
 // PMIS DFW Indonesia
 // =========================================================
 
-const RSS2JSON = 'https://api.rss2json.com/v1/api.json?count=20&rss_url=';
+https://zdfxcxkgmksaeigyuibe.supabase.co/functions/v1/hyper-worker
 
 const DEFAULT_FEEDS = [
   { name: 'Perikanan Indonesia', url: 'https://news.google.com/rss/search?q=perikanan+indonesia&hl=id-ID&gl=ID&ceid=ID:id' },
@@ -227,20 +227,22 @@ window.kbFetchRss = async function () {
   resultsEl.innerHTML = '<div style="padding:30px 0;color:#64748b;">Mengambil data RSS...</div>';
 
   try {
-    const apiUrl = RSS2JSON + encodeURIComponent(feedUrl);
-    const resp = await fetchWithTimeout(apiUrl, 15000);
-
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
-    }
+    const resp = await fetch(RSS_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': window.SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify({ feedUrl })
+    });
 
     const data = await resp.json();
 
-    if (data.status === 'error') {
-      throw new Error(data.message || 'Feed tidak dapat dibaca');
+    if (!resp.ok) {
+      throw new Error(data.error || `HTTP ${resp.status}`);
     }
 
-    if (!Array.isArray(data.items) || data.items.length === 0) {
+    if (!Array.isArray(data.items) || !data.items.length) {
       throw new Error('Tidak ada artikel dalam feed ini');
     }
 
@@ -248,11 +250,11 @@ window.kbFetchRss = async function () {
 
     let items = data.items.map(item => ({
       title: item.title || 'Tanpa judul',
-      url: item.link || item.guid || '',
+      url: item.link || '',
       source: sourceName,
-      summary: stripHtml(item.description || item.content || '').slice(0, 240),
+      summary: stripHtml(item.description || '').slice(0, 240),
       published: item.pubDate || '',
-      thumbnail: item.thumbnail || ''
+      thumbnail: ''
     }));
 
     if (keywords.length) {
@@ -273,22 +275,12 @@ window.kbFetchRss = async function () {
 
     renderRssItems();
   } catch (err) {
-    let hint = 'Coba gunakan feed lain dari daftar default.';
     const msg = err.message || 'Unknown error';
-
-    if (msg.includes('422')) {
-      hint = 'Feed yang dipilih kemungkinan bukan RSS valid atau ditolak oleh layanan parser.';
-    } else if (msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('rate')) {
-      hint = 'Batas request sementara tercapai. Tunggu sebentar lalu coba lagi.';
-    } else if (msg.toLowerCase().includes('abort')) {
-      hint = 'Request timeout. Koneksi atau layanan parser sedang lambat.';
-    }
-
     statusEl.innerHTML = `<span style="color:#dc2626;">❌ Gagal: ${esc(msg)}</span>`;
     resultsEl.innerHTML = `
       <div style="text-align:center;padding:50px 20px;color:#94a3b8;">
         <div style="font-size:15px;color:#dc2626;font-weight:700;margin-bottom:8px;">Error Fetching Artikel</div>
-        <div style="font-size:13px;color:#64748b;">${esc(hint)}</div>
+        <div style="font-size:13px;color:#64748b;">${esc(msg)}</div>
       </div>
     `;
   } finally {
