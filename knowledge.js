@@ -1,5 +1,5 @@
 // =========================================================
-// knowledge.js - FINAL STABLE PACKAGE
+// knowledge.js - FINAL STABLE with Supabase Edge Function
 // PMIS DFW Indonesia
 // =========================================================
 
@@ -53,16 +53,6 @@ function fmtDate(str) {
 
 function isLikelyRssUrl(url) {
   return /news\.google\.com\/rss|\/rss|\/feed|\.xml(\?|$)/i.test(url || '');
-}
-
-async function fetchWithTimeout(url, timeout = 15000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 async function loadKnowledgeData() {
@@ -299,13 +289,8 @@ function renderRssItems() {
 
   el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:10px;">
-      ${rssItems.map(item => `
+      ${rssItems.map((item, index) => `
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;display:flex;gap:14px;box-shadow:0 1px 4px rgba(0,0,0,.04);">
-          ${item.thumbnail ? `
-            <img src="${esc(item.thumbnail)}" alt="" loading="lazy"
-              style="width:80px;height:60px;object-fit:cover;border-radius:8px;flex-shrink:0;">
-          ` : ''}
-
           <div style="flex:1;min-width:0;text-align:left;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
               <span style="font-size:11px;color:#2563eb;font-weight:600;background:#eff6ff;padding:2px 8px;border-radius:20px;">
@@ -327,7 +312,7 @@ function renderRssItems() {
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-sm">Buka</a>
-              <button class="btn-primary btn-sm" onclick="kbSaveArticleByIndex(${rssItems.indexOf(item)})">Simpan</button>
+              <button class="btn-primary btn-sm" onclick="kbSaveArticleByIndex(${index})">Simpan</button>
             </div>
           </div>
         </div>
