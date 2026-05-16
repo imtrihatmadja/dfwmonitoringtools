@@ -1,31 +1,32 @@
 // ================================================================
 // knowledge.js — Knowledge Base Management + RSS Reader
-// PMIS DFW Indonesia
+// PMIS DFW Indonesia  v22 (Google News direct fetch)
 // ================================================================
 
-// ─── RSS proxy (CORS-free, no API key needed) ──────────────────
-const RSS_PROXY = 'https://api.allorigins.win/get?url=';
+// ─── RSS proxy fallback untuk feed non-Google ──────────────────
+const RSS_PROXY     = 'https://api.allorigins.win/get?url=';
+const GOOGLE_NEWS_RE = /^https:\/\/news\.google\.com\/rss/;
 
-// ─── Default RSS feeds per tema perikanan & buruh ──────────────
+// ─── Default RSS feeds via Google News (no CORS, no API key) ──
 const DEFAULT_FEEDS = [
-  { name: 'FAO Fisheries News',    url: 'https://www.fao.org/fishery/news/rss/en/' },
-  { name: 'ILO News',              url: 'https://www.ilo.org/global/about-the-ilo/newsroom/news/WCMS_RSS_EN/rss.xml' },
-  { name: 'SeafoodSource',         url: 'https://www.seafoodsource.com/rss.xml' },
-  { name: 'Global Fishing Watch',  url: 'https://globalfishingwatch.org/feed/' },
-  { name: 'Antara – Perikanan',    url: 'https://www.antaranews.com/rss/ekonomi/perikanan' },
-  { name: 'Tempo Lingkungan',      url: 'https://rss.tempo.co/lingkungan' },
-  { name: 'Human Rights Watch',    url: 'https://www.hrw.org/rss/rss.xml' },
+  { name: 'Perikanan Indonesia',     url: 'https://news.google.com/rss/search?q=perikanan+indonesia&hl=id-ID&gl=ID&ceid=ID:id' },
+  { name: 'IUU Fishing',             url: 'https://news.google.com/rss/search?q=IUU+fishing&hl=en-US&gl=US&ceid=US:en' },
+  { name: 'Hak Buruh Nelayan',       url: 'https://news.google.com/rss/search?q=hak+buruh+nelayan+indonesia&hl=id-ID&gl=ID&ceid=ID:id' },
+  { name: 'Perbudakan Kapal',        url: 'https://news.google.com/rss/search?q=perbudakan+kapal+nelayan&hl=id-ID&gl=ID&ceid=ID:id' },
+  { name: 'KKP Kebijakan Perikanan', url: 'https://news.google.com/rss/search?q=KKP+kebijakan+perikanan&hl=id-ID&gl=ID&ceid=ID:id' },
+  { name: 'Destructive Fishing',     url: 'https://news.google.com/rss/search?q=destructive+fishing+indonesia&hl=en-US&gl=US&ceid=US:en' },
+  { name: 'Forced Labour Fishing',   url: 'https://news.google.com/rss/search?q=forced+labour+fishing+vessel&hl=en-US&gl=US&ceid=US:en' },
 ];
 
 // ─── Module state ──────────────────────────────────────────────
-let _kbTopics    = [];
-let _kbArticles  = [];
-let _kbDocs      = [];
-let _kbFeeds     = [];
-let _kbSubTab    = 'rss';    // rss | docs | topics
-let _kbActiveTopic = null;   // null = semua topik
-let _rssResults  = [];       // hasil fetch RSS sementara
-let _rssLoading  = false;
+let _kbTopics      = [];
+let _kbArticles    = [];
+let _kbDocs        = [];
+let _kbFeeds       = [];
+let _kbSubTab      = 'rss';
+let _kbActiveTopic = null;
+let _rssResults    = [];
+let _rssLoading    = false;
 
 function _kbEsc(s) {
   if (!s) return '';
@@ -46,122 +47,165 @@ window.initKnowledgeBase = async function () {
 // DATA LOADERS
 // ──────────────────────────────────────────────────────────────
 async function _loadKbTopics() {
-  const _c = window.client || client;
-  const { data } = await _c.from('kb_topics').select('*').order('created_at', { ascending: false });
+  const db = window.client;
+  if (!db) return;
+  const { data } = await db.from('kb_topics').select('*').order('name');
   _kbTopics = data || [];
 }
-
 async function _loadKbArticles() {
-  const _c = window.client || client;
-  const { data } = await _c.from('kb_articles').select('*').order('created_at', { ascending: false }).limit(200);
+  const db = window.client;
+  if (!db) return;
+  const { data } = await db.from('kb_articles').select('*').order('published_at', { ascending: false }).limit(200);
   _kbArticles = data || [];
 }
-
 async function _loadKbDocs() {
-  const _c = window.client || client;
-  const { data } = await _c.from('kb_documents').select('*').order('created_at', { ascending: false });
+  const db = window.client;
+  if (!db) return;
+  const { data } = await db.from('kb_documents').select('*').order('created_at', { ascending: false });
   _kbDocs = data || [];
 }
-
 async function _loadKbFeeds() {
-  const _c = window.client || client;
-  const { data } = await _c.from('kb_rss_feeds').select('*').order('feed_name');
+  const db = window.client;
+  if (!db) return;
+  const { data } = await db.from('kb_rss_feeds').select('*').order('feed_name');
   _kbFeeds = data || [];
 }
 
 // ──────────────────────────────────────────────────────────────
-// SUB-TAB NAVIGATION
+// RENDER LAYOUT
 // ──────────────────────────────────────────────────────────────
 function _renderKbSubTabs() {
-  const wrap = document.getElementById('kb-subtabs');
-  if (!wrap) return;
+  const tab = document.getElementById('tab-knowledge');
+  if (!tab) return;
   const tabs = [
-    { id: 'rss',    icon: 'fa-rss',        label: 'Pantau Isu (RSS)' },
-    { id: 'saved',  icon: 'fa-bookmark',   label: 'Tersimpan' },
-    { id: 'docs',   icon: 'fa-folder-open',label: 'Repositori Dokumen' },
-    { id: 'topics', icon: 'fa-tags',       label: 'Kelola Topik' },
+    { id: 'rss',    icon: '📡', label: 'RSS Reader' },
+    { id: 'docs',   icon: '📁', label: 'Repositori Dokumen' },
+    { id: 'topics', icon: '🏷️', label: 'Kelola Topik' },
   ];
-  wrap.innerHTML = tabs.map(t => `
-    <button class="kb-subtab${_kbSubTab === t.id ? ' active' : ''}" onclick="kbSwitchTab('${t.id}')">
-      <i class="fa-solid ${t.icon}"></i> ${t.label}
-    </button>`).join('');
+  tab.innerHTML = `
+    <div class="kb-page">
+      <div class="kb-header">
+        <h2 class="kb-title">📚 Knowledge Base</h2>
+        <div class="kb-subtabs">
+          ${tabs.map(t => `<button class="kb-subtab-btn${_kbSubTab===t.id?' active':''}" onclick="_kbSwitchTab('${t.id}')">${t.icon} ${t.label}</button>`).join('')}
+        </div>
+      </div>
+      <div id="kb-sub-content"></div>
+    </div>`;
+  _renderKbSubTabContent();
 }
 
-window.kbSwitchTab = function (tabId) {
+function _kbSwitchTab(tabId) {
   _kbSubTab = tabId;
-  _renderKbSubTabs();
+  document.querySelectorAll('.kb-subtab-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(tabId==='rss'?'RSS':tabId==='docs'?'Repositori':'Topik')));
   _renderKbSubTabContent();
-};
+}
+window._kbSwitchTab = _kbSwitchTab;
 
 function _renderKbSubTabContent() {
-  const wrap = document.getElementById('kb-content');
-  if (!wrap) return;
-  if (_kbSubTab === 'rss')    _renderRssTab(wrap);
-  if (_kbSubTab === 'saved')  _renderSavedTab(wrap);
-  if (_kbSubTab === 'docs')   _renderDocsTab(wrap);
-  if (_kbSubTab === 'topics') _renderTopicsTab(wrap);
+  const el = document.getElementById('kb-sub-content');
+  if (!el) return;
+  if (_kbSubTab === 'rss')    el.innerHTML = _buildRssPanel();
+  if (_kbSubTab === 'docs')   el.innerHTML = _buildDocsPanel();
+  if (_kbSubTab === 'topics') el.innerHTML = _buildTopicsPanel();
 }
 
 // ──────────────────────────────────────────────────────────────
-// RSS TAB
+// RSS PANEL
 // ──────────────────────────────────────────────────────────────
-function _renderRssTab(wrap) {
-  wrap.innerHTML = `
-    <div class="kb-rss-controls">
-      <div class="kb-rss-left">
-        <select id="kbFeedSelect" style="min-width:200px">
-          <option value="">-- Pilih sumber RSS --</option>
-          ${DEFAULT_FEEDS.map(f=>`<option value="${_kbEsc(f.url)}">${_kbEsc(f.name)}</option>`).join('')}
-          ${_kbFeeds.map(f=>`<option value="${_kbEsc(f.feed_url)}">${_kbEsc(f.feed_name)}</option>`).join('')}
-        </select>
-        <input id="kbKeywordFilter" type="text" placeholder="Filter kata kunci (pisah koma)…" style="min-width:220px">
-        <select id="kbTopicSave">
-          <option value="">-- Simpan ke topik --</option>
-          ${_kbTopics.map(t=>`<option value="${t.id}">${_kbEsc(t.name)}</option>`).join('')}
-        </select>
+function _buildRssPanel() {
+  const savedFeeds = _kbFeeds.map(f =>
+    `<option value="${_kbEsc(f.feed_url)}">${_kbEsc(f.feed_name)}</option>`).join('');
+  const defaultOpts = DEFAULT_FEEDS.map(f =>
+    `<option value="${_kbEsc(f.url)}">${_kbEsc(f.name)}</option>`).join('');
+  return `
+    <div class="kb-rss-panel">
+      <div class="kb-rss-toolbar">
+        <div class="kb-rss-source-group">
+          <label class="kb-label">Pilih Sumber RSS</label>
+          <select id="kb-rss-select" class="kb-select" onchange="kbOnFeedSelect(this.value)">
+            <option value="">-- Pilih sumber RSS --</option>
+            <optgroup label="📌 Sumber Tersimpan">${savedFeeds || '<option disabled>Belum ada sumber tersimpan</option>'}</optgroup>
+            <optgroup label="⭐ Sumber Default DFW">${defaultOpts}</optgroup>
+          </select>
+        </div>
+        <div class="kb-rss-url-group">
+          <label class="kb-label">Atau masukkan URL RSS</label>
+          <div class="kb-rss-url-row">
+            <input id="kb-rss-url" class="kb-input" type="url" placeholder="https://example.com/feed.xml" />
+            <button class="btn-primary" onclick="kbFetchRss()">🔍 Muat</button>
+            <button class="btn-secondary" onclick="kbSaveFeed()" title="Simpan sumber ini">💾 Simpan</button>
+          </div>
+        </div>
+        <div class="kb-rss-filter-group">
+          <label class="kb-label">Filter kata kunci</label>
+          <div class="kb-rss-url-row">
+            <input id="kb-rss-keywords" class="kb-input" type="text" placeholder="contoh: nelayan, IUU, buruh" />
+          </div>
+        </div>
       </div>
-      <div class="kb-rss-right">
-        <button class="btn-primary btn-sm" onclick="kbFetchRss()">
-          <i class="fa-solid fa-rotate"></i> Muat Berita
-        </button>
+      <div id="kb-rss-status" class="kb-status"></div>
+      <div id="kb-rss-list" class="kb-rss-list">
+        <div class="kb-empty">
+          <i class="fa-solid fa-satellite-dish"></i>
+          <p>Pilih sumber RSS di atas untuk menampilkan berita terbaru</p>
+        </div>
       </div>
-    </div>
-    <div id="kb-rss-status" style="font-size:12px;color:#94a3b8;margin-bottom:8px"></div>
-    <div id="kb-rss-list"></div>
-  `;
-  if (_rssResults.length) _renderRssResults();
+    </div>`;
 }
 
-window.kbFetchRss = async function () {
-  const feedUrl = document.getElementById('kbFeedSelect')?.value;
-  if (!feedUrl) { alert('Pilih sumber RSS terlebih dahulu.'); return; }
+window.kbOnFeedSelect = function(url) {
+  if (!url) return;
+  const urlInput = document.getElementById('kb-rss-url');
+  if (urlInput) urlInput.value = url;
+  kbFetchRss();
+};
 
-  const keyword = (document.getElementById('kbKeywordFilter')?.value || '').toLowerCase();
-  const keywords = keyword ? keyword.split(',').map(k => k.trim()).filter(Boolean) : [];
+window.kbFetchRss = async function() {
+  if (_rssLoading) return;
+  const urlInput  = document.getElementById('kb-rss-url');
+  const statusEl  = document.getElementById('kb-rss-status');
+  const listEl    = document.getElementById('kb-rss-list');
+  const kwInput   = document.getElementById('kb-rss-keywords');
 
-  const statusEl = document.getElementById('kb-rss-status');
-  const listEl   = document.getElementById('kb-rss-list');
-  if (statusEl) statusEl.textContent = '⏳ Memuat berita…';
-  if (listEl)   listEl.innerHTML = _kbSkeletonRows(6);
+  const feedUrl  = urlInput?.value?.trim();
+  const keywords = (kwInput?.value || '').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
+
+  if (!feedUrl) { if(statusEl) statusEl.textContent = '⚠️ Masukkan URL RSS terlebih dahulu.'; return; }
+
   _rssLoading = true;
+  if (statusEl) statusEl.textContent = '⏳ Memuat artikel...';
+  if (listEl)   listEl.innerHTML = '<div class="kb-loading"><i class="fa-solid fa-spinner fa-spin"></i> Mengambil data RSS...</div>';
 
   try {
-    const apiUrl = RSS_PROXY + encodeURIComponent(feedUrl);
-    const resp   = await fetch(apiUrl);
-    const data   = await resp.json();
+    let xmlText = '';
 
-    if (!data.contents) throw new Error('Respons kosong dari proxy RSS');
+    if (GOOGLE_NEWS_RE.test(feedUrl)) {
+      // Google News RSS dapat diakses langsung tanpa proxy CORS
+      const resp = await fetch(feedUrl);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      xmlText = await resp.text();
+    } else {
+      // Feed lain: gunakan allorigins sebagai proxy CORS
+      const apiUrl = RSS_PROXY + encodeURIComponent(feedUrl);
+      const resp   = await fetch(apiUrl);
+      if (!resp.ok) throw new Error('Proxy error ' + resp.status);
+      const data   = await resp.json();
+      if (!data.contents) throw new Error('Respons proxy kosong');
+      xmlText = data.contents;
+    }
 
-    // Parse XML RSS
-    const parser = new DOMParser();
-    const xml    = parser.parseFromString(data.contents, 'text/xml');
-    const parseErr = xml.querySelector('parsererror');
-    if (parseErr) throw new Error('Format RSS tidak valid');
+    // Parse XML RSS/Atom
+    const parser    = new DOMParser();
+    const xml       = parser.parseFromString(xmlText, 'text/xml');
+    const parseErr  = xml.querySelector('parsererror');
+    if (parseErr) throw new Error('Format XML tidak valid — pastikan URL adalah RSS/Atom feed');
 
-    // Support RSS 2.0 (<item>) dan Atom (<entry>)
-    const isAtom  = xml.querySelector('feed') !== null;
-    const nodes   = [...xml.querySelectorAll(isAtom ? 'entry' : 'item')].slice(0, 30);
+    const isAtom    = xml.querySelector('feed') !== null;
+    const nodes     = [...xml.querySelectorAll(isAtom ? 'entry' : 'item')].slice(0, 50);
     const feedTitle = xml.querySelector(isAtom ? 'feed > title' : 'channel > title')?.textContent || feedUrl;
+
+    if (nodes.length === 0) throw new Error('Tidak ada artikel ditemukan dalam feed ini');
 
     const getText = (el, tag) => el.querySelector(tag)?.textContent?.trim() || '';
     const getLink = (el) => {
@@ -171,8 +215,8 @@ window.kbFetchRss = async function () {
     const getDesc = (el) => {
       const raw = isAtom
         ? (getText(el,'summary') || getText(el,'content'))
-        : (getText(el,'description') || getText(el,'content:encoded'));
-      return raw.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim().slice(0,220) + '…';
+        : (getText(el,'description') || el.querySelector('content\\:encoded')?.textContent?.trim() || '');
+      return raw.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim().slice(0,250);
     };
     const getDate = (el) => isAtom ? getText(el,'published') || getText(el,'updated') : getText(el,'pubDate');
 
@@ -192,448 +236,195 @@ window.kbFetchRss = async function () {
     }
 
     _rssResults = items;
-    if (statusEl) statusEl.textContent = `✅ ${_rssResults.length} artikel ditemukan` + (keywords.length ? ` (filter: ${keywords.join(', ')})` : '');
+    if (statusEl) statusEl.textContent = `✅ ${_rssResults.length} artikel ditemukan dari "${feedTitle}"` + (keywords.length ? ` (filter: ${keywords.join(', ')})` : '');
     _renderRssResults();
+
   } catch(e) {
     if (statusEl) statusEl.textContent = '❌ Gagal memuat: ' + e.message;
-    if (listEl)   listEl.innerHTML = '<div class="kb-empty"><i class="fa-solid fa-circle-exclamation"></i><p>Tidak bisa memuat RSS.<br><small>' + e.message + '</small></p></div>';
+    if (listEl)   listEl.innerHTML = '<div class="kb-empty"><i class="fa-solid fa-circle-exclamation"></i><p>Tidak bisa memuat RSS.<br><small>' + _kbEsc(e.message) + '</small></p></div>';
+  } finally {
+    _rssLoading = false;
   }
-  _rssLoading = false;
 };
 
 function _renderRssResults() {
   const listEl = document.getElementById('kb-rss-list');
   if (!listEl) return;
   if (!_rssResults.length) {
-    listEl.innerHTML = `<div class="kb-empty"><i class="fa-solid fa-newspaper"></i><p>Tidak ada artikel ditemukan.</p></div>`;
+    listEl.innerHTML = '<div class="kb-empty"><p>Tidak ada artikel yang cocok dengan filter.</p></div>';
     return;
   }
-  listEl.innerHTML = _rssResults.map((a, i) => `
-    <div class="kb-article-card" id="rss-card-${i}">
+  listEl.innerHTML = _rssResults.map(item => {
+    const dateStr = item.published_at ? new Date(item.published_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '';
+    return `<div class="kb-article-card">
       <div class="kb-article-meta">
-        <span class="kb-badge source">${_kbEsc(a.source)}</span>
-        <span class="kb-date">${_kbEsc(a.published_at ? new Date(a.published_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '')}</span>
+        <span class="kb-article-source">${_kbEsc(item.source)}</span>
+        ${dateStr ? `<span class="kb-article-date">${dateStr}</span>` : ''}
       </div>
-      <div class="kb-article-title">
-        <a href="${_kbEsc(a.url)}" target="_blank" rel="noopener noreferrer">${_kbEsc(a.title)}</a>
-      </div>
-      <div class="kb-article-summary">${_kbEsc(a.summary)}</div>
+      <a class="kb-article-title" href="${_kbEsc(item.url)}" target="_blank" rel="noopener">${_kbEsc(item.title)}</a>
+      ${item.summary ? `<p class="kb-article-summary">${_kbEsc(item.summary)}</p>` : ''}
       <div class="kb-article-actions">
-        <button class="btn-primary btn-xs" onclick="kbSaveArticle(${i})">
-          <i class="fa-solid fa-bookmark"></i> Simpan
-        </button>
-        <a href="${_kbEsc(a.url)}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-xs">
-          <i class="fa-solid fa-arrow-up-right-from-square"></i> Buka
-        </a>
-      </div>
-    </div>`).join('');
-}
-
-window.kbSaveArticle = async function (idx) {
-  const a = _rssResults[idx];
-  if (!a) return;
-  const _c = window.client || client;
-  const topicId   = document.getElementById('kbTopicSave')?.value || null;
-  const topicName = topicId ? _kbTopics.find(t=>t.id===topicId)?.name || '' : '';
-
-  const btn = document.querySelector(`#rss-card-${idx} .btn-primary`);
-  if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
-
-  const { error } = await _c.from('kb_articles').insert({
-    topic_id    : topicId || null,
-    topic_name  : topicName,
-    title       : a.title,
-    source_url  : a.url,
-    source_name : a.source,
-    summary     : a.summary,
-    published_at: a.published_at,
-    status      : 'saved',
-  });
-
-  if (error) {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-bookmark"></i> Simpan'; }
-    alert('Gagal menyimpan: ' + error.message);
-  } else {
-    if (btn) { btn.disabled = true; btn.innerHTML = '✅ Tersimpan'; btn.style.background='#16a34a'; }
-    await _loadKbArticles();
-  }
-};
-
-// ──────────────────────────────────────────────────────────────
-// SAVED ARTICLES TAB
-// ──────────────────────────────────────────────────────────────
-function _renderSavedTab(wrap) {
-  const topicFilter = _kbActiveTopic;
-  const articles = topicFilter
-    ? _kbArticles.filter(a => a.topic_id === topicFilter)
-    : _kbArticles;
-
-  wrap.innerHTML = `
-    <div class="kb-toolbar">
-      <div class="kb-toolbar-left">
-        <select id="kbSavedTopicFilter" onchange="kbFilterSaved(this.value)" style="min-width:180px">
-          <option value="">Semua Topik</option>
-          ${_kbTopics.map(t=>`<option value="${t.id}"${topicFilter===t.id?' selected':''}>${_kbEsc(t.name)}</option>`).join('')}
-        </select>
-        <input id="kbSavedSearch" type="text" placeholder="Cari judul…" oninput="kbSearchSaved(this.value)" style="min-width:200px">
-      </div>
-      <div class="kb-toolbar-right">
-        <span style="font-size:12px;color:#94a3b8">${articles.length} artikel tersimpan</span>
-      </div>
-    </div>
-    <div id="kb-saved-list">
-      ${articles.length ? articles.map(a => _kbArticleRow(a)).join('') : `<div class="kb-empty"><i class="fa-solid fa-bookmark"></i><p>Belum ada artikel tersimpan.</p></div>`}
-    </div>
-  `;
-}
-
-function _kbArticleRow(a) {
-  const topic = _kbTopics.find(t => t.id === a.topic_id);
-  const statusColor = a.status === 'reviewed' ? '#16a34a' : a.status === 'archived' ? '#94a3b8' : '#2563eb';
-  return `
-    <div class="kb-article-card">
-      <div class="kb-article-meta">
-        ${topic ? `<span class="kb-badge topic" style="background:${topic.color}22;color:${topic.color}">${_kbEsc(topic.name)}</span>` : ''}
-        <span class="kb-badge source">${_kbEsc(a.source_name||'')}</span>
-        <span class="kb-badge status" style="color:${statusColor}">${a.status||'saved'}</span>
-        <span class="kb-date">${a.published_at ? new Date(a.published_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : ''}</span>
-      </div>
-      <div class="kb-article-title">
-        ${a.source_url ? `<a href="${_kbEsc(a.source_url)}" target="_blank" rel="noopener noreferrer">${_kbEsc(a.title)}</a>` : _kbEsc(a.title)}
-      </div>
-      <div class="kb-article-summary">${_kbEsc(a.summary||'')}</div>
-      ${a.note ? `<div class="kb-note-display"><i class="fa-solid fa-note-sticky"></i> ${_kbEsc(a.note)}</div>` : ''}
-      <div class="kb-article-actions">
-        <button class="btn-secondary btn-xs" onclick="kbMarkReviewed('${a.id}')"><i class="fa-solid fa-check"></i> Tandai Reviewed</button>
-        <button class="btn-secondary btn-xs" onclick="kbAddNote('${a.id}','${_kbEsc(a.note||'')}')"><i class="fa-solid fa-pen"></i> Catatan</button>
-        <button class="btn-danger btn-xs" onclick="kbDeleteArticle('${a.id}')"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn-secondary btn-sm" onclick="kbSaveArticle(${JSON.stringify({title:item.title,url:item.url,source:item.source,summary:item.summary,published_at:item.published_at}).replace(/"/g,'&quot;')})">💾 Simpan Artikel</button>
+        <a class="btn-ghost btn-sm" href="${_kbEsc(item.url)}" target="_blank" rel="noopener">🔗 Buka</a>
       </div>
     </div>`;
+  }).join('');
 }
 
-window.kbFilterSaved = function(topicId) {
-  _kbActiveTopic = topicId || null;
-  const wrap = document.getElementById('kb-content');
-  if (wrap) _renderSavedTab(wrap);
-};
-
-window.kbSearchSaved = function(q) {
-  const list = document.getElementById('kb-saved-list');
-  if (!list) return;
-  const query = q.toLowerCase();
-  const filtered = query
-    ? _kbArticles.filter(a => (a.title||'').toLowerCase().includes(query) || (a.summary||'').toLowerCase().includes(query))
-    : _kbArticles;
-  list.innerHTML = filtered.length
-    ? filtered.map(a => _kbArticleRow(a)).join('')
-    : `<div class="kb-empty"><p>Tidak ada artikel yang cocok.</p></div>`;
-};
-
-window.kbMarkReviewed = async function(id) {
-  const _c = window.client || client;
-  const art = _kbArticles.find(a => a.id === id);
-  const newStatus = art?.status === 'reviewed' ? 'saved' : 'reviewed';
-  await _c.from('kb_articles').update({ status: newStatus }).eq('id', id);
+window.kbSaveArticle = async function(item) {
+  const db = window.client;
+  if (!db) return;
+  const topicId = _kbActiveTopic;
+  const { error } = await db.from('kb_articles').insert({
+    title: item.title, url: item.url, source: item.source,
+    summary: item.summary, published_at: item.published_at || null, topic_id: topicId
+  });
+  if (error) { alert('Gagal simpan: ' + error.message); return; }
+  alert('✅ Artikel berhasil disimpan ke Knowledge Base!');
   await _loadKbArticles();
-  _renderKbSubTabContent();
 };
 
-window.kbAddNote = async function(id, currentNote) {
-  const note = prompt('Tambahkan catatan untuk artikel ini:', currentNote || '');
-  if (note === null) return;
-  const _c = window.client || client;
-  await _c.from('kb_articles').update({ note }).eq('id', id);
-  await _loadKbArticles();
-  _renderKbSubTabContent();
-};
-
-window.kbDeleteArticle = async function(id) {
-  if (!confirm('Hapus artikel ini dari daftar tersimpan?')) return;
-  const _c = window.client || client;
-  await _c.from('kb_articles').delete().eq('id', id);
-  await _loadKbArticles();
+window.kbSaveFeed = async function() {
+  const db = window.client;
+  const url = document.getElementById('kb-rss-url')?.value?.trim();
+  if (!url) { alert('Masukkan URL feed terlebih dahulu'); return; }
+  const name = prompt('Nama untuk sumber RSS ini:', url.replace(/https?:\/\//,'').split('/')[0]) || url;
+  const { error } = await db.from('kb_rss_feeds').insert({ feed_name: name, feed_url: url });
+  if (error) { alert('Gagal: ' + error.message); return; }
+  alert('✅ Sumber RSS tersimpan!');
+  await _loadKbFeeds();
   _renderKbSubTabContent();
 };
 
 // ──────────────────────────────────────────────────────────────
-// DOKUMEN REPOSITORI TAB
+// DOCS PANEL
 // ──────────────────────────────────────────────────────────────
-const DOC_TYPES = ['policy','regulation','report','module','template','guideline','other'];
-const DOC_TYPE_LABELS = { policy:'Kebijakan', regulation:'Regulasi', report:'Laporan', module:'Modul', template:'Template', guideline:'Panduan', other:'Lainnya' };
-
-function _renderDocsTab(wrap) {
-  wrap.innerHTML = `
-    <div class="kb-toolbar">
-      <div class="kb-toolbar-left">
-        <select id="kbDocTypeFilter" onchange="kbRenderDocList()" style="min-width:150px">
-          <option value="">Semua Jenis</option>
-          ${DOC_TYPES.map(t=>`<option value="${t}">${DOC_TYPE_LABELS[t]||t}</option>`).join('')}
-        </select>
-        <select id="kbDocTopicFilter" onchange="kbRenderDocList()" style="min-width:150px">
+function _buildDocsPanel() {
+  const topicOpts = _kbTopics.map(t => `<option value="${t.id}">${_kbEsc(t.name)}</option>`).join('');
+  const docs = _kbActiveTopic ? _kbDocs.filter(d => d.topic_id === _kbActiveTopic) : _kbDocs;
+  return `
+    <div class="kb-docs-panel">
+      <div class="kb-docs-toolbar">
+        <select class="kb-select" onchange="_kbFilterDocsByTopic(this.value)">
           <option value="">Semua Topik</option>
-          ${_kbTopics.map(t=>`<option value="${t.id}">${_kbEsc(t.name)}</option>`).join('')}
+          ${topicOpts}
         </select>
-        <input id="kbDocSearch" type="text" placeholder="Cari dokumen…" oninput="kbRenderDocList()" style="min-width:200px">
+        <button class="btn-primary" onclick="kbOpenAddDocModal()">➕ Tambah Referensi</button>
       </div>
-      <div class="kb-toolbar-right">
-        <button class="btn-primary btn-sm" onclick="kbOpenDocModal()">
-          <i class="fa-solid fa-plus"></i> Tambah Dokumen
-        </button>
-      </div>
-    </div>
-    <div id="kb-doc-list"></div>
-    ${_kbDocModalHTML()}
-  `;
-  kbRenderDocList();
-}
-
-window.kbRenderDocList = function() {
-  const typeF  = document.getElementById('kbDocTypeFilter')?.value || '';
-  const topicF = document.getElementById('kbDocTopicFilter')?.value || '';
-  const q      = (document.getElementById('kbDocSearch')?.value || '').toLowerCase();
-  let docs = [..._kbDocs];
-  if (typeF)  docs = docs.filter(d => d.doc_type === typeF);
-  if (topicF) docs = docs.filter(d => d.topic_id === topicF);
-  if (q)      docs = docs.filter(d => (d.title||'').toLowerCase().includes(q) || (d.description||'').toLowerCase().includes(q));
-
-  const listEl = document.getElementById('kb-doc-list');
-  if (!listEl) return;
-  if (!docs.length) {
-    listEl.innerHTML = `<div class="kb-empty"><i class="fa-solid fa-folder-open"></i><p>Belum ada dokumen.</p></div>`;
-    return;
-  }
-  listEl.innerHTML = `
-    <div class="kb-doc-grid">
-      ${docs.map(d => {
-        const topic = _kbTopics.find(t => t.id === d.topic_id);
-        const icon  = { policy:'fa-file-contract', regulation:'fa-scale-balanced', report:'fa-chart-bar', module:'fa-book', template:'fa-file-lines', guideline:'fa-list-check', other:'fa-file' }[d.doc_type] || 'fa-file';
-        return `
-          <div class="kb-doc-card">
-            <div class="kb-doc-icon"><i class="fa-solid ${icon}"></i></div>
-            <div class="kb-doc-body">
-              <div class="kb-doc-title">${_kbEsc(d.title)}</div>
+      <div class="kb-docs-list">
+        ${docs.length ? docs.map(d => `
+          <div class="kb-doc-item">
+            <div class="kb-doc-icon">📄</div>
+            <div class="kb-doc-info">
+              <a class="kb-doc-title" href="${_kbEsc(d.url||'#')}" target="_blank">${_kbEsc(d.title)}</a>
+              ${d.description ? `<p class="kb-doc-desc">${_kbEsc(d.description)}</p>` : ''}
               <div class="kb-doc-meta">
-                <span class="kb-badge source">${DOC_TYPE_LABELS[d.doc_type]||d.doc_type||'Dokumen'}</span>
-                ${topic ? `<span class="kb-badge topic" style="background:${topic.color}22;color:${topic.color}">${_kbEsc(topic.name)}</span>` : ''}
-                ${d.project_name ? `<span class="kb-badge source">${_kbEsc(d.project_name)}</span>` : ''}
-                <span class="kb-date">${d.created_at ? new Date(d.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : ''}</span>
+                ${d.doc_type ? `<span class="kb-badge">${_kbEsc(d.doc_type)}</span>` : ''}
+                ${d.year ? `<span class="kb-badge">${d.year}</span>` : ''}
               </div>
-              ${d.description ? `<div class="kb-article-summary">${_kbEsc(d.description)}</div>` : ''}
             </div>
-            <div class="kb-doc-actions">
-              ${d.file_url ? `<a href="${_kbEsc(d.file_url)}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-xs"><i class="fa-solid fa-arrow-up-right-from-square"></i> Buka</a>` : ''}
-              <button class="btn-danger btn-xs" onclick="kbDeleteDoc('${d.id}')"><i class="fa-solid fa-trash"></i></button>
-            </div>
-          </div>`;
-      }).join('')}
-    </div>`;
-};
-
-function _kbDocModalHTML() {
-  return `
-    <div id="kbDocOverlay" class="modal-overlay hidden">
-      <div class="modal-box" style="max-width:520px">
-        <div class="modal-header">
-          <div class="modal-title"><i class="fa-solid fa-plus"></i> Tambah Dokumen</div>
-          <button class="modal-close" onclick="kbCloseDocModal()">×</button>
-        </div>
-        <div class="form-grid">
-          <div class="form-group full">
-            <label>Judul Dokumen *</label>
-            <input type="text" id="kbDocTitle" placeholder="Nama dokumen…">
-          </div>
-          <div class="form-group">
-            <label>Jenis Dokumen</label>
-            <select id="kbDocType">
-              <option value="">-- Pilih --</option>
-              ${DOC_TYPES.map(t=>`<option value="${t}">${DOC_TYPE_LABELS[t]||t}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Topik</label>
-            <select id="kbDocTopic">
-              <option value="">-- Opsional --</option>
-              ${_kbTopics.map(t=>`<option value="${t.id}">${_kbEsc(t.name)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="form-group full">
-            <label>Link File (Google Drive / URL)</label>
-            <input type="url" id="kbDocUrl" placeholder="https://drive.google.com/…">
-          </div>
-          <div class="form-group full">
-            <label>Deskripsi</label>
-            <textarea id="kbDocDesc" rows="2" placeholder="Penjelasan singkat…"></textarea>
-          </div>
-        </div>
-        <div id="kbDocMsg" class="form-msg hidden"></div>
-        <div class="form-actions">
-          <button class="btn-secondary" onclick="kbCloseDocModal()">Batal</button>
-          <button class="btn-primary" onclick="kbSaveDoc()">Simpan</button>
-        </div>
+            <button class="btn-ghost btn-sm" onclick="kbDeleteDoc('${d.id}')" title="Hapus">🗑️</button>
+          </div>`).join('') :
+          '<div class="kb-empty"><i class="fa-solid fa-folder-open"></i><p>Belum ada dokumen referensi.</p></div>'
+        }
       </div>
     </div>`;
 }
-
-window.kbOpenDocModal = function() {
-  const el = document.getElementById('kbDocOverlay');
-  if (el) el.classList.remove('hidden');
+window._kbFilterDocsByTopic = function(topicId) {
+  _kbActiveTopic = topicId || null;
+  _renderKbSubTabContent();
 };
-
-window.kbCloseDocModal = function() {
-  const el = document.getElementById('kbDocOverlay');
-  if (el) el.classList.add('hidden');
-};
-
-window.kbSaveDoc = async function() {
-  const _c     = window.client || client;
-  const title  = document.getElementById('kbDocTitle')?.value.trim();
-  if (!title) { alert('Judul dokumen wajib diisi.'); return; }
-  const topicId   = document.getElementById('kbDocTopic')?.value || null;
-  const topicName = topicId ? _kbTopics.find(t=>t.id===topicId)?.name||'' : '';
-  const btn = document.querySelector('#kbDocOverlay .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
-  const { error } = await _c.from('kb_documents').insert({
-    title,
-    doc_type    : document.getElementById('kbDocType')?.value || 'other',
-    topic_id    : topicId,
-    topic_name  : topicName,
-    file_url    : document.getElementById('kbDocUrl')?.value.trim() || null,
-    description : document.getElementById('kbDocDesc')?.value.trim() || null,
-  });
-  if (error) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; }
-    alert('Gagal menyimpan: ' + error.message);
-  } else {
-    kbCloseDocModal();
-    await _loadKbDocs();
-    kbRenderDocList();
-  }
-};
-
 window.kbDeleteDoc = async function(id) {
   if (!confirm('Hapus dokumen ini?')) return;
-  const _c = window.client || client;
-  await _c.from('kb_documents').delete().eq('id', id);
+  const db = window.client;
+  await db.from('kb_documents').delete().eq('id', id);
   await _loadKbDocs();
-  kbRenderDocList();
+  _renderKbSubTabContent();
 };
-
-// ──────────────────────────────────────────────────────────────
-// TOPIK TAB
-// ──────────────────────────────────────────────────────────────
-const TOPIC_COLORS = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#be185d','#0d9488'];
-
-function _renderTopicsTab(wrap) {
-  wrap.innerHTML = `
-    <div class="kb-toolbar">
-      <div class="kb-toolbar-right">
-        <button class="btn-primary btn-sm" onclick="kbOpenTopicModal()">
-          <i class="fa-solid fa-plus"></i> Tambah Topik
-        </button>
-      </div>
+window.kbOpenAddDocModal = function() {
+  let m = document.getElementById('kb-add-doc-modal');
+  if (!m) { m = document.createElement('div'); m.id='kb-add-doc-modal'; document.body.appendChild(m); }
+  const topicOpts = _kbTopics.map(t=>`<option value="${t.id}">${_kbEsc(t.name)}</option>`).join('');
+  m.className = 'doc-modal-overlay';
+  m.innerHTML = `<div class="doc-modal" style="max-width:480px">
+    <div class="doc-modal-header"><h3 style="margin:0;font-size:16px">Tambah Dokumen Referensi</h3>
+    <button class="doc-modal-close" onclick="document.getElementById('kb-add-doc-modal').style.display='none'">✕</button></div>
+    <div class="doc-modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <input id="kb-doc-title" class="kb-input" placeholder="Judul dokumen *" />
+      <input id="kb-doc-url"   class="kb-input" type="url" placeholder="URL (opsional)" />
+      <input id="kb-doc-desc"  class="kb-input" placeholder="Deskripsi singkat" />
+      <select id="kb-doc-topic" class="kb-select"><option value="">-- Pilih Topik --</option>${topicOpts}</select>
+      <input id="kb-doc-year"  class="kb-input" type="number" placeholder="Tahun (misal: 2024)" />
     </div>
-    <div class="kb-topic-grid" id="kb-topic-list">
-      ${_kbTopics.length ? _kbTopics.map(t => {
-        const artCount = _kbArticles.filter(a => a.topic_id === t.id).length;
-        const docCount = _kbDocs.filter(d => d.topic_id === t.id).length;
-        const kwList   = (t.keywords||[]).slice(0,5).map(k=>`<span class="kb-kw">${_kbEsc(k)}</span>`).join('');
-        return `
-          <div class="kb-topic-card" style="border-left:4px solid ${t.color||'#2563eb'}">
-            <div class="kb-topic-header">
-              <div class="kb-topic-name">${_kbEsc(t.name)}</div>
-              <button class="btn-danger btn-xs" onclick="kbDeleteTopic('${t.id}')"><i class="fa-solid fa-trash"></i></button>
-            </div>
-            ${t.description ? `<div class="kb-article-summary">${_kbEsc(t.description)}</div>` : ''}
-            <div class="kb-kw-list">${kwList}</div>
-            <div class="kb-topic-stats">
-              <span><i class="fa-solid fa-newspaper"></i> ${artCount} artikel</span>
-              <span><i class="fa-solid fa-file"></i> ${docCount} dokumen</span>
-            </div>
-          </div>`;
-      }).join('') : `<div class="kb-empty"><i class="fa-solid fa-tags"></i><p>Belum ada topik. Tambahkan topik pantauan DFW.</p></div>`}
+    <div class="doc-modal-footer">
+      <button class="btn-secondary" onclick="document.getElementById('kb-add-doc-modal').style.display='none'">Batal</button>
+      <button class="btn-primary" onclick="kbSubmitAddDoc()">💾 Simpan</button>
     </div>
-    <div id="kbTopicOverlay" class="modal-overlay hidden">
-      <div class="modal-box" style="max-width:440px">
-        <div class="modal-header">
-          <div class="modal-title"><i class="fa-solid fa-tag"></i> Tambah Topik</div>
-          <button class="modal-close" onclick="document.getElementById('kbTopicOverlay').classList.add('hidden')">×</button>
-        </div>
-        <div class="form-grid">
-          <div class="form-group full">
-            <label>Nama Topik *</label>
-            <input type="text" id="kbTopicName" placeholder="contoh: IUU Fishing, C188, Rekrutmen Adil…">
-          </div>
-          <div class="form-group full">
-            <label>Kata Kunci Filter RSS <span style="font-weight:400;color:#94a3b8">(pisah koma)</span></label>
-            <input type="text" id="kbTopicKeywords" placeholder="IUU, illegal fishing, kapal ikan…">
-          </div>
-          <div class="form-group full">
-            <label>Deskripsi</label>
-            <textarea id="kbTopicDesc" rows="2" placeholder="Mengapa topik ini dipantau?"></textarea>
-          </div>
-          <div class="form-group full">
-            <label>Warna Label</label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              ${TOPIC_COLORS.map(c=>`<button type="button" onclick="selectKbColor('${c}')" data-color="${c}" style="width:28px;height:28px;background:${c};border-radius:50%;border:2px solid transparent;cursor:pointer"></button>`).join('')}
-            </div>
-            <input type="hidden" id="kbTopicColor" value="${TOPIC_COLORS[0]}">
-          </div>
-        </div>
-        <div id="kbTopicMsg" class="form-msg hidden"></div>
-        <div class="form-actions">
-          <button class="btn-secondary" onclick="document.getElementById('kbTopicOverlay').classList.add('hidden')">Batal</button>
-          <button class="btn-primary" onclick="kbSaveTopic()">Simpan</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-window.selectKbColor = function(c) {
-  document.getElementById('kbTopicColor').value = c;
-  document.querySelectorAll('[data-color]').forEach(btn => {
-    btn.style.borderColor = btn.dataset.color === c ? '#0f172a' : 'transparent';
-  });
+  </div>`;
+  m.style.display = 'flex';
 };
-
-window.kbOpenTopicModal = function() {
-  document.getElementById('kbTopicOverlay')?.classList.remove('hidden');
-};
-
-window.kbSaveTopic = async function() {
-  const _c   = window.client || client;
-  const name = document.getElementById('kbTopicName')?.value.trim();
-  if (!name) { alert('Nama topik wajib diisi.'); return; }
-  const kwRaw  = document.getElementById('kbTopicKeywords')?.value || '';
-  const keywords = kwRaw.split(',').map(k=>k.trim()).filter(Boolean);
-  const { error } = await _c.from('kb_topics').insert({
-    name,
-    keywords,
-    description: document.getElementById('kbTopicDesc')?.value.trim() || null,
-    color      : document.getElementById('kbTopicColor')?.value || TOPIC_COLORS[0],
+window.kbSubmitAddDoc = async function() {
+  const db = window.client;
+  const title = document.getElementById('kb-doc-title')?.value?.trim();
+  if (!title) { alert('Judul wajib diisi'); return; }
+  const { error } = await db.from('kb_documents').insert({
+    title, url: document.getElementById('kb-doc-url')?.value?.trim() || null,
+    description: document.getElementById('kb-doc-desc')?.value?.trim() || null,
+    topic_id: document.getElementById('kb-doc-topic')?.value || null,
+    year: Number(document.getElementById('kb-doc-year')?.value) || null,
   });
   if (error) { alert('Gagal: ' + error.message); return; }
-  document.getElementById('kbTopicOverlay')?.classList.add('hidden');
-  await _loadKbTopics();
-  _renderKbSubTabContent();
-};
-
-window.kbDeleteTopic = async function(id) {
-  if (!confirm('Hapus topik ini? Artikel dan dokumen terkait tidak ikut terhapus.')) return;
-  const _c = window.client || client;
-  await _c.from('kb_topics').delete().eq('id', id);
-  await _loadKbTopics();
+  document.getElementById('kb-add-doc-modal').style.display = 'none';
+  await _loadKbDocs();
   _renderKbSubTabContent();
 };
 
 // ──────────────────────────────────────────────────────────────
-// HELPERS
+// TOPICS PANEL
 // ──────────────────────────────────────────────────────────────
-function _kbSkeletonRows(n) {
-  return Array.from({length:n}, () =>
-    `<div class="kb-article-card" style="pointer-events:none">
-       <div class="skeleton skeleton-text" style="width:60%;height:12px;margin-bottom:6px"></div>
-       <div class="skeleton skeleton-text" style="width:90%;height:16px;margin-bottom:8px"></div>
-       <div class="skeleton skeleton-text" style="width:80%;height:12px"></div>
-     </div>`).join('');
+function _buildTopicsPanel() {
+  return `
+    <div class="kb-topics-panel">
+      <div class="kb-topics-add">
+        <input id="kb-new-topic" class="kb-input" placeholder="Nama topik baru..." />
+        <button class="btn-primary" onclick="kbAddTopic()">➕ Tambah</button>
+      </div>
+      <div class="kb-topics-list">
+        ${_kbTopics.length ? _kbTopics.map(t=>`
+          <div class="kb-topic-item">
+            <span class="kb-topic-name">${_kbEsc(t.name)}</span>
+            <button class="btn-ghost btn-sm" onclick="kbDeleteTopic('${t.id}')">🗑️</button>
+          </div>`).join('') :
+          '<div class="kb-empty"><p>Belum ada topik. Tambahkan topik untuk mengorganisir konten.</p></div>'
+        }
+      </div>
+    </div>`;
 }
+window.kbAddTopic = async function() {
+  const db = window.client;
+  const name = document.getElementById('kb-new-topic')?.value?.trim();
+  if (!name) return;
+  const { error } = await db.from('kb_topics').insert({ name });
+  if (error) { alert('Gagal: ' + error.message); return; }
+  document.getElementById('kb-new-topic').value = '';
+  await _loadKbTopics();
+  _renderKbSubTabContent();
+};
+window.kbDeleteTopic = async function(id) {
+  if (!confirm('Hapus topik ini?')) return;
+  const db = window.client;
+  await db.from('kb_topics').delete().eq('id', id);
+  await _loadKbTopics();
+  _renderKbSubTabContent();
+};
+
+// ─── Init via MutationObserver (sama seperti modul lain) ───────
+document.addEventListener('DOMContentLoaded', () => {
+  new MutationObserver(() => {
+    const t = document.getElementById('tab-knowledge');
+    if (t?.classList.contains('active') && !t.dataset.kbInit) {
+      t.dataset.kbInit = '1';
+      window.initKnowledgeBase();
+    }
+  }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+});
