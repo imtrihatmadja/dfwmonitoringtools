@@ -4,7 +4,7 @@
 // ================================================================
 
 // ─── RSS proxy (CORS-free, no API key needed) ──────────────────
-const RSS_PROXY = 'https://api.rss2json.com/v1/api.json?rss_url=';
+const RSS_PROXY = 'https://api.allorigins.win/get?url=';
 
 // ─── Default RSS feeds per tema perikanan & buruh ──────────────
 const DEFAULT_FEEDS = [
@@ -146,33 +146,57 @@ window.kbFetchRss = async function () {
   _rssLoading = true;
 
   try {
-    const apiUrl = RSS_PROXY + encodeURIComponent(feedUrl) + '&count=30';
+    const apiUrl = RSS_PROXY + encodeURIComponent(feedUrl);
     const resp   = await fetch(apiUrl);
-    const json   = await resp.json();
+    const data   = await resp.json();
 
-    if (json.status !== 'ok') throw new Error(json.message || 'RSS gagal dimuat');
+    if (!data.contents) throw new Error('Respons kosong dari proxy RSS');
 
-    let items = json.items || [];
+    // Parse XML RSS
+    const parser = new DOMParser();
+    const xml    = parser.parseFromString(data.contents, 'text/xml');
+    const parseErr = xml.querySelector('parsererror');
+    if (parseErr) throw new Error('Format RSS tidak valid');
+
+    // Support RSS 2.0 (<item>) dan Atom (<entry>)
+    const isAtom  = xml.querySelector('feed') !== null;
+    const nodes   = [...xml.querySelectorAll(isAtom ? 'entry' : 'item')].slice(0, 30);
+    const feedTitle = xml.querySelector(isAtom ? 'feed > title' : 'channel > title')?.textContent || feedUrl;
+
+    const getText = (el, tag) => el.querySelector(tag)?.textContent?.trim() || '';
+    const getLink = (el) => {
+      if (isAtom) return el.querySelector('link')?.getAttribute('href') || getText(el, 'link') || '';
+      return getText(el, 'link') || getText(el, 'guid') || '';
+    };
+    const getDesc = (el) => {
+      const raw = isAtom
+        ? (getText(el,'summary') || getText(el,'content'))
+        : (getText(el,'description') || getText(el,'content:encoded'));
+      return raw.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim().slice(0,220) + '…';
+    };
+    const getDate = (el) => isAtom ? getText(el,'published') || getText(el,'updated') : getText(el,'pubDate');
+
+    let items = nodes.map(el => ({
+      title       : getText(el,'title') || '(tanpa judul)',
+      url         : getLink(el),
+      source      : feedTitle,
+      summary     : getDesc(el),
+      published_at: getDate(el),
+    }));
+
     if (keywords.length) {
       items = items.filter(item => {
-        const text = ((item.title||'') + ' ' + (item.description||'') + ' ' + (item.categories||[]).join(' ')).toLowerCase();
+        const text = (item.title + ' ' + item.summary).toLowerCase();
         return keywords.some(kw => text.includes(kw));
       });
     }
 
-    _rssResults = items.map(item => ({
-      title       : item.title || '(tanpa judul)',
-      url         : item.link  || '',
-      source      : json.feed?.title || feedUrl,
-      summary     : (item.description||'').replace(/<[^>]+>/g,'').slice(0,220) + '…',
-      published_at: item.pubDate || '',
-    }));
-
+    _rssResults = items;
     if (statusEl) statusEl.textContent = `✅ ${_rssResults.length} artikel ditemukan` + (keywords.length ? ` (filter: ${keywords.join(', ')})` : '');
     _renderRssResults();
   } catch(e) {
     if (statusEl) statusEl.textContent = '❌ Gagal memuat: ' + e.message;
-    if (listEl)   listEl.innerHTML = `<div class="kb-empty">Tidak bisa terhubung ke sumber RSS. Coba sumber lain.</div>`;
+    if (listEl)   listEl.innerHTML = '<div class="kb-empty"><i class="fa-solid fa-circle-exclamation"></i><p>Tidak bisa memuat RSS.<br><small>' + e.message + '</small></p></div>';
   }
   _rssLoading = false;
 };
