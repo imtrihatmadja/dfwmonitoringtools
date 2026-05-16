@@ -37,6 +37,7 @@
       <ul class="nav-submenu" id="projectSubmenu"></ul>
       <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
       <li data-tab="beneficiary" onclick="loadBeneficiaries();populateBenProjectFilter()"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Penerima Manfaat</span></li>
+      <li       <li data-tab="knowledge" onclick="initKnowledgeBase()"><span class="nav-icon"><i class="fa-solid fa-book-open"></i></span><span>Knowledge Base</span></li>
       <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
@@ -395,6 +396,24 @@
     </table>
   </div>
   <div id="benPagination"></div>
+</div>
+
+
+
+<!-- ===== TAB KNOWLEDGE BASE ===== -->
+<div class="tab-content" id="tab-knowledge">
+  <div style="background:#2563eb;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:10px;border-radius:10px 10px 0 0">
+    <i class="fa-solid fa-book-open" style="font-size:18px"></i>
+    <span style="font-size:15px;font-weight:700">Knowledge Base</span>
+    <span style="font-size:12px;opacity:.75;margin-left:4px">Pantau isu &middot; Repositori dokumen &middot; Manajemen topik</span>
+  </div>
+  <div id="kb-subtabs" style="display:flex;gap:4px;padding:12px 16px 0;background:#f8fafc;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0"></div>
+  <div id="kb-content" style="padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;min-height:400px">
+    <div style="padding:60px 0;text-align:center;color:#94a3b8">
+      <i class="fa-solid fa-book-open" style="font-size:32px;display:block;margin-bottom:12px"></i>
+      <p style="font-size:13px">Memuat Knowledge Base…</p>
+    </div>
+  </div>
 </div>
 
 <!-- ===== TAB ARSIP PROYEK ===== -->
@@ -811,5 +830,6 @@ function closeSidebar(){
   </div>
 </div>
 
+  <script src="./knowledge.js"></script>
 </body>
 </html>
