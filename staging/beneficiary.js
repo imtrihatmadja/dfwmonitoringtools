@@ -1,3 +1,5 @@
+window._benImportSessionId = 0;
+window._benDupHandledSessionId = 0;
 // =====================================================================
 // beneficiary.js — Penerima Manfaat (Beneficiary Tracker)
 // PMIS DFW Indonesia
@@ -667,6 +669,8 @@ window.handleBenImportFile = function (input) {
       const raw     = XLSX.utils.sheet_to_json(ws, { defval: '' });
       const rows    = raw.map(r => mapFlatRow(normalizeRow(r))).filter(r => r.name);
       window._benImportRows = rows;
+  window._benImportSessionId += 1;
+  window._benDupHandledSessionId = 0;
       previewBenImport(rows);
     } catch(err) {
       showBenImportMsg('❌ Gagal baca file: ' + err.message, 'error');
@@ -731,13 +735,6 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
-function getBenImportName(r, dupDecision) {
-  if (dupDecision !== 'new') return r.name;
-  const base = (r.name || '').trim();
-  const phone = (r.phone || '').trim().replace(/\s+/g,'');
-  return phone ? `${base} (${phone})` : `${base} (baru)`;
-}
-
 window.runBenImport = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
@@ -775,13 +772,15 @@ window.runBenImport = async function () {
   for (const r of rows) {
     const dupDecision = (window._benDupDecisions || {})[r.name] || '';
     if (dupDecision === 'skip') { processed++; updateProgress(); continue; }
+    if (dupDecision === 'update') { /* allowed */ }
+    if (dupDecision === 'new') { /* allowed */ }
     // ── STEP 1: Upsert beneficiary ────────────────────────────────
     const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
     let benId = benIdCache[cacheKey];
 
     if (!benId) {
       const payload = {
-        name       : getBenImportName(r, dupDecision),
+        name       : (dupDecision === 'new' ? forceNewName : r.name),
         phone      : r.phone || null,
         gender     : normGender(r.gender) || null,
         birth_year : parseInt(r.birth_year) || null,
@@ -1366,6 +1365,10 @@ window.openEditBenModal = async function (id) {
 window.checkBenDuplicates = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
+  if (window._benDupHandledSessionId === window._benImportSessionId) {
+    window.runBenImport();
+    return;
+  }
 
   const _client = window.client || client;
   const btn = document.getElementById('benImportConfirmBtn');
@@ -1415,14 +1418,15 @@ window.checkBenDuplicates = async function () {
 };
 
 function showDuplicateConfirm(dupList) {
-  window._benPendingDupList = dupList;
+  // Buat overlay konfirmasi duplikat
   let overlay = document.getElementById('benDupOverlay');
   if (!overlay) {
     overlay = document.createElement('div');
-    overlay.id = 'benDupOverlay';
+    overlay.id        = 'benDupOverlay';
     overlay.className = 'modal-overlay';
     document.body.appendChild(overlay);
   }
+
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:580px">
       <div class="modal-header">
@@ -1431,7 +1435,8 @@ function showDuplicateConfirm(dupList) {
       </div>
       <div class="modal-body">
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400e">
-          <strong>${dupList.length} orang</strong> ditemukan duplikat. Pilih tindakan lalu klik Lanjutkan Import.
+          <strong>${dupList.length} orang</strong> dalam file Excel memiliki nama yang sama dengan data di sistem, namun nomor HP berbeda.
+          Pilih tindakan untuk masing-masing:
         </div>
         <div style="max-height:320px;overflow-y:auto">
           ${dupList.map((d,i) => `
@@ -1457,11 +1462,11 @@ function showDuplicateConfirm(dupList) {
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
                   <input type="radio" name="dup_${i}" value="update">
-                  Update data di sistem
+                  Update data di sistem dengan data import
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
                   <input type="radio" name="dup_${i}" value="new">
-                  Simpan sebagai orang baru
+                  Simpan sebagai orang baru (beda HP)
                 </label>
               </div>
             </div>`).join('')}
@@ -1469,36 +1474,17 @@ function showDuplicateConfirm(dupList) {
         <div id="benDupMsg" class="form-msg hidden"></div>
         <div class="form-actions" style="margin-top:14px">
           <button class="btn-secondary" onclick="document.getElementById('benDupOverlay').classList.add('hidden')">Batal</button>
-          <button id="benDupContinueBtn" class="btn-primary" onclick="window.applyDupDecisions(window._benPendingDupList || [])">
+          <button class="btn-primary" onclick="applyDupDecisions(${JSON.stringify(dupList).replace(/</g,'\u003c')})">
             ✅ Lanjutkan Import
           </button>
         </div>
       </div>
     </div>`;
+
   overlay.classList.remove('hidden');
 }
 
 window.applyDupDecisions = async function (dupList) {
-  const _client = window.client || client;
-  const decisions = dupList.map((d, i) => {
-    const radio = document.querySelector(`input[name="dup_${i}"]:checked`);
-    return { ...d, decision: radio?.value || 'skip' };
-  });
-  window._benDupDecisions = {};
-  decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
-  document.getElementById('benDupOverlay')?.classList.add('hidden');
-  document.getElementById('benImportConfirmBtn')?.classList.remove('hidden');
-  window.runBenImport();
-};
-
-function getBenImportName(r, dupDecision) {
-  if (dupDecision !== 'new') return r.name;
-  const base = (r.name || '').trim();
-  const phone = (r.phone || '').trim().replace(/\s+/g,'');
-  return phone ? `${base} (${phone})` : `${base} (baru)`;
-}
-
-window.runBenImport = async function () {
   const _client = window.client || client;
   // Baca pilihan user
   const decisions = dupList.map((d, i) => {
