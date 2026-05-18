@@ -475,7 +475,8 @@ window.saveBeneficiary = async function () {
   setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 800);
 };
 
-// ── Detail beneficiary + riwayat kegiatan ─────────────────────────────window.openBenDetail = async function (id) {
+// ── Detail beneficiary + riwayat kegiatan ─────────────────────────────
+window.openBenDetail = async function (id) {
   const _client = window.client || client;
   const ben = _benAllData.find(b => b.id === id);
   if (!ben) return;
@@ -945,7 +946,7 @@ window.runBenImport = async function () {
   setTimeout(() => { closeBenImport(); loadBeneficiaries(); }, logPart ? 2000 : 1500);
 };
 
-function showBenImportMsg(msg, type) {function showBenImportMsg(msg, type) {
+function showBenImportMsg(msg, type) {
   const el = document.getElementById('benImportMsg');
   el.textContent = msg; el.className = `form-msg ${type}`; el.classList.remove('hidden');
 }
