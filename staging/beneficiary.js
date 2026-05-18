@@ -117,6 +117,8 @@ function updateBenStats(projectFilter) {
   document.getElementById('benStatParticip').textContent  = parts.length.toLocaleString('id-ID');
 
   // Label stat card sesuai konteks
+  const participLbl = document.getElementById('benStatParticipLabel');
+  if (participLbl) participLbl.textContent = 'Total Data Terinput';
   const lbl = document.getElementById('benStatUniqueLabel');
   if (lbl) lbl.textContent = projectFilter ? `Penerima — ${projectFilter.length > 25 ? projectFilter.slice(0,25)+'…' : projectFilter}` : 'Total Unik';
 }
@@ -637,6 +639,18 @@ function normGender(v) {
   if (vl.startsWith('p') || vl === 'f' || vl.includes('perempuan') || vl.includes('wanita')) return 'Perempuan';
   return v;
 }
+
+function getBeneficiaryUniqueKey(r) {
+  const name = String(r?.name || '').trim().toLowerCase();
+  const phone = String(r?.phone || '').trim().toLowerCase();
+  const gender = String(normGender(r?.gender || '') || '').trim().toLowerCase();
+  if (name && phone && gender) return `${name}|${phone}|${gender}`;
+  if (name && gender) return `${name}|no-phone|${gender}`;
+  if (name && phone) return `${name}|${phone}|no-gender`;
+  if (name) return `${name}|unverified`;
+  return 'unknown|unverified';
+}
+
 function parseDate(v) {
   if (!v) return null;
   const s = String(v).trim();
@@ -683,7 +697,7 @@ function previewBenImport(rows) {
     return;
   }
   // Hitung unik
-  const uniquePeople   = new Set(rows.map(r => `${r.name}|${r.phone}`)).size;
+  const uniquePeople = new Set(rows.map(r => getBeneficiaryUniqueKey(r))).size;
   const uniqueProjects = new Set(rows.map(r => r.project_name).filter(Boolean)).size;
   const uniqueActs     = new Set(rows.map(r => `${r.project_name}|${r.activity_name}`).filter(Boolean)).size;
 
@@ -859,7 +873,7 @@ window.runBenImport = async function () {
   const uniqueBen = Object.keys(benIdCache).length;
 
   let msg = `🎉 ${uniqueBen} penerima manfaat tersimpan`;
-  if (okPart)   msg += ` • ${okPart} partisipasi terekam`;
+  if (okPart)   msg += ` • ${okPart} data aktivitas terekam`;
   if (logPart)  msg += ` (${logPart} sebagai log bebas)`;
   if (skipPart) msg += ` • ${skipPart} gagal`;
   showBenImportMsg(msg + '.', 'success');
