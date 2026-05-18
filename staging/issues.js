@@ -68,8 +68,8 @@ window.loadIssues = async function () {
     { data: updates, error: updErr },
   ] = await Promise.all([
     client
-      .from('v_issues_dashboard')  // use view for stats
-      .select('*')
+      .from('issues')
+      .select('id, title, description, category, severity, status, location_id, province, location_name, date_occurred, date_reported, source_type, source_link, source_hash, tags, created_by, created_at, updated_at')
       .order('created_at', { ascending: false }),
     client
       .from('issue_updates')

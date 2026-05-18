@@ -37,7 +37,8 @@
       <ul class="nav-submenu" id="projectSubmenu"></ul>
       <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
       <li data-tab="beneficiary" onclick="loadBeneficiaries();populateBenProjectFilter()"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Penerima Manfaat</span></li>
-      <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
+      <li data-tab="issues"><span class="nav-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Isu &amp; Kasus</span></li>
+        <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
   </div>
@@ -1051,6 +1052,19 @@ function closeSidebar(){
     </div>
   </div>
 </div>
+
+
+<script>
+window.__openIssuesTab = function(){
+  if (typeof loadIssues === 'function') loadIssues();
+};
+document.addEventListener('click', function(e){
+  const el = e.target.closest('[data-tab="issues"]');
+  if (el && typeof switchTab === 'function') {
+    setTimeout(function(){ if (typeof loadIssues === 'function') loadIssues(); }, 50);
+  }
+});
+</script>
 
 </body>
 </html>
