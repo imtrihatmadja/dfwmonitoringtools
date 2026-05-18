@@ -731,6 +731,14 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
+function getBenImportName(r, dupDecision) {
+  if (dupDecision !== 'new') return r.name;
+  const base = (r.name || '').trim();
+  const phone = (r.phone || '').trim().replace(/\s+/g,'');
+  const stamp = Date.now().toString().slice(-5);
+  return phone ? `${base} (${phone}-${stamp})` : `${base} (baru-${stamp})`;
+}
+
 window.runBenImport = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
@@ -766,7 +774,7 @@ window.runBenImport = async function () {
   const benIdCache = {}; // "name|phone" → uuid
 
   for (const r of rows) {
-    const dupDecision = (window._benDupDecisions || {})[r.name] || (window._benDupDecisions || {})[(r.name||'').toLowerCase().trim()] || '';
+    const dupDecision = (window._benDupDecisions || {})[r.name] || '';
     if (dupDecision === 'skip') { processed++; updateProgress(); continue; }
     // ── STEP 1: Upsert beneficiary ────────────────────────────────
     const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
@@ -1358,26 +1366,16 @@ window.openEditBenModal = async function (id) {
 // ══════════════════════════════════════════════════════════════
 
 window.checkBenDuplicates = async function () {
-  benDbg('checkBenDuplicates start');
   const rows = window._benImportRows || [];
   if (!rows.length) return;
-  if (window._benImportLock) { benDbg('duplicate check skipped: import lock active'); return; }
-  if (window._benDupHandledSessionId === window._benImportSessionId) {
-    benDbg('duplicate check skipped: handled session');
-    window.runBenImport();
-    return;
-  }
 
   const _client = window.client || client;
   const btn = document.getElementById('benImportConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; }
 
   const norm = (v) => String(v || '').toLowerCase().trim().replace(/\s+/g, ' ');
-  const keyOf = (r) => [norm(r.name), norm(r.phone), norm(r.location), norm(r.gender), norm(r.occupation)].join('|');
-
-  const importKeys = rows.map(r => keyOf(r)).filter(k => k.split('|')[0]);
-  const importNames = [...new Set(rows.map(r => norm(r.name)).filter(Boolean))];
-  if (!importNames.length) {
+  const names = [...new Set(rows.map(r => norm(r.name)).filter(Boolean))];
+  if (!names.length) {
     if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
     return window.runBenImport();
   }
@@ -1385,51 +1383,39 @@ window.checkBenDuplicates = async function () {
   const { data: existing, error: err } = await _client
     .from('beneficiaries')
     .select('id,name,phone,gender,location,occupation')
-    .in('name', importNames.map(n => n));
+    .in('name', names.map(n => n));
 
   if (err) {
-    benDbg('duplicate query error: ' + err.message);
     if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
     return window.runBenImport();
   }
 
-  const existingRows = existing || [];
   const dupList = [];
   const seen = new Set();
-
-  rows.forEach(r => {
-    const rName = norm(r.name);
-    if (!rName) return;
-    const candidates = existingRows.filter(db => norm(db.name) === rName);
-    candidates.forEach(db => {
-      const samePhone = norm(db.phone) === norm(r.phone);
-      const sameLoc = norm(db.location) === norm(r.location);
-      const sameGender = norm(db.gender) === norm(r.gender);
-      const sameOcc = norm(db.occupation) === norm(r.occupation);
-      // Duplikat hanya jika nama sama dan minimal 1 detail penting sama, tapi belum identik total.
-      const strongMatch = samePhone || (sameLoc && sameGender) || sameOcc;
-      if (!strongMatch) return;
-      const uniq = `${rName}|${norm(r.phone)}|${db.id}`;
-      if (seen.has(uniq)) return;
-      seen.add(uniq);
+  (existing || []).forEach(db => {
+    const dbName = norm(db.name);
+    rows.forEach(r => {
+      if (norm(r.name) !== dbName) return;
+      if (norm(r.phone) !== norm(db.phone)) return; // only exact name+phone duplicates
+      const key = `${db.id}|${dbName}|${norm(r.phone)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
       dupList.push({
-        importName  : r.name,
-        importPhone : r.phone || '-',
-        importLoc   : r.location || '-',
-        dbId        : db.id,
-        dbPhone     : db.phone || '-',
-        dbLoc       : db.location || '-',
-        dbGender    : db.gender || '-',
+        importName: r.name,
+        importPhone: r.phone || '-',
+        importLoc: r.location || '-',
+        dbId: db.id,
+        dbPhone: db.phone || '-',
+        dbLoc: db.location || '-',
+        dbGender: db.gender || '-',
       });
     });
   });
 
   if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
-  benDbg('dupList found: ' + dupList.length);
 
   if (!dupList.length) {
-    window.runBenImport();
-    return;
+    return window.runBenImport();
   }
 
   showDuplicateConfirm(dupList);
