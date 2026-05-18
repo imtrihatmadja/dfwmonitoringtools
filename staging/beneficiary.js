@@ -732,8 +732,6 @@ function previewBenImport(rows) {
 
 // ── runBenImport ──────────────────────────────────────────────────────
 window.runBenImport = async function () {
-  const errBox = document.getElementById('benImportMsg');
-  if (errBox) { errBox.className = 'form-msg hidden'; }
   const rows = window._benImportRows || [];
   if (!rows.length) return;
 
@@ -1358,9 +1356,55 @@ window.openEditBenModal = async function (id) {
 // ══════════════════════════════════════════════════════════════
 // VALIDASI DUPLIKAT — cek sebelum import
 // ══════════════════════════════════════════════════════════════
-
 window.checkBenDuplicates = async function () {
-  return window.runBenImport();
+  const rows = window._benImportRows || [];
+  if (!rows.length) return;
+
+  const _client = window.client || client;
+  const btn = document.getElementById('benImportConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; }
+
+  // Ambil semua nama yang ada di import
+  const importNames = [...new Set(rows.map(r => r.name.toLowerCase().trim()))];
+
+  // Cari yang sudah ada di DB dengan nama sama tapi HP berbeda
+  const { data: existing } = await _client.from('beneficiaries')
+    .select('id,name,phone,gender,location,occupation')
+    .in('name', rows.map(r => r.name));
+
+  const existMap = {};
+  (existing||[]).forEach(e => { existMap[e.name.toLowerCase()] = existMap[e.name.toLowerCase()] || []; existMap[e.name.toLowerCase()].push(e); });
+
+  // Deteksi duplikat potensial: nama sama, HP berbeda
+  const dupList = [];
+  rows.forEach(r => {
+    const key = r.name.toLowerCase().trim();
+    const inDB = existMap[key] || [];
+    inDB.forEach(db => {
+      if (db.phone !== (r.phone||'') && !dupList.find(d => d.importName === r.name && d.dbId === db.id)) {
+        dupList.push({
+          importName  : r.name,
+          importPhone : r.phone || '-',
+          importLoc   : r.location || '-',
+          dbId        : db.id,
+          dbPhone     : db.phone || '-',
+          dbLoc       : db.location || '-',
+          dbGender    : db.gender || '-',
+        });
+      }
+    });
+  });
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
+
+  if (!dupList.length) {
+    // Tidak ada duplikat — langsung import
+    window.runBenImport();
+    return;
+  }
+
+  // Tampilkan modal konfirmasi duplikat
+  showDuplicateConfirm(dupList);
 };
 
 function showDuplicateConfirm(dupList) {
@@ -1478,3 +1522,24 @@ window.initBenModalStability = function () {
     overlay.dataset.boundClose = 'true';
   }
 };
+
+
+const benResearchObserver = new MutationObserver(() => {
+  const btn = document.getElementById('benResearchBtn');
+  if (btn && (btn.classList.contains('hidden') || btn.style.display === 'none' || btn.style.visibility === 'hidden')) {
+    restoreBenResearchButton();
+  }
+});
+
+function initBenResearchPersistence() {
+  const target = document.getElementById('beneficiarySection') || document.body;
+  if (target) benResearchObserver.observe(target, { attributes: true, childList: true, subtree: true });
+  restoreBenResearchButton();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(initBenResearchPersistence, 300);
+  setTimeout(restoreBenResearchButton, 1200);
+  setTimeout(restoreBenResearchButton, 3000);
+});
+
