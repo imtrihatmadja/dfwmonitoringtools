@@ -640,6 +640,61 @@
 </div>
 
 
+<div class="tab-content" id="tab-knowledge">
+  <div style="background:#2563eb;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:10px;border-radius:10px 10px 0 0;">
+    <i class="fa-solid fa-book-open" style="font-size:18px"></i>
+    <span style="font-size:15px;font-weight:700;">Knowledge Management</span>
+    <span style="font-size:12px;opacity:.75;margin-left:4px;">Dokumen · Lessons Learned · Topik</span>
+  </div>
+  <div style="padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;min-height:400px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;min-width:140px;flex:1;">
+        <div style="font-size:11px;color:#64748b;">Total Dokumen</div>
+        <div id="kmDocCount" style="font-size:22px;font-weight:800;color:#0f172a;">0</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;min-width:140px;flex:1;">
+        <div style="font-size:11px;color:#64748b;">Lessons Learned</div>
+        <div id="kmLessonCount" style="font-size:22px;font-weight:800;color:#0f172a;">0</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;min-width:140px;flex:1;">
+        <div style="font-size:11px;color:#64748b;">Topik Aktif</div>
+        <div id="kmTopicCount" style="font-size:22px;font-weight:800;color:#0f172a;">0</div>
+      </div>
+    </div>
+
+    <div class="table-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <input type="text" class="search-input" id="kmSearchInput" placeholder="Cari dokumen, lesson, topik..." oninput="filterKMData()" style="min-width:240px;">
+      <select id="kmFilterType" onchange="filterKMData()" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;">
+        <option value="">Semua Jenis</option>
+        <option value="document">Dokumen</option>
+        <option value="lesson">Lesson Learned</option>
+      </select>
+      <select id="kmFilterTopic" onchange="filterKMData()" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;">
+        <option value="">Semua Topik</option>
+      </select>
+      <button class="btn-primary btn-sm" onclick="openAddKMModal()"><i class="fa-solid fa-plus"></i> Tambah</button>
+      <button class="btn-secondary btn-sm" onclick="loadKMData()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+    </div>
+
+    <div id="kmMsg" class="form-msg hidden" style="margin-bottom:12px;"></div>
+    <div class="tab-links" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn-secondary btn-sm" onclick="showKMTab('documents')">Dokumen</button>
+      <button class="btn-secondary btn-sm" onclick="showKMTab('lessons')">Lessons Learned</button>
+      <button class="btn-secondary btn-sm" onclick="showKMTab('topics')">Topik</button>
+    </div>
+
+    <div id="kmDocumentsWrap">
+      <div class="table-wrap"><table><thead><tr><th>No</th><th>Judul</th><th>Topik</th><th>Proyek</th><th>Jenis</th><th>Pemilik</th><th>Link</th></tr></thead><tbody id="kmDocumentsBody"></tbody></table></div>
+    </div>
+    <div id="kmLessonsWrap" class="hidden" style="display:none;">
+      <div class="table-wrap"><table><thead><tr><th>No</th><th>Judul</th><th>Topik</th><th>Proyek</th><th>Lesson</th><th>Aksi</th></tr></thead><tbody id="kmLessonsBody"></tbody></table></div>
+    </div>
+    <div id="kmTopicsWrap" class="hidden" style="display:none;">
+      <div class="table-wrap"><table><thead><tr><th>No</th><th>Topik</th><th>Deskripsi</th><th>Status</th></tr></thead><tbody id="kmTopicsBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
 <div class="tab-content" id="tab-archive">
   <div class="table-toolbar">
     <input type="text" class="search-input" id="archiveSearchInput"
@@ -768,6 +823,7 @@
   <script src="documents.js"></script>
   <script src="impact.js"></script>
   <script src="print-report.js"></script>
+<script src="km.js"></script>
 <script>
 function toggleSidebar(){
   const s=document.getElementById('mainSidebar');
