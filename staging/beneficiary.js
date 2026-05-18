@@ -731,6 +731,15 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
+
+function getBenImportName(r, dupDecision) {
+  if (dupDecision !== 'new') return r.name;
+  const base = (r.name || '').trim();
+  const phone = (r.phone || '').trim().replace(/\s+/g,'');
+  if (!base) return base;
+  return phone ? `${base} (${phone})` : `${base} (baru)`;
+}
+
 window.runBenImport = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
@@ -774,7 +783,7 @@ window.runBenImport = async function () {
 
     if (!benId) {
       const payload = {
-        name       : (dupDecision === 'new' ? forceNewName : r.name),
+        name       : getBenImportName(r, dupDecision),
         phone      : r.phone || null,
         gender     : normGender(r.gender) || null,
         birth_year : parseInt(r.birth_year) || null,
@@ -1504,6 +1513,7 @@ window.applyDupDecisions = async function (dupList) {
   }
 
   document.getElementById('benDupOverlay')?.classList.add('hidden');
+  document.getElementById('benImportConfirmBtn')?.classList.remove('hidden');
 
   // Tandai rows yang harus di-'new' agar tidak di-merge saat upsert
   window._benDupDecisions = {};
