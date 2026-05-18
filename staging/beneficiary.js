@@ -1,5 +1,17 @@
-window._benImportSessionId = 0;
-window._benDupHandledSessionId = 0;
+
+window._benDebug = [];
+function benDbg(msg) {
+  window._benDebug.push({ t: new Date().toISOString(), msg });
+  let el = document.getElementById('benDebugPanel');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'benDebugPanel';
+    el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;max-width:420px;max-height:260px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:12px;border:1px solid #334155;font-size:11px;line-height:1.4;box-shadow:0 10px 30px rgba(0,0,0,.25)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<div style="font-weight:700;margin-bottom:8px;color:#fff">Beneficiary Import Debug</div>' + window._benDebug.slice(-12).map(x => `<div style="margin-bottom:6px"><span style="color:#94a3b8">${x.t.slice(11,19)}</span> · ${x.msg}</div>`).join('');
+}
+
 // =====================================================================
 // beneficiary.js — Penerima Manfaat (Beneficiary Tracker)
 // PMIS DFW Indonesia
@@ -669,8 +681,6 @@ window.handleBenImportFile = function (input) {
       const raw     = XLSX.utils.sheet_to_json(ws, { defval: '' });
       const rows    = raw.map(r => mapFlatRow(normalizeRow(r))).filter(r => r.name);
       window._benImportRows = rows;
-  window._benImportSessionId += 1;
-  window._benDupHandledSessionId = 0;
       previewBenImport(rows);
     } catch(err) {
       showBenImportMsg('❌ Gagal baca file: ' + err.message, 'error');
@@ -735,7 +745,7 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
-window.runBenImport = async function () {
+window.runBenImport = async function () { benDbg('runBenImport start');
   const rows = window._benImportRows || [];
   if (!rows.length) return;
 
@@ -771,9 +781,8 @@ window.runBenImport = async function () {
 
   for (const r of rows) {
     const dupDecision = (window._benDupDecisions || {})[r.name] || '';
+    benDbg('row: ' + r.name + ' decision=' + (dupDecision||'none'));
     if (dupDecision === 'skip') { processed++; updateProgress(); continue; }
-    if (dupDecision === 'update') { /* allowed */ }
-    if (dupDecision === 'new') { /* allowed */ }
     // ── STEP 1: Upsert beneficiary ────────────────────────────────
     const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
     let benId = benIdCache[cacheKey];
@@ -789,11 +798,13 @@ window.runBenImport = async function () {
         email      : r.email || null,
         note       : r.note || null,
       };
+      benDbg('upsert beneficiary: ' + payload.name + ' / ' + (payload.phone||''));
       const { data: upserted, error: errBen } = await _client
         .from('beneficiaries')
         .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: false })
         .select('id')
         .single();
+      if (errBen) benDbg('upsert err: ' + errBen.message);
 
       if (!errBen && upserted) {
         benId = upserted.id;
@@ -1362,13 +1373,9 @@ window.openEditBenModal = async function (id) {
 // ══════════════════════════════════════════════════════════════
 // VALIDASI DUPLIKAT — cek sebelum import
 // ══════════════════════════════════════════════════════════════
-window.checkBenDuplicates = async function () {
+window.checkBenDuplicates = async function () { benDbg('checkBenDuplicates start');
   const rows = window._benImportRows || [];
   if (!rows.length) return;
-  if (window._benDupHandledSessionId === window._benImportSessionId) {
-    window.runBenImport();
-    return;
-  }
 
   const _client = window.client || client;
   const btn = document.getElementById('benImportConfirmBtn');
@@ -1410,10 +1417,12 @@ window.checkBenDuplicates = async function () {
   if (!dupList.length) {
     // Tidak ada duplikat — langsung import
     window.runBenImport();
+  setTimeout(() => { window._benImportLock = false; }, 3000);
     return;
   }
 
   // Tampilkan modal konfirmasi duplikat
+  benDbg('dupList found: ' + dupList.length);
   showDuplicateConfirm(dupList);
 };
 
@@ -1484,7 +1493,7 @@ function showDuplicateConfirm(dupList) {
   overlay.classList.remove('hidden');
 }
 
-window.applyDupDecisions = async function (dupList) {
+window.applyDupDecisions = async function (dupList) { benDbg('applyDupDecisions ' + (dupList||[]).length);
   const _client = window.client || client;
   // Baca pilihan user
   const decisions = dupList.map((d, i) => {
@@ -1520,6 +1529,7 @@ window.applyDupDecisions = async function (dupList) {
   decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
 
   window.runBenImport();
+  setTimeout(() => { window._benImportLock = false; }, 3000);
 };
 
 
