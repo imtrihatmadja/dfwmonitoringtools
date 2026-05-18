@@ -64,8 +64,8 @@ window.loadIssues = async function () {
 
   // Load issues + updates in parallel
   const [
-    { data: issues, error: issErr },
-    { data: updates, error: updErr },
+    issuesRes,
+    updatesRes,
   ] = await Promise.all([
     client
       .from('issues')
@@ -76,6 +76,10 @@ window.loadIssues = async function () {
       .select('id, issue_id, update_text, evidence_urls, updated_by, updated_at')
       .order('updated_at', { ascending: false }),
   ]);
+  const issues = issuesRes.data || [];
+  const issErr = issuesRes.error;
+  const updates = updatesRes.data || [];
+  const updErr = updatesRes.error;
 
   if (issErr) {
     showIssueLoading(false);
@@ -84,6 +88,7 @@ window.loadIssues = async function () {
       errEl.textContent = 'Gagal memuat isu: ' + issErr.message;
       errEl.style.display = 'block';
     }
+    console.error('loadIssues issues error', issErr);
     return;
   }
 
@@ -98,12 +103,17 @@ window.loadIssues = async function () {
     ...i,
     updates: updMap[i.id] || [],
   }));
+  console.log('issues loaded', issueAllData.length, issueAllData.slice(0,3));
   issueFilteredData = [...issueAllData];
   issueCurrentPage = 1;
 
   renderIssueStats();
   renderIssueTable();
   showIssueLoading(false);
+  if (!issueAllData.length) {
+    const body = document.getElementById('issueTableBody');
+    if (body) body.innerHTML = `<tr><td colspan=\"8\" style=\"text-align:center;padding:28px;color:#94a3b8\">Belum ada data isu. Jalankan schema_issues_FIXED.sql dulu, atau tambah data manual.</td></tr>`;
+  }
 };
 
 // ── Stats cards ───────────────────────────────────────────────
@@ -122,6 +132,11 @@ function renderIssueStats() {
 function renderIssueTable() {
   const tbody = document.getElementById('issueTableBody');
   if (!tbody) return;
+  if (!issueAllData.length) {
+    tbody.innerHTML = `<tr><td colspan=\"8\" style=\"text-align:center;padding:28px;color:#94a3b8\">Belum ada data isu di database.</td></tr>`;
+    renderIssuePagination(0);
+    return;
+  }
 
   const total = issueFilteredData.length;
   const start = (issueCurrentPage - 1) * ISSUE_PAGE_SIZE;
