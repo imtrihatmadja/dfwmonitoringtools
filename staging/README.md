@@ -1,111 +1,46 @@
-# ProMonitor PMIS — DFW Indonesia
-## Paket Final + Knowledge Base RSS Stabil
+# ProMonitor PMIS — DFW Indonesia  
+## Versi 5 / Tahap 1 — Siap Deploy
 
 ---
 
-## WAJIB: Jalankan SQL terlebih dahulu
+## ⚠️  WAJIB: Jalankan SQL dulu sebelum upload file
 
-Sebelum upload file ke GitHub, jalankan dua schema berikut di Supabase SQL Editor:
-
-1. `schema_v5_tahap1.sql`
-2. `schema_knowledge_base.sql`
-
-Urutan:
-1. Buka project Supabase Anda.
-2. Masuk ke **SQL Editor**.
-3. Jalankan `schema_v5_tahap1.sql`.
-4. Setelah sukses, jalankan `schema_knowledge_base.sql`.
-5. Pastikan tidak ada error.
+1. Buka https://supabase.com → project Anda → **SQL Editor**  
+2. Copy-paste isi file `schema_v5_tahap1.sql` → klik **Run**  
+3. Tunggu sampai tidak ada error, baru lanjut ke deploy file.
 
 ---
 
-## File yang harus di-upload / replace
+## Deploy ke GitHub Pages
 
-Upload dan replace file berikut di repo GitHub:
-
-- `index.html`
-- `app.js`
-- `style.css`
-- `documents.js`
-- `impact.js`
-- `print-report.js`
-- `import.js`
-- `knowledge.js`
-- `schema_v5_tahap1.sql`
-- `schema_knowledge_base.sql`
-
-Catatan:
-- File `.sql` tidak dijalankan oleh browser, tetapi tetap disimpan di repo sebagai referensi deploy.
-- `knowledge.js` wajib ikut di-upload karena ini inti fitur RSS Knowledge Base.
+1. Buka repo `dfwmonitoringtools` di GitHub  
+2. Upload / replace semua file berikut:
+   - `index.html`
+   - `app.js`
+   - `style.css`
+   - `documents.js`
+   - `impact.js`
+   - `print-report.js`
+   - `schema_v5_tahap1.sql` *(referensi, tidak dieksekusi browser)*
+3. Tulis pesan commit, klik **Commit changes**  
+4. Tunggu 1–2 menit → buka URL GitHub Pages Anda
 
 ---
 
-## Langkah deploy
+## Fitur baru di v5 (Tahap 1)
 
-1. Buka repo GitHub proyek Anda.
-2. Upload / replace semua file di atas.
-3. Tulis commit message, misalnya: `fix knowledge base rss stable package`
-4. Klik **Commit changes**
-5. Tunggu 1–2 menit
-6. Buka GitHub Pages
-7. Lakukan hard refresh dengan `Ctrl + F5`
-
----
-
-## Sumber RSS default yang aman
-
-Paket ini memakai beberapa sumber default yang relatif aman dipakai:
-
-- Google News RSS: Perikanan Indonesia
-- Google News RSS: IUU Fishing Indonesia
-- Google News RSS: Hak Buruh Nelayan
-- Google News RSS: Trafficking Nelayan
-- Google News RSS: Forced Labour Fishing
-- Antara RSS Perikanan
-- Tempo RSS Lingkungan
-
-Catatan penting:
-- Jangan masukkan halaman biasa seperti `/tag/...` atau halaman HTML umum.
-- Gunakan feed yang benar, biasanya mengandung `/rss`, `/feed`, atau `.xml`.
+| # | Fitur | Detail |
+|---|---|---|
+| 1 | **project_id di semua tabel** | Relasi UUID menggantikan project_name sebagai kunci utama |
+| 2 | **Soft delete / Arsip** | Hapus = arsip, data tetap aman. Tab baru "Arsip Proyek" di sidebar |
+| 3 | **Pulihkan proyek** | Proyek yang diarsipkan bisa dikembalikan dengan tombol Pulihkan |
+| 4 | **Audit log** | Setiap simpan/edit/arsip/pulihkan tercatat di tabel audit_log |
+| 5 | **DB trigger rename** | Ubah nama proyek → semua tabel turunan ikut update otomatis via trigger |
+| 6 | **Save lebih aman** | Upsert menangkap UUID dari Supabase dan meneruskan ke semua insert turunan |
 
 ---
 
-## Jika masih muncul HTTP 422
+## Catatan pengembangan selanjutnya
 
-Biasanya penyebabnya salah satu dari ini:
-
-1. URL yang dimasukkan bukan RSS feed valid.
-2. Layanan parser publik `rss2json` sedang limit / sibuk.
-3. Feed sumber menolak parser pihak ketiga.
-4. Browser masih cache file JS lama.
-
-Coba langkah berikut:
-- Ganti ke feed default dulu.
-- Hard refresh browser.
-- Coba lagi 1–2 menit kemudian.
-- Pastikan schema `schema_knowledge_base.sql` terbaru sudah dijalankan.
-
----
-
-## Catatan teknis
-
-- Aplikasi saat ini memakai Supabase anon client dari `app.js`.
-- Karena itu policy RLS pada Knowledge Base harus membuka akses untuk `anon` dan `authenticated`.
-- Field database untuk Knowledge Base menggunakan format snake_case, misalnya:
-  - `feed_name`
-  - `feed_url`
-  - `source_name`
-  - `source_url`
-  - `published_at`
-
----
-
-## Rencana tahap berikutnya
-
-Penguatan tahap berikutnya yang disarankan:
-
-- Edge Function / proxy RSS milik sendiri agar tidak tergantung `rss2json`
-- Login user Supabase/Auth
-- Role access admin / staff
-- Tagging artikel per topik dan proyek
-- Sinkronisasi artikel ke dokumen / evidence project
+- `AUDIT_USER = "Tim"` di `app.js` → ganti dengan nama login user setelah fitur auth ditambahkan
+- Tahap 2 berikutnya: Login Gmail + Role access (Admin / Program Manager / Staff)
