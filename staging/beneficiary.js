@@ -731,12 +731,10 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
-
 function getBenImportName(r, dupDecision) {
   if (dupDecision !== 'new') return r.name;
   const base = (r.name || '').trim();
   const phone = (r.phone || '').trim().replace(/\s+/g,'');
-  if (!base) return base;
   return phone ? `${base} (${phone})` : `${base} (baru)`;
 }
 
@@ -1417,15 +1415,14 @@ window.checkBenDuplicates = async function () {
 };
 
 function showDuplicateConfirm(dupList) {
-  // Buat overlay konfirmasi duplikat
+  window._benPendingDupList = dupList;
   let overlay = document.getElementById('benDupOverlay');
   if (!overlay) {
     overlay = document.createElement('div');
-    overlay.id        = 'benDupOverlay';
+    overlay.id = 'benDupOverlay';
     overlay.className = 'modal-overlay';
     document.body.appendChild(overlay);
   }
-
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:580px">
       <div class="modal-header">
@@ -1434,8 +1431,7 @@ function showDuplicateConfirm(dupList) {
       </div>
       <div class="modal-body">
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400e">
-          <strong>${dupList.length} orang</strong> dalam file Excel memiliki nama yang sama dengan data di sistem, namun nomor HP berbeda.
-          Pilih tindakan untuk masing-masing:
+          <strong>${dupList.length} orang</strong> ditemukan duplikat. Pilih tindakan lalu klik Lanjutkan Import.
         </div>
         <div style="max-height:320px;overflow-y:auto">
           ${dupList.map((d,i) => `
@@ -1461,11 +1457,11 @@ function showDuplicateConfirm(dupList) {
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
                   <input type="radio" name="dup_${i}" value="update">
-                  Update data di sistem dengan data import
+                  Update data di sistem
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
                   <input type="radio" name="dup_${i}" value="new">
-                  Simpan sebagai orang baru (beda HP)
+                  Simpan sebagai orang baru
                 </label>
               </div>
             </div>`).join('')}
@@ -1473,17 +1469,36 @@ function showDuplicateConfirm(dupList) {
         <div id="benDupMsg" class="form-msg hidden"></div>
         <div class="form-actions" style="margin-top:14px">
           <button class="btn-secondary" onclick="document.getElementById('benDupOverlay').classList.add('hidden')">Batal</button>
-          <button class="btn-primary" onclick="applyDupDecisions(${JSON.stringify(dupList).replace(/</g,'\u003c')})">
+          <button id="benDupContinueBtn" class="btn-primary" onclick="window.applyDupDecisions(window._benPendingDupList || [])">
             ✅ Lanjutkan Import
           </button>
         </div>
       </div>
     </div>`;
-
   overlay.classList.remove('hidden');
 }
 
 window.applyDupDecisions = async function (dupList) {
+  const _client = window.client || client;
+  const decisions = dupList.map((d, i) => {
+    const radio = document.querySelector(`input[name="dup_${i}"]:checked`);
+    return { ...d, decision: radio?.value || 'skip' };
+  });
+  window._benDupDecisions = {};
+  decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
+  document.getElementById('benDupOverlay')?.classList.add('hidden');
+  document.getElementById('benImportConfirmBtn')?.classList.remove('hidden');
+  window.runBenImport();
+};
+
+function getBenImportName(r, dupDecision) {
+  if (dupDecision !== 'new') return r.name;
+  const base = (r.name || '').trim();
+  const phone = (r.phone || '').trim().replace(/\s+/g,'');
+  return phone ? `${base} (${phone})` : `${base} (baru)`;
+}
+
+window.runBenImport = async function () {
   const _client = window.client || client;
   // Baca pilihan user
   const decisions = dupList.map((d, i) => {
@@ -1513,7 +1528,6 @@ window.applyDupDecisions = async function (dupList) {
   }
 
   document.getElementById('benDupOverlay')?.classList.add('hidden');
-  document.getElementById('benImportConfirmBtn')?.classList.remove('hidden');
 
   // Tandai rows yang harus di-'new' agar tidak di-merge saat upsert
   window._benDupDecisions = {};
