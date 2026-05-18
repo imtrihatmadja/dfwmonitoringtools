@@ -61,6 +61,8 @@ function fmtDatetime(d) {
 window.loadIssues = async function () {
   const client = window.client;
   showIssueLoading(true);
+  const dbg = document.getElementById('issueLoadError');
+  if (dbg) { dbg.style.display = 'block'; dbg.textContent = 'Memuat data isu...'; }
 
   // Load issues + updates in parallel
   const [
@@ -104,6 +106,8 @@ window.loadIssues = async function () {
     updates: updMap[i.id] || [],
   }));
   console.log('issues loaded', issueAllData.length, issueAllData.slice(0,3));
+  const dbg2 = document.getElementById('issueLoadError');
+  if (dbg2) { dbg2.style.display = 'none'; dbg2.textContent = ''; }
   issueFilteredData = [...issueAllData];
   issueCurrentPage = 1;
 
