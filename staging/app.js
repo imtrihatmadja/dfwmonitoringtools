@@ -1778,3 +1778,23 @@ document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
 loadProjects();
+
+
+// ===== DEBUG: log missing resource paths =====
+window.addEventListener('error', function(e) {
+  const t = e.target || e.srcElement;
+  if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK' || t.tagName === 'IMG')) {
+    console.warn('[resource 404]', t.tagName, t.src || t.href || '(no src/href)');
+  }
+}, true);
+
+window.addEventListener('DOMContentLoaded', function() {
+  const dbg = document.getElementById('issueLoadError');
+  if (dbg) {
+    dbg.style.display = 'block';
+    dbg.style.background = '#eff6ff';
+    dbg.style.color = '#2563eb';
+    dbg.style.border = '1px solid #bfdbfe';
+    dbg.textContent = 'Debug aktif: buka Console untuk melihat file/resource yang 404.';
+  }
+});
