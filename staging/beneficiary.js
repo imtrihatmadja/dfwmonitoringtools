@@ -731,20 +731,22 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
-function getBenImportName(r, dupDecision) {
-  if (dupDecision !== 'new') return r.name;
-  const base = (r.name || '').trim();
-  const phone = (r.phone || '').trim().replace(/\s+/g,'');
-  const stamp = Date.now().toString().slice(-5);
-  return phone ? `${base} (${phone}-${stamp})` : `${base} (baru-${stamp})`;
-}
+window.startBenImport = async function () {
+  try {
+    await window.runBenImport();
+  } catch (e) {
+    const el = document.getElementById('benImportMsg');
+    if (el) { el.textContent = 'Import gagal: ' + e.message; el.className = 'form-msg error'; el.classList.remove('hidden'); }
+    throw e;
+  }
+};
 
 window.runBenImport = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
 
   const btn = document.getElementById('benImportConfirmBtn');
-  btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Import…'; }
   const _client = window.client || client;
 
   // Progress bar
@@ -863,7 +865,7 @@ window.runBenImport = async function () {
     updateProgress();
   }
 
-  btn.disabled = false; btn.textContent = 'Import Sekarang';
+  if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
   const uniqueBen = Object.keys(benIdCache).length;
 
   let msg = `🎉 ${uniqueBen} penerima manfaat tersimpan`;
@@ -1364,61 +1366,57 @@ window.openEditBenModal = async function (id) {
 // ══════════════════════════════════════════════════════════════
 // VALIDASI DUPLIKAT — cek sebelum import
 // ══════════════════════════════════════════════════════════════
-
 window.checkBenDuplicates = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
 
   const _client = window.client || client;
   const btn = document.getElementById('benImportConfirmBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; } }, 1200); }
 
-  const norm = (v) => String(v || '').toLowerCase().trim().replace(/\s+/g, ' ');
-  const names = [...new Set(rows.map(r => norm(r.name)).filter(Boolean))];
-  if (!names.length) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
-    return window.runBenImport();
-  }
+  // Ambil semua nama yang ada di import
+  const importNames = [...new Set(rows.map(r => r.name.toLowerCase().trim()))];
 
-  const { data: existing, error: err } = await _client
-    .from('beneficiaries')
+  // Cari yang sudah ada di DB dengan nama sama tapi HP berbeda
+  const { data: existing } = await _client.from('beneficiaries')
     .select('id,name,phone,gender,location,occupation')
-    .in('name', names.map(n => n));
+    .in('name', rows.map(r => r.name));
 
-  if (err) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
-    return window.runBenImport();
-  }
+  const existMap = {};
+  (existing||[]).forEach(e => { existMap[e.name.toLowerCase()] = existMap[e.name.toLowerCase()] || []; existMap[e.name.toLowerCase()].push(e); });
 
+  // Deteksi duplikat potensial: nama sama, HP berbeda
   const dupList = [];
-  const seen = new Set();
-  (existing || []).forEach(db => {
-    const dbName = norm(db.name);
-    rows.forEach(r => {
-      if (norm(r.name) !== dbName) return;
-      if (norm(r.phone) !== norm(db.phone)) return; // only exact name+phone duplicates
-      const key = `${db.id}|${dbName}|${norm(r.phone)}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      dupList.push({
-        importName: r.name,
-        importPhone: r.phone || '-',
-        importLoc: r.location || '-',
-        dbId: db.id,
-        dbPhone: db.phone || '-',
-        dbLoc: db.location || '-',
-        dbGender: db.gender || '-',
-      });
+  rows.forEach(r => {
+    const key = r.name.toLowerCase().trim();
+    const inDB = existMap[key] || [];
+    inDB.forEach(db => {
+      if (db.phone !== (r.phone||'') && !dupList.find(d => d.importName === r.name && d.dbId === db.id)) {
+        dupList.push({
+          importName  : r.name,
+          importPhone : r.phone || '-',
+          importLoc   : r.location || '-',
+          dbId        : db.id,
+          dbPhone     : db.phone || '-',
+          dbLoc       : db.location || '-',
+          dbGender    : db.gender || '-',
+        });
+      }
     });
   });
 
   if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
 
   if (!dupList.length) {
-    return window.runBenImport();
+    // Tidak ada duplikat — langsung import
+    window.runBenImport();
+    return;
   }
 
+  // Tampilkan modal konfirmasi duplikat
   showDuplicateConfirm(dupList);
+  const cbtn = document.getElementById('benImportConfirmBtn');
+  if (cbtn) { cbtn.disabled = false; cbtn.classList.remove('hidden'); cbtn.textContent = 'Import Sekarang'; }
 };
 
 function showDuplicateConfirm(dupList) {
