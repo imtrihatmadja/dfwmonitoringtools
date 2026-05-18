@@ -1,17 +1,3 @@
-
-window._benDebug = [];
-function benDbg(msg) {
-  window._benDebug.push({ t: new Date().toISOString(), msg });
-  let el = document.getElementById('benDebugPanel');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'benDebugPanel';
-    el.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99999;max-width:420px;max-height:260px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:12px;border:1px solid #334155;font-size:11px;line-height:1.4;box-shadow:0 10px 30px rgba(0,0,0,.25)';
-    document.body.appendChild(el);
-  }
-  el.innerHTML = '<div style="font-weight:700;margin-bottom:8px;color:#fff">Beneficiary Import Debug</div>' + window._benDebug.slice(-12).map(x => `<div style="margin-bottom:6px"><span style="color:#94a3b8">${x.t.slice(11,19)}</span> · ${x.msg}</div>`).join('');
-}
-
 // =====================================================================
 // beneficiary.js — Penerima Manfaat (Beneficiary Tracker)
 // PMIS DFW Indonesia
@@ -745,7 +731,7 @@ function previewBenImport(rows) {
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
-window.runBenImport = async function () { benDbg('runBenImport start');
+window.runBenImport = async function () {
   const rows = window._benImportRows || [];
   if (!rows.length) return;
 
@@ -780,8 +766,7 @@ window.runBenImport = async function () { benDbg('runBenImport start');
   const benIdCache = {}; // "name|phone" → uuid
 
   for (const r of rows) {
-    const dupDecision = (window._benDupDecisions || {})[r.name] || '';
-    benDbg('row: ' + r.name + ' decision=' + (dupDecision||'none'));
+    const dupDecision = (window._benDupDecisions || {})[r.name] || (window._benDupDecisions || {})[(r.name||'').toLowerCase().trim()] || '';
     if (dupDecision === 'skip') { processed++; updateProgress(); continue; }
     // ── STEP 1: Upsert beneficiary ────────────────────────────────
     const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
@@ -798,13 +783,11 @@ window.runBenImport = async function () { benDbg('runBenImport start');
         email      : r.email || null,
         note       : r.note || null,
       };
-      benDbg('upsert beneficiary: ' + payload.name + ' / ' + (payload.phone||''));
       const { data: upserted, error: errBen } = await _client
         .from('beneficiaries')
         .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: false })
         .select('id')
         .single();
-      if (errBen) benDbg('upsert err: ' + errBen.message);
 
       if (!errBen && upserted) {
         benId = upserted.id;
@@ -1373,56 +1356,82 @@ window.openEditBenModal = async function (id) {
 // ══════════════════════════════════════════════════════════════
 // VALIDASI DUPLIKAT — cek sebelum import
 // ══════════════════════════════════════════════════════════════
-window.checkBenDuplicates = async function () { benDbg('checkBenDuplicates start');
+
+window.checkBenDuplicates = async function () {
+  benDbg('checkBenDuplicates start');
   const rows = window._benImportRows || [];
   if (!rows.length) return;
+  if (window._benImportLock) { benDbg('duplicate check skipped: import lock active'); return; }
+  if (window._benDupHandledSessionId === window._benImportSessionId) {
+    benDbg('duplicate check skipped: handled session');
+    window.runBenImport();
+    return;
+  }
 
   const _client = window.client || client;
   const btn = document.getElementById('benImportConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; }
 
-  // Ambil semua nama yang ada di import
-  const importNames = [...new Set(rows.map(r => r.name.toLowerCase().trim()))];
+  const norm = (v) => String(v || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const keyOf = (r) => [norm(r.name), norm(r.phone), norm(r.location), norm(r.gender), norm(r.occupation)].join('|');
 
-  // Cari yang sudah ada di DB dengan nama sama tapi HP berbeda
-  const { data: existing } = await _client.from('beneficiaries')
+  const importKeys = rows.map(r => keyOf(r)).filter(k => k.split('|')[0]);
+  const importNames = [...new Set(rows.map(r => norm(r.name)).filter(Boolean))];
+  if (!importNames.length) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
+    return window.runBenImport();
+  }
+
+  const { data: existing, error: err } = await _client
+    .from('beneficiaries')
     .select('id,name,phone,gender,location,occupation')
-    .in('name', rows.map(r => r.name));
+    .in('name', importNames.map(n => n));
 
-  const existMap = {};
-  (existing||[]).forEach(e => { existMap[e.name.toLowerCase()] = existMap[e.name.toLowerCase()] || []; existMap[e.name.toLowerCase()].push(e); });
+  if (err) {
+    benDbg('duplicate query error: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
+    return window.runBenImport();
+  }
 
-  // Deteksi duplikat potensial: nama sama, HP berbeda
+  const existingRows = existing || [];
   const dupList = [];
+  const seen = new Set();
+
   rows.forEach(r => {
-    const key = r.name.toLowerCase().trim();
-    const inDB = existMap[key] || [];
-    inDB.forEach(db => {
-      if (db.phone !== (r.phone||'') && !dupList.find(d => d.importName === r.name && d.dbId === db.id)) {
-        dupList.push({
-          importName  : r.name,
-          importPhone : r.phone || '-',
-          importLoc   : r.location || '-',
-          dbId        : db.id,
-          dbPhone     : db.phone || '-',
-          dbLoc       : db.location || '-',
-          dbGender    : db.gender || '-',
-        });
-      }
+    const rName = norm(r.name);
+    if (!rName) return;
+    const candidates = existingRows.filter(db => norm(db.name) === rName);
+    candidates.forEach(db => {
+      const samePhone = norm(db.phone) === norm(r.phone);
+      const sameLoc = norm(db.location) === norm(r.location);
+      const sameGender = norm(db.gender) === norm(r.gender);
+      const sameOcc = norm(db.occupation) === norm(r.occupation);
+      // Duplikat hanya jika nama sama dan minimal 1 detail penting sama, tapi belum identik total.
+      const strongMatch = samePhone || (sameLoc && sameGender) || sameOcc;
+      if (!strongMatch) return;
+      const uniq = `${rName}|${norm(r.phone)}|${db.id}`;
+      if (seen.has(uniq)) return;
+      seen.add(uniq);
+      dupList.push({
+        importName  : r.name,
+        importPhone : r.phone || '-',
+        importLoc   : r.location || '-',
+        dbId        : db.id,
+        dbPhone     : db.phone || '-',
+        dbLoc       : db.location || '-',
+        dbGender    : db.gender || '-',
+      });
     });
   });
 
   if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
+  benDbg('dupList found: ' + dupList.length);
 
   if (!dupList.length) {
-    // Tidak ada duplikat — langsung import
     window.runBenImport();
-  setTimeout(() => { window._benImportLock = false; }, 3000);
     return;
   }
 
-  // Tampilkan modal konfirmasi duplikat
-  benDbg('dupList found: ' + dupList.length);
   showDuplicateConfirm(dupList);
 };
 
@@ -1493,7 +1502,7 @@ function showDuplicateConfirm(dupList) {
   overlay.classList.remove('hidden');
 }
 
-window.applyDupDecisions = async function (dupList) { benDbg('applyDupDecisions ' + (dupList||[]).length);
+window.applyDupDecisions = async function (dupList) {
   const _client = window.client || client;
   // Baca pilihan user
   const decisions = dupList.map((d, i) => {
@@ -1529,7 +1538,6 @@ window.applyDupDecisions = async function (dupList) { benDbg('applyDupDecisions 
   decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
 
   window.runBenImport();
-  setTimeout(() => { window._benImportLock = false; }, 3000);
 };
 
 
