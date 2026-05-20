@@ -105,6 +105,96 @@
     </div>
   </div>
 
+  <!-- TAB ISU -->
+<div id="tab-issues" class="tab-content">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+    <div>
+      <div class="section-title" style="margin-bottom:4px;">Manajemen Isu</div>
+      <div style="font-size:12px;color:#94a3b8;">
+        Pantau kasus IUU Fishing, HAM, lingkungan, TPPO, dan isu lain
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-secondary btn-sm" onclick="loadIssues()">
+        <i class="fa-solid fa-rotate-right"></i> Refresh
+      </button>
+      <button class="btn-primary btn-sm" onclick="openIssueModal()">
+        <i class="fa-solid fa-plus"></i> Tambah Isu
+      </button>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card blue">
+      <div class="stat-label">Total Isu</div>
+      <div class="stat-value" id="issueStatTotal">0</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Kritis</div>
+      <div class="stat-value" id="issueStatCritical">0</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Resolved</div>
+      <div class="stat-value" id="issueStatResolved">0</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-label">Total Update</div>
+      <div class="stat-value" id="issueStatUpdates">0</div>
+    </div>
+  </div>
+
+  <div class="table-toolbar" style="flex-wrap:wrap;gap:8px;">
+    <input
+      type="text"
+      class="search-input"
+      id="issueSearchInput"
+      placeholder="Cari judul, kategori, deskripsi, tag"
+      style="max-width:none;"
+    />
+
+    <select id="issueStatusFilter" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+      <option value="">Semua Status</option>
+      <option value="pending_review">Pending Review</option>
+      <option value="active">Active</option>
+      <option value="monitoring">Monitoring</option>
+      <option value="resolved">Resolved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+
+    <select id="issueCategoryFilter" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+      <option value="">Semua Kategori</option>
+    </select>
+  </div>
+
+  <div id="issueMsg" class="form-msg hidden"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Judul</th>
+          <th>Kategori</th>
+          <th>Severity</th>
+          <th>Status</th>
+          <th>Tanggal</th>
+          <th>Sumber</th>
+          <th>Update</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="issueTableBody">
+        <tr>
+          <td colspan="9" style="text-align:center;padding:28px;color:#94a3b8;">
+            Tab isu siap. Data akan muncul setelah file issues.js ditambahkan.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
   <!-- TAB DOKUMEN -->
   <div id="tab-documents" class="tab-content">
   </div>
