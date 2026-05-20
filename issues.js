@@ -1,24 +1,7 @@
-console.log('issues.js loaded');
-
-// issues.js
 let issuesAllData = [];
 let issuesFilteredData = [];
 let currentIssueDetailId = null;
-
-const ISSUE_STATUS_LABELS = {
-  pending_review: 'Pending Review',
-  active: 'Active',
-  monitoring: 'Monitoring',
-  resolved: 'Resolved',
-  rejected: 'Rejected'
-};
-
-const ISSUE_SEVERITY_LABELS = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  critical: 'Critical'
-};
+let issueProjectsCache = [];
 
 function esc(v) {
   return String(v ?? '')
@@ -106,13 +89,97 @@ function hideIssueMsg(elId = 'issueMsg') {
   el.className = 'form-msg hidden';
 }
 
+function relType(row) {
+  return row?.related_type || row?.entity_type || '';
+}
+
+function relId(row) {
+  return row?.related_id || row?.entity_id || '';
+}
+
+async function loadIssueProjects() {
+  const client = window.client;
+  if (!client) {
+    issueProjectsCache = [];
+    return [];
+  }
+
+  if (Array.isArray(window.allProjects) && window.allProjects.length) {
+    issueProjectsCache = [...window.allProjects]
+      .filter(p => p && p.id && p.name)
+      .map(p => ({ id: p.id, name: p.name }))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    return issueProjectsCache;
+  }
+
+  const { data, error } = await client
+    .from('projects')
+    .select('id, name, archived')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('loadIssueProjects error:', error.message);
+    issueProjectsCache = [];
+    return [];
+  }
+
+  issueProjectsCache = (data || [])
+    .filter(p => !p.archived)
+    .map(p => ({ id: p.id, name: p.name }))
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+  return issueProjectsCache;
+}
+
+function getProjectNameById(projectId) {
+  if (!projectId) return '';
+
+  const fromCache = issueProjectsCache.find(p => p.id === projectId);
+  if (fromCache) return fromCache.name || '';
+
+  if (Array.isArray(window.allProjects)) {
+    const fromAllProjects = window.allProjects.find(p => p.id === projectId);
+    if (fromAllProjects) return fromAllProjects.name || '';
+  }
+
+  return '';
+}
+
+function getIssueProjectRelation(item) {
+  return (item.relations || []).find(r => relType(r) === 'project') || null;
+}
+
+function getIssueProjectName(item) {
+  const rel = getIssueProjectRelation(item);
+  if (!rel) return '';
+  return getProjectNameById(relId(rel));
+}
+
+async function populateIssueProjectOptions(selectedId = '') {
+  const sel = document.getElementById('issueF-project-id');
+  if (!sel) return;
+
+  const projects = await loadIssueProjects();
+  const options = projects
+    .map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
+    .join('');
+
+  sel.innerHTML = `<option value="">-- Pilih Proyek --</option>${options}`;
+  sel.value = selectedId || '';
+}
+
 function populateIssueCategoryFilter() {
   const sel = document.getElementById('issueCategoryFilter');
   if (!sel) return;
+
   const current = sel.value;
-  const cats = [...new Set(issuesAllData.map(x => x.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  sel.innerHTML = '<option value="">Semua Kategori</option>' +
+  const cats = [...new Set(issuesAllData.map(x => x.category).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b)));
+
+  sel.innerHTML =
+    '<option value="">Semua Kategori</option>' +
     cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
   if (cats.includes(current)) sel.value = current;
 }
 
@@ -155,12 +222,18 @@ function renderIssueTable() {
         ).join('')
       : '<span style="color:#94a3b8;">-</span>';
 
+    const projectName = getIssueProjectName(item);
+    const latestUpdate = item.updates?.length
+      ? [...item.updates].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+      : null;
+
     return `
       <tr>
         <td style="color:#94a3b8;">${idx + 1}</td>
         <td style="min-width:260px;">
           <div style="font-weight:700; color:#0f172a; margin-bottom:3px;">${esc(item.title)}</div>
           <div style="font-size:11px; color:#64748b; line-height:1.5;">${esc(shortText(item.description, 100))}</div>
+          ${projectName ? `<div style="font-size:11px; color:#2563eb; margin-top:4px;">Proyek: ${esc(projectName)}</div>` : ''}
           <div style="margin-top:4px;">${tags}</div>
         </td>
         <td>${esc(item.category || '-')}</td>
@@ -169,16 +242,18 @@ function renderIssueTable() {
         <td>${fmtDate(item.date_occurred)}</td>
         <td>
           <div style="font-size:12px; font-weight:700; color:#475569;">${esc(item.source_type || '-')}</div>
-          ${item.source_link ? `<a href="${esc(item.source_link)}" target="_blank" style="font-size:11px; color:#2563eb; text-decoration:none;">Buka sumber</a>` : '<span style="font-size:11px; color:#94a3b8;">-</span>'}
+          ${item.source_link
+            ? `<a href="${esc(item.source_link)}" target="_blank" rel="noopener noreferrer" style="font-size:11px; color:#2563eb; text-decoration:none;">Buka sumber</a>`
+            : '<span style="font-size:11px; color:#94a3b8;">-</span>'}
         </td>
         <td>
           <div style="font-size:13px; font-weight:700; color:#2563eb;">${item.updates?.length || 0}x</div>
-          <div style="font-size:10px; color:#94a3b8;">${item.updates?.length ? fmtDateTime(item.updates[0].created_at) : '-'}</div>
+          <div style="font-size:10px; color:#94a3b8;">${latestUpdate ? fmtDateTime(latestUpdate.created_at) : '-'}</div>
         </td>
         <td style="white-space:nowrap;">
           <button class="btn-secondary btn-sm" style="margin-right:4px;" onclick="openIssueDetail('${item.id}')">Detail</button>
           <button class="btn-edit" style="margin-right:4px;" onclick="openIssueModal('${item.id}')">Edit</button>
-          <button class="btn-danger btn-sm" onclick="deleteIssue('${item.id}', ${JSON.stringify('')})">Hapus</button>
+          <button class="btn-danger btn-sm" onclick="deleteIssue('${item.id}')">Hapus</button>
         </td>
       </tr>
     `;
@@ -191,6 +266,7 @@ window.filterIssues = function () {
   const category = document.getElementById('issueCategoryFilter')?.value || '';
 
   issuesFilteredData = issuesAllData.filter(item => {
+    const projectName = getIssueProjectName(item);
     const haystack = [
       item.title,
       item.description,
@@ -198,12 +274,17 @@ window.filterIssues = function () {
       item.status,
       item.severity,
       item.source_type,
+      projectName,
       ...(item.tags || [])
-    ].filter(Boolean).join(' ').toLowerCase();
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
 
     const matchQ = !q || haystack.includes(q);
     const matchS = !status || item.status === status;
     const matchC = !category || item.category === category;
+
     return matchQ && matchS && matchC;
   });
 
@@ -226,13 +307,20 @@ window.loadIssues = async function () {
     `;
   }
 
-  const [{ data: issues, error: errIssues }, { data: updates, error: errUpdates }] = await Promise.all([
+  await loadIssueProjects();
+
+  const [
+    { data: issues, error: errIssues },
+    { data: updates, error: errUpdates },
+    { data: relations, error: errRelations }
+  ] = await Promise.all([
     client.from('issues').select('*').order('created_at', { ascending: false }),
-    client.from('issue_updates').select('*').order('created_at', { ascending: false })
+    client.from('issue_updates').select('*').order('created_at', { ascending: false }),
+    client.from('issue_relations').select('*')
   ]);
 
-  if (errIssues || errUpdates) {
-    showIssueMsg(`Gagal memuat data: ${(errIssues || errUpdates).message}`, 'error', 'issueMsg');
+  if (errIssues || errUpdates || errRelations) {
+    showIssueMsg(`Gagal memuat data: ${(errIssues || errUpdates || errRelations).message}`, 'error', 'issueMsg');
     return;
   }
 
@@ -242,9 +330,16 @@ window.loadIssues = async function () {
     updateMap[u.issue_id].push(u);
   });
 
+  const relationMap = {};
+  (relations || []).forEach(r => {
+    if (!relationMap[r.issue_id]) relationMap[r.issue_id] = [];
+    relationMap[r.issue_id].push(r);
+  });
+
   issuesAllData = (issues || []).map(item => ({
     ...item,
-    updates: updateMap[item.id] || []
+    updates: updateMap[item.id] || [],
+    relations: relationMap[item.id] || []
   }));
 
   populateIssueCategoryFilter();
@@ -266,6 +361,7 @@ function resetIssueForm() {
   setVal('issueF-title');
   setVal('issueF-description');
   setVal('issueF-category');
+  setVal('issueF-project-id');
   setVal('issueF-severity', 'medium');
   setVal('issueF-status', 'active');
   setVal('issueF-date-occurred');
@@ -275,20 +371,29 @@ function resetIssueForm() {
   setVal('issueF-initial-update');
 
   hideIssueMsg('issueFormMsg');
+
   const title = document.getElementById('issueFormTitle');
   if (title) title.textContent = 'Tambah Isu';
 }
 
-window.openIssueModal = function (id = null) {
+window.openIssueModal = async function (id = null) {
   resetIssueForm();
 
   const overlay = document.getElementById('issueFormOverlay');
   if (overlay) overlay.classList.remove('hidden');
 
-  if (!id) return;
+  if (!id) {
+    await populateIssueProjectOptions();
+    return;
+  }
 
   const item = issuesAllData.find(x => x.id === id);
-  if (!item) return;
+  if (!item) {
+    await populateIssueProjectOptions();
+    return;
+  }
+
+  const rel = getIssueProjectRelation(item);
 
   const setVal = (elId, val = '') => {
     const el = document.getElementById(elId);
@@ -308,6 +413,9 @@ window.openIssueModal = function (id = null) {
   setVal('issueF-source-type', item.source_type || 'MANUAL');
   setVal('issueF-source-link', item.source_link || '');
   setVal('issueF-tags', (item.tags || []).join(', '));
+  setVal('issueF-initial-update', '');
+
+  await populateIssueProjectOptions(relId(rel) || '');
 };
 
 window.closeIssueModal = function () {
@@ -326,6 +434,7 @@ window.saveIssue = async function () {
   const title = document.getElementById('issueF-title')?.value.trim();
   const description = document.getElementById('issueF-description')?.value.trim() || null;
   const category = document.getElementById('issueF-category')?.value.trim();
+  const projectId = document.getElementById('issueF-project-id')?.value || '';
   const severity = document.getElementById('issueF-severity')?.value || 'medium';
   const status = document.getElementById('issueF-status')?.value || 'active';
   const dateOccurred = document.getElementById('issueF-date-occurred')?.value || null;
@@ -394,6 +503,34 @@ window.saveIssue = async function () {
     savedId = data.id;
   }
 
+  const { error: delRelErr } = await client
+    .from('issue_relations')
+    .delete()
+    .eq('issue_id', savedId)
+    .eq('related_type', 'project');
+
+  if (delRelErr) {
+    showIssueMsg(`Isu tersimpan, tapi relasi proyek lama gagal dibersihkan: ${delRelErr.message}`, 'error', 'issueFormMsg');
+    await loadIssues();
+    return;
+  }
+
+  if (projectId) {
+    const { error: relErr } = await client
+      .from('issue_relations')
+      .insert({
+        issue_id: savedId,
+        related_type: 'project',
+        related_id: projectId
+      });
+
+    if (relErr) {
+      showIssueMsg(`Isu tersimpan, tapi relasi proyek gagal disimpan: ${relErr.message}`, 'error', 'issueFormMsg');
+      await loadIssues();
+      return;
+    }
+  }
+
   if (initialUpdate) {
     const { error: updErr } = await client
       .from('issue_updates')
@@ -419,18 +556,23 @@ window.saveIssue = async function () {
 };
 
 window.deleteIssue = async function (id) {
-  if (!confirm('Hapus isu ini? Semua update terkait juga akan terhapus.')) return;
+  if (!confirm('Hapus isu ini? Semua update dan relasi terkait juga akan terhapus.')) return;
 
   const client = window.client;
   if (!client) return;
 
-  const { error } = await client.from('issues').delete().eq('id', id);
+  const { error } = await client
+    .from('issues')
+    .delete()
+    .eq('id', id);
+
   if (error) {
     showIssueMsg(`Gagal hapus isu: ${error.message}`, 'error', 'issueMsg');
     return;
   }
 
   if (currentIssueDetailId === id) closeIssueDetail();
+
   showIssueMsg('Isu berhasil dihapus.', 'success', 'issueMsg');
   await loadIssues();
 };
@@ -452,19 +594,24 @@ function renderIssueDetail() {
         ).join('')
       : '<span style="color:#94a3b8;">-</span>';
 
+    const projectName = getIssueProjectName(issue);
+
     metaEl.innerHTML = `
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
         ${renderSeverityBadge(issue.severity)}
         ${renderStatusBadge(issue.status)}
         ${issueBadge(issue.category || '-', '#f8fafc', '#475569', '#e2e8f0')}
         ${issueBadge(issue.source_type || '-', '#eff6ff', '#1d4ed8', '#bfdbfe')}
+        ${projectName ? issueBadge(`Project: ${projectName}`, '#ecfeff', '#0f766e', '#99f6e4') : ''}
       </div>
       <div style="font-size:12px; color:#64748b; line-height:1.7;">
         <div><strong style="color:#0f172a;">Tanggal kejadian:</strong> ${fmtDate(issue.date_occurred)}</div>
         <div><strong style="color:#0f172a;">Dibuat:</strong> ${fmtDateTime(issue.created_at)}</div>
         <div><strong style="color:#0f172a;">Deskripsi:</strong> ${esc(issue.description || '-')}</div>
         <div style="margin-top:4px;"><strong style="color:#0f172a;">Tags:</strong> ${tags}</div>
-        ${issue.source_link ? `<div style="margin-top:4px;"><a href="${esc(issue.source_link)}" target="_blank" style="color:#2563eb; text-decoration:none;">Buka tautan sumber</a></div>` : ''}
+        ${issue.source_link
+          ? `<div style="margin-top:4px;"><a href="${esc(issue.source_link)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb; text-decoration:none;">Buka tautan sumber</a></div>`
+          : ''}
       </div>
     `;
   }
@@ -473,7 +620,11 @@ function renderIssueDetail() {
 
   if (listEl) {
     if (!updates.length) {
-      listEl.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">Belum ada update.</div>`;
+      listEl.innerHTML = `
+        <div style="padding:16px; text-align:center; color:#94a3b8; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+          Belum ada update.
+        </div>
+      `;
     } else {
       listEl.innerHTML = updates.map(u => `
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid #2563eb; border-radius:10px; padding:12px 14px; margin-bottom:10px;">
@@ -481,7 +632,7 @@ function renderIssueDetail() {
           ${
             (u.evidence_urls || []).length
               ? `<div style="margin-bottom:6px;">${u.evidence_urls.map(url =>
-                  `<a href="${esc(url)}" target="_blank" style="display:inline-block; font-size:11px; color:#2563eb; text-decoration:none; margin-right:8px; margin-bottom:4px;">Evidence</a>`
+                  `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block; font-size:11px; color:#2563eb; text-decoration:none; margin-right:8px; margin-bottom:4px;">Evidence</a>`
                 ).join('')}</div>`
               : ''
           }
@@ -564,8 +715,10 @@ function patchIssueTab() {
     if (tab === 'issues') {
       const title = document.getElementById('pageTitle');
       const subtitle = document.getElementById('pageSubtitle');
+
       if (title) title.textContent = 'Manajemen Isu';
       if (subtitle) subtitle.textContent = 'Pantau dan perbarui isu lapangan';
+
       loadIssues();
     }
   };
