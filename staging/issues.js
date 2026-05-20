@@ -3,21 +3,6 @@ let issuesFilteredData = [];
 let currentIssueDetailId = null;
 let issueProjectsCache = [];
 
-const ISSUE_STATUS_LABELS = {
-  pending_review: 'Pending Review',
-  active: 'Active',
-  monitoring: 'Monitoring',
-  resolved: 'Resolved',
-  rejected: 'Rejected'
-};
-
-const ISSUE_SEVERITY_LABELS = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  critical: 'Critical'
-};
-
 function esc(v) {
   return String(v ?? '')
     .replace(/&/g, '&amp;')
@@ -104,6 +89,14 @@ function hideIssueMsg(elId = 'issueMsg') {
   el.className = 'form-msg hidden';
 }
 
+function relType(row) {
+  return row?.related_type || row?.entity_type || '';
+}
+
+function relId(row) {
+  return row?.related_id || row?.entity_id || '';
+}
+
 async function loadIssueProjects() {
   const client = window.client;
   if (!client) {
@@ -115,7 +108,7 @@ async function loadIssueProjects() {
     issueProjectsCache = [...window.allProjects]
       .filter(p => p && p.id && p.name)
       .map(p => ({ id: p.id, name: p.name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     return issueProjectsCache;
   }
 
@@ -132,7 +125,8 @@ async function loadIssueProjects() {
 
   issueProjectsCache = (data || [])
     .filter(p => !p.archived)
-    .map(p => ({ id: p.id, name: p.name }));
+    .map(p => ({ id: p.id, name: p.name }))
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 
   return issueProjectsCache;
 }
@@ -152,13 +146,13 @@ function getProjectNameById(projectId) {
 }
 
 function getIssueProjectRelation(item) {
-  return (item.relations || []).find(r => r.entity_type === 'project') || null;
+  return (item.relations || []).find(r => relType(r) === 'project') || null;
 }
 
 function getIssueProjectName(item) {
   const rel = getIssueProjectRelation(item);
   if (!rel) return '';
-  return getProjectNameById(rel.entity_id);
+  return getProjectNameById(relId(rel));
 }
 
 async function populateIssueProjectOptions(selectedId = '') {
@@ -166,7 +160,6 @@ async function populateIssueProjectOptions(selectedId = '') {
   if (!sel) return;
 
   const projects = await loadIssueProjects();
-
   const options = projects
     .map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`)
     .join('');
@@ -181,7 +174,7 @@ function populateIssueCategoryFilter() {
 
   const current = sel.value;
   const cats = [...new Set(issuesAllData.map(x => x.category).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b));
+    .sort((a, b) => String(a).localeCompare(String(b)));
 
   sel.innerHTML =
     '<option value="">Semua Kategori</option>' +
@@ -230,6 +223,9 @@ function renderIssueTable() {
       : '<span style="color:#94a3b8;">-</span>';
 
     const projectName = getIssueProjectName(item);
+    const latestUpdate = item.updates?.length
+      ? [...item.updates].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+      : null;
 
     return `
       <tr>
@@ -252,7 +248,7 @@ function renderIssueTable() {
         </td>
         <td>
           <div style="font-size:13px; font-weight:700; color:#2563eb;">${item.updates?.length || 0}x</div>
-          <div style="font-size:10px; color:#94a3b8;">${item.updates?.length ? fmtDateTime(item.updates[0].created_at) : '-'}</div>
+          <div style="font-size:10px; color:#94a3b8;">${latestUpdate ? fmtDateTime(latestUpdate.created_at) : '-'}</div>
         </td>
         <td style="white-space:nowrap;">
           <button class="btn-secondary btn-sm" style="margin-right:4px;" onclick="openIssueDetail('${item.id}')">Detail</button>
@@ -288,6 +284,7 @@ window.filterIssues = function () {
     const matchQ = !q || haystack.includes(q);
     const matchS = !status || item.status === status;
     const matchC = !category || item.category === category;
+
     return matchQ && matchS && matchC;
   });
 
@@ -319,7 +316,7 @@ window.loadIssues = async function () {
   ] = await Promise.all([
     client.from('issues').select('*').order('created_at', { ascending: false }),
     client.from('issue_updates').select('*').order('created_at', { ascending: false }),
-    client.from('issue_relations').select('*').order('created_at', { ascending: false })
+    client.from('issue_relations').select('*')
   ]);
 
   if (errIssues || errUpdates || errRelations) {
@@ -418,7 +415,7 @@ window.openIssueModal = async function (id = null) {
   setVal('issueF-tags', (item.tags || []).join(', '));
   setVal('issueF-initial-update', '');
 
-  await populateIssueProjectOptions(rel?.entity_id || '');
+  await populateIssueProjectOptions(relId(rel) || '');
 };
 
 window.closeIssueModal = function () {
@@ -510,7 +507,7 @@ window.saveIssue = async function () {
     .from('issue_relations')
     .delete()
     .eq('issue_id', savedId)
-    .eq('entity_type', 'project');
+    .eq('related_type', 'project');
 
   if (delRelErr) {
     showIssueMsg(`Isu tersimpan, tapi relasi proyek lama gagal dibersihkan: ${delRelErr.message}`, 'error', 'issueFormMsg');
@@ -519,14 +516,13 @@ window.saveIssue = async function () {
   }
 
   if (projectId) {
-  const { error: relErr } = await client
-    .from('issue_relations')
-    .insert({
-      issue_id: savedId,
-      entity_type: 'project',
-      entity_id: projectId,
-      related_type: 'related'
-    });
+    const { error: relErr } = await client
+      .from('issue_relations')
+      .insert({
+        issue_id: savedId,
+        related_type: 'project',
+        related_id: projectId
+      });
 
     if (relErr) {
       showIssueMsg(`Isu tersimpan, tapi relasi proyek gagal disimpan: ${relErr.message}`, 'error', 'issueFormMsg');
