@@ -519,14 +519,14 @@ window.saveIssue = async function () {
   }
 
   if (projectId) {
-    const { error: relErr } = await client
-      .from('issue_relations')
-      .insert({
-        issue_id: savedId,
-        entity_type: 'project',
-        entity_id: projectId,
-        relation_type: 'related'
-      });
+  const { error: relErr } = await client
+    .from('issue_relations')
+    .insert({
+      issue_id: savedId,
+      entity_type: 'project',
+      entity_id: projectId,
+      related_type: 'related'
+    });
 
     if (relErr) {
       showIssueMsg(`Isu tersimpan, tapi relasi proyek gagal disimpan: ${relErr.message}`, 'error', 'issueFormMsg');
