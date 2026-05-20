@@ -1,3 +1,5 @@
+console.log('issues.js loaded');
+
 // issues.js
 let issuesAllData = [];
 let issuesFilteredData = [];
