@@ -117,6 +117,8 @@ function updateBenStats(projectFilter) {
   document.getElementById('benStatParticip').textContent  = parts.length.toLocaleString('id-ID');
 
   // Label stat card sesuai konteks
+  const participLbl = document.getElementById('benStatParticipLabel');
+  if (participLbl) participLbl.textContent = 'Total Data Terinput';
   const lbl = document.getElementById('benStatUniqueLabel');
   if (lbl) lbl.textContent = projectFilter ? `Penerima — ${projectFilter.length > 25 ? projectFilter.slice(0,25)+'…' : projectFilter}` : 'Total Unik';
 }
@@ -402,7 +404,7 @@ window.saveBeneficiary = async function () {
 
   const payload = {
     name,
-    phone       : phone || null,
+    phone       : normalizeBenPhone(phone) || null,
     gender      : document.getElementById('benF-gender').value || null,
     birth_year  : parseInt(document.getElementById('benF-birthyear').value) || null,
     location    : document.getElementById('benF-location').value.trim() || null,
@@ -417,50 +419,52 @@ window.saveBeneficiary = async function () {
   if (id) {
     ({ error } = await _client.from('beneficiaries').update(payload).eq('id', id));
   } else {
-    const { data: inserted, error: errIns } = await _client
-      .from('beneficiaries')
-      .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: false })
-      .select('id').single();
-    error = errIns;
-    benId = inserted?.id;
+    const existing = await findExistingBeneficiary(_client, payload);
+    if (existing) {
+      benId = existing.id;
+      const merged = mergeBeneficiaryPayload(existing, payload);
+      ({ error } = await _client.from('beneficiaries').update(merged).eq('id', benId));
+    } else {
+      const { data: inserted, error: errIns } = await _client
+        .from('beneficiaries')
+        .insert(payload)
+        .select('id').single();
+      error = errIns;
+      benId = inserted?.id;
+    }
   }
 
   if (error) { showBenFormMsg('❌ ' + error.message, 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
 
-  // ── Jika ada proyek dipilih → catat relasi beneficiary ↔ proyek ──
+  // Jika ada proyek dipilih, catat relasi beneficiary-proyek
   const projName = document.getElementById('benF-project')?.value;
   const actSel   = document.getElementById('benF-activity');
   const actId    = actSel?.value;
-  const actTitle = actSel?.options[actSel.selectedIndex]?.getAttribute('data-title') || '';
+  const actTitle = actSel?.options[actSel.selectedIndex]?.getAttribute('data-title');
 
   if (benId && projName) {
-    // Lookup project_id
     const { data: projData } = await _client.from('projects').select('id').eq('name', projName).single();
-
-    // ① Selalu catat ke beneficiary_projects (agar filter proyek bisa bekerja)
     await _client.from('beneficiary_projects').upsert({
       beneficiary_id: benId,
-      project_name  : projName,
-      project_id    : projData?.id || null,
+      project_name : projName,
+      project_id   : projData?.id || null,
     }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
 
-    // ② Jika ada kegiatan → catat ke activity_participants juga
     if (actId) {
       const attendedDate = document.getElementById('benF-attended-date')?.value || null;
       const attendNote   = document.getElementById('benF-attend-note')?.value.trim() || null;
-
       const { error: errPart } = await _client.from('activity_participants').upsert({
-        activity_id   : actId,
-        activity_name : actTitle,
-        project_name  : projName,
-        project_id    : projData?.id || null,
-        beneficiary_id: benId,
-        attended_date : attendedDate || null,
-        note          : attendNote,
+        activity_id    : actId,
+        activity_name  : actTitle,
+        project_name   : projName,
+        project_id     : projData?.id || null,
+        beneficiary_id : benId,
+        attended_date  : attendedDate || null,
+        note           : attendNote,
       }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
 
       if (errPart) {
-        showBenFormMsg('✅ Data tersimpan, tapi gagal daftarkan ke kegiatan: ' + errPart.message, 'error');
+        showBenFormMsg('Data tersimpan, tapi gagal daftarkan ke kegiatan: ' + errPart.message, 'error');
         setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 1500);
         return;
       }
@@ -471,13 +475,7 @@ window.saveBeneficiary = async function () {
   setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 800);
 };
 
-function showBenFormMsg(msg, type) {
-  const el = document.getElementById('benFormMsg');
-  el.textContent = msg;
-  el.className = `form-msg ${type}`;
-}
-
-// ── Detail beneficiary (riwayat kegiatan) ────────────────────────────
+// ── Detail beneficiary + riwayat kegiatan ─────────────────────────────
 window.openBenDetail = async function (id) {
   const _client = window.client || client;
   const ben = _benAllData.find(b => b.id === id);
@@ -637,6 +635,79 @@ function normGender(v) {
   if (vl.startsWith('p') || vl === 'f' || vl.includes('perempuan') || vl.includes('wanita')) return 'Perempuan';
   return v;
 }
+
+function getBeneficiaryUniqueKey(r) {
+  const name = String(r?.name || '').trim().toLowerCase();
+  const phone = String(r?.phone || '').trim().toLowerCase();
+  const gender = String(normGender(r?.gender || '') || '').trim().toLowerCase();
+  if (name && phone && gender) return `${name}|${phone}|${gender}`;
+  if (name && gender) return `${name}|no-phone|${gender}`;
+  if (name && phone) return `${name}|${phone}|no-gender`;
+  if (name) return `${name}|unverified`;
+  return 'unknown|unverified';
+}
+
+
+function normalizeBenText(v) {
+  return String(v || '').trim().toLowerCase();
+}
+function normalizeBenPhone(v) {
+  const raw = String(v || '').trim();
+  if (!raw) return '';
+  const digits = raw.replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('62')) return digits;
+  if (digits.startsWith('0')) return '62' + digits.slice(1);
+  return digits;
+}
+function getBeneficiaryUniqueKey(r) {
+  const name = normalizeBenText(r?.name);
+  const phone = normalizeBenPhone(r?.phone);
+  const gender = normalizeBenText(normGender(r?.gender || '') || '');
+  if (name && phone && gender) return `${name}|${phone}|${gender}`;
+  if (name && gender) return `${name}|no-phone|${gender}`;
+  if (name && phone) return `${name}|${phone}|no-gender`;
+  if (name) return `${name}|unverified`;
+  return 'unknown|unverified';
+}
+function isSameBeneficiary(existing, incoming) {
+  const exName = normalizeBenText(existing?.name);
+  const exPhone = normalizeBenPhone(existing?.phone);
+  const exGender = normalizeBenText(normGender(existing?.gender || '') || '');
+  const inName = normalizeBenText(incoming?.name);
+  const inPhone = normalizeBenPhone(incoming?.phone);
+  const inGender = normalizeBenText(normGender(incoming?.gender || '') || '');
+  if (!exName || !inName || exName !== inName) return false;
+  if (inPhone && inGender) return exPhone === inPhone && exGender === inGender;
+  if (!inPhone && inGender) return exGender === inGender;
+  if (inPhone && !inGender) return exPhone === inPhone;
+  return false;
+}
+function mergeBeneficiaryPayload(existing, incoming) {
+  const incomingBirthYear = incoming?.birth_year ? parseInt(incoming.birth_year, 10) : null;
+  const existingBirthYear = existing?.birth_year ? parseInt(existing.birth_year, 10) : null;
+  return {
+    name: String(incoming?.name || '').trim() || existing?.name || null,
+    phone: normalizeBenPhone(incoming?.phone) || existing?.phone || null,
+    gender: normGender(incoming?.gender || '') || existing?.gender || null,
+    birth_year: Number.isFinite(incomingBirthYear) ? incomingBirthYear : existingBirthYear,
+    location: String(incoming?.location || '').trim() || existing?.location || null,
+    occupation: String(incoming?.occupation || '').trim() || existing?.occupation || null,
+    email: String(incoming?.email || '').trim() || existing?.email || null,
+    note: String(incoming?.note || '').trim() || existing?.note || null,
+  };
+}
+async function findExistingBeneficiary(client, row) {
+  const name = String(row?.name || '').trim();
+  if (!name) return null;
+  const { data, error } = await client
+    .from('beneficiaries')
+    .select('id, name, phone, gender, birth_year, location, occupation, email, note')
+    .ilike('name', name);
+  if (error || !data?.length) return null;
+  return data.find(item => isSameBeneficiary(item, row)) || null;
+}
+
 function parseDate(v) {
   if (!v) return null;
   const s = String(v).trim();
@@ -683,7 +754,7 @@ function previewBenImport(rows) {
     return;
   }
   // Hitung unik
-  const uniquePeople   = new Set(rows.map(r => `${r.name}|${r.phone}`)).size;
+  const uniquePeople = new Set(rows.map(r => getBeneficiaryUniqueKey(r))).size;
   const uniqueProjects = new Set(rows.map(r => r.project_name).filter(Boolean)).size;
   const uniqueActs     = new Set(rows.map(r => `${r.project_name}|${r.activity_name}`).filter(Boolean)).size;
 
@@ -739,115 +810,113 @@ window.runBenImport = async function () {
   btn.disabled = true;
   const _client = window.client || client;
 
-  // Progress bar
   let processed = 0;
-  const total   = rows.length;
+  const total = rows.length;
   const updateProgress = () => {
     btn.textContent = `⏳ ${processed}/${total}...`;
   };
   updateProgress();
 
-  // Load semua proyek & aktivitas satu kali (lebih efisien)
   const [{ data: allProjs }, { data: allActs }] = await Promise.all([
     _client.from('projects').select('id, name'),
     _client.from('project_activities').select('id, title, project_name'),
   ]);
 
   const projMap = {};
-  (allProjs || []).forEach(p => { projMap[(p.name||'').toLowerCase()] = p.id; });
+  (allProjs || []).forEach(p => { projMap[(p.name || '').toLowerCase()] = p.id; });
   const actMap = {};
   (allActs || []).forEach(a => {
-    const key = `${(a.project_name||'').toLowerCase()}|${(a.title||'').toLowerCase()}`;
+    const key = `${(a.project_name || '').toLowerCase()}|${(a.title || '').toLowerCase()}`;
     actMap[key] = a;
   });
 
   let okBen = 0, okPart = 0, skipPart = 0, logPart = 0;
-  const warnPart   = [];
-  const benIdCache = {}; // "name|phone" → uuid
+  const benIdCache = {};
 
   for (const r of rows) {
-    const dupDecision = (window._benDupDecisions || {})[r.name] || '';
-    if (dupDecision === 'skip') { processed++; updateProgress(); continue; }
-    // ── STEP 1: Upsert beneficiary ────────────────────────────────
-    const cacheKey = `${r.name.toLowerCase()}|${r.phone||''}`;
+    const normalizedRow = {
+      name       : String(r.name || '').trim(),
+      phone      : normalizeBenPhone(r.phone) || null,
+      gender     : normGender(r.gender) || null,
+      birth_year : parseInt(r.birth_year) || null,
+      location   : r.location || null,
+      occupation : r.occupation || null,
+      email      : r.email || null,
+      note       : r.note || null,
+    };
+
+    const cacheKey = getBeneficiaryUniqueKey(normalizedRow);
     let benId = benIdCache[cacheKey];
 
     if (!benId) {
-      const payload = {
-        name       : (dupDecision === 'new' ? forceNewName : r.name),
-        phone      : r.phone || null,
-        gender     : normGender(r.gender) || null,
-        birth_year : parseInt(r.birth_year) || null,
-        location   : r.location || null,
-        occupation : r.occupation || null,
-        email      : r.email || null,
-        note       : r.note || null,
-      };
-      const { data: upserted, error: errBen } = await _client
-        .from('beneficiaries')
-        .upsert(payload, { onConflict: 'name,phone', ignoreDuplicates: false })
-        .select('id')
-        .single();
-
-      if (!errBen && upserted) {
-        benId = upserted.id;
-        benIdCache[cacheKey] = benId;
+      const existing = await findExistingBeneficiary(_client, normalizedRow);
+      if (existing) {
+        benId = existing.id;
+        const merged = mergeBeneficiaryPayload(existing, normalizedRow);
+        const { error: errUpd } = await _client
+          .from('beneficiaries')
+          .update(merged)
+          .eq('id', benId);
+        if (errUpd) {
+          skipPart++;
+          processed++;
+          updateProgress();
+          continue;
+        }
         okBen++;
       } else {
-        // Mungkin sudah ada — coba select
-        const { data: existing } = await _client
-          .from('beneficiaries').select('id')
-          .eq('name', r.name)
-          .eq('phone', r.phone || '')
+        const { data: inserted, error: errBen } = await _client
+          .from('beneficiaries')
+          .insert(normalizedRow)
+          .select('id')
           .single();
-        if (existing) { benId = existing.id; benIdCache[cacheKey] = benId; }
+        if (errBen || !inserted) {
+          skipPart++;
+          processed++;
+          updateProgress();
+          continue;
+        }
+        benId = inserted.id;
+        okBen++;
       }
+      benIdCache[cacheKey] = benId;
     }
 
-    // ── STEP 1b: Catat relasi beneficiary ↔ proyek ─────────────────
     if (benId && r.project_name) {
       await _client.from('beneficiary_projects').upsert({
-        beneficiary_id: benId,
-        project_name  : r.project_name,
-        project_id    : projMap[r.project_name.toLowerCase()] || null,
+        beneficiary_id : benId,
+        project_name   : r.project_name,
+        project_id     : projMap[(r.project_name || '').toLowerCase()] || null,
       }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
     }
 
-    // ── STEP 2: Insert ke activity_participants atau activity_log ──
     if (benId && r.activity_name) {
-      const actKey = `${(r.project_name||'').toLowerCase()}|${r.activity_name.toLowerCase()}`;
-      const act    = actMap[actKey];
-      const projId = r.project_name ? projMap[r.project_name.toLowerCase()] || null : null;
+      const actKey = `${(r.project_name || '').toLowerCase()}|${(r.activity_name || '').toLowerCase()}`;
+      const act = actMap[actKey];
+      const projId = r.project_name ? (projMap[(r.project_name || '').toLowerCase()] || null) : null;
 
       if (act) {
-        // Aktivitas ditemukan di sistem → linked ke project_activities
-        const { error: errPart } = await _client
-          .from('activity_participants')
-          .upsert({
-            activity_id   : act.id,
-            activity_name : act.title,
-            project_name  : r.project_name || null,
-            project_id    : projId,
-            beneficiary_id: benId,
-            attended_date : parseDate(r.attended_date) || null,
-            note          : r.note || null,
-          }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
+        const { error: errPart } = await _client.from('activity_participants').upsert({
+          activity_id    : act.id,
+          activity_name  : act.title,
+          project_name   : r.project_name || null,
+          project_id     : projId,
+          beneficiary_id : benId,
+          attended_date  : parseDate(r.attended_date) || null,
+          note           : r.note || null,
+        }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
         if (!errPart) okPart++; else skipPart++;
       } else {
-        // Aktivitas TIDAK ada di sistem → simpan sebagai free-text log
-        const { error: errLog } = await _client
-          .from('beneficiary_activity_log')
-          .upsert({
-            beneficiary_id: benId,
-            project_name  : r.project_name || null,
-            project_id    : projId,
-            activity_name : r.activity_name,
-            attended_date : parseDate(r.attended_date) || null,
-            source        : 'import',
-            note          : r.note || null,
-          }, { onConflict: 'beneficiary_id,project_name,activity_name', ignoreDuplicates: true });
-        if (!errLog) { okPart++; logPart++; }
-        else skipPart++;
+        const { error: errLog } = await _client.from('beneficiary_activity_log').upsert({
+          beneficiary_id : benId,
+          project_name   : r.project_name || null,
+          project_id     : projId,
+          activity_name  : r.activity_name,
+          attended_date  : parseDate(r.attended_date) || null,
+          source         : 'import',
+          note           : r.note || null,
+        }, { onConflict: 'beneficiary_id,project_name,activity_name', ignoreDuplicates: true });
+        if (!errLog) { okPart++; logPart++; } else skipPart++;
       }
     }
 
@@ -855,25 +924,25 @@ window.runBenImport = async function () {
     updateProgress();
   }
 
-  btn.disabled = false; btn.textContent = 'Import Sekarang';
+  btn.disabled = false;
+  btn.textContent = 'Import Sekarang';
   const uniqueBen = Object.keys(benIdCache).length;
-
-  let msg = `🎉 ${uniqueBen} penerima manfaat tersimpan`;
-  if (okPart)   msg += ` • ${okPart} partisipasi terekam`;
-  if (logPart)  msg += ` (${logPart} sebagai log bebas)`;
-  if (skipPart) msg += ` • ${skipPart} gagal`;
-  showBenImportMsg(msg + '.', 'success');
+  let msg = `${uniqueBen} penerima manfaat diproses`;
+  if (okPart) msg += `, ${okPart} data aktivitas terekam`;
+  if (logPart) msg += `, ${logPart} sebagai log bebas`;
+  if (skipPart) msg += `, ${skipPart} gagal`;
+  showBenImportMsg('✅ ' + msg + '.', 'success');
 
   if (logPart) {
     document.getElementById('benImportPreview').innerHTML += `
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;font-size:11px;color:#92400e;margin-top:8px">
-        <strong>📝 ${logPart} kegiatan tersimpan sebagai catatan bebas</strong><br>
+        <strong>${logPart} kegiatan tersimpan sebagai catatan bebas</strong><br>
         Nama aktivitas tidak cocok dengan sistem, namun kehadiran tetap direkam di log.
         Data ini tetap terlihat di halaman detail penerima manfaat.
       </div>`;
   }
 
-  window._benDupDecisions = {};
+  window._benDupDecisions = null;
   setTimeout(() => { closeBenImport(); loadBeneficiaries(); }, logPart ? 2000 : 1500);
 };
 
