@@ -14,17 +14,25 @@ window.loadBeneficiaries = async function () {
   const _client = window.client || client;
   showBenLoading(true);
 
-  const [
-    { data: benData },
-    { data: partData },
-    { data: projData },
-    { data: logData },
-  ] = await Promise.all([
-    _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
-    _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
-    _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
-    _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source'),
-  ]);
+  let benData = [], partData = [], projData = [], logData = [];
+  try {
+    const [r1, r2, r3, r4] = await Promise.all([
+      _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
+      _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
+      _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
+      _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source'),
+    ]);
+    benData  = r1.data || [];
+    partData = r2.data || [];
+    projData = r3.data || [];
+    logData  = r4.data || [];
+  } catch (loadErr) {
+    const el = document.getElementById('benTableBody');
+    if (el) el.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:#ef4444">
+      ⚠️ Gagal memuat data: ${loadErr.message || loadErr}. Coba refresh halaman.
+    </td></tr>`;
+    return;
+  }
 
   _benAllData        = benData  || [];
   const participants = partData || [];
@@ -279,14 +287,29 @@ function showBenLoading(show) {
   if (el && show) el.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:#94a3b8">⏳ Memuat data...</td></tr>`;
 }
 
+function showBenFormMsg(msg, type) {
+  let el = document.getElementById('benFormMsg');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'benFormMsg';
+    const body = document.querySelector('#benFormOverlay .modal-body');
+    if (body) body.appendChild(el);
+  }
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `form-msg ${type}`;
+  el.classList.remove('hidden');
+}
+
 // ── Populate filter proyek ────────────────────────────────────────────
 window.populateBenProjectFilter = async function () {
   const _client = window.client || client;
-  const { data } = await _client.from('projects').select('name').eq('archived', false).order('name');
+  const { data } = await _client.from('projects').select('name').order('name');
   const sel = document.getElementById('benFilterProject');
   if (!sel || !data) return;
+  const active = (data || []).filter(p => !p.archived);
   sel.innerHTML = '<option value="">Semua Proyek</option>' +
-    (data || []).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    active.map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
 };
 
 // ── Form Tambah Beneficiary ───────────────────────────────────────────
@@ -339,13 +362,14 @@ window.openAddBenModal = async function () {
   if (selProj) {
     selProj.disabled = true;
     selProj.innerHTML = '<option value="">Memuat proyek…</option>';
-    const { data: projs, error } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
-    if (error) {
-      selProj.innerHTML = '<option value="">Gagal memuat proyek</option>';
-      showBenFormMsg('Gagal memuat daftar proyek. Silakan tutup dan coba lagi.', 'error');
-    } else {
+    try {
+      const { data: projs, error } = await _client.from('projects').select('id,name').order('name');
+      if (error) throw error;
+      const activeProjs = (projs || []).filter(p => !p.archived);
       selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
-        (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+        activeProjs.map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    } catch (err) {
+      selProj.innerHTML = '<option value="">-- Pilih Proyek --</option>';
     }
     selProj.disabled = false;
   }
@@ -365,27 +389,28 @@ window.loadActivitiesForBenForm = async function () {
 
   selAct.disabled = true;
   selAct.innerHTML = '<option value="">Memuat kegiatan…</option>';
-  const { data: acts, error } = await _client
-    .from('project_activities')
-    .select('id,title')
-    .eq('project_name', projName)
-    .order('created_at', { ascending: true });
+  try {
+    const { data: acts, error } = await _client
+      .from('project_activities')
+      .select('id,title')
+      .eq('project_name', projName)
+      .order('title', { ascending: true });
 
-  if (error) {
-    selAct.innerHTML = '<option value="">Gagal memuat kegiatan</option>';
-    showBenFormMsg('Gagal memuat kegiatan proyek.', 'error');
-    return;
+    if (error) throw error;
+
+    if (!acts || !acts.length) {
+      selAct.innerHTML = '<option value="">Belum ada kegiatan untuk proyek ini</option>';
+      selAct.disabled = true;
+      return;
+    }
+
+    selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
+      acts.map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
+    selAct.disabled = false;
+  } catch (err) {
+    selAct.innerHTML = '<option value="">-- Gagal memuat kegiatan --</option>';
+    selAct.disabled = false;
   }
-
-  if (!acts || !acts.length) {
-    selAct.innerHTML = '<option value="">Belum ada kegiatan untuk proyek ini</option>';
-    selAct.disabled = true;
-    return;
-  }
-
-  selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
-    acts.map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
-  selAct.disabled = false;
 };
 
 window.closeBenModal = function () {
@@ -397,15 +422,17 @@ window.closeBenModal = function () {
 window.saveBeneficiary = async function () {
   const _client = window.client || client;
   const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  const resetBtn = () => { if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId')?.value ? 'Update' : 'Simpan'; } };
   if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = 'Menyimpan…'; }
 
+  try {
   const id    = document.getElementById('benFormId').value;
   const name  = document.getElementById('benF-name').value.trim();
   const phone = document.getElementById('benF-phone').value.trim();
 
   if (!name) {
     showBenFormMsg('Nama wajib diisi.', 'error');
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = id ? 'Update' : 'Simpan'; }
+    resetBtn();
     return;
   }
 
@@ -485,6 +512,10 @@ window.saveBeneficiary = async function () {
 
   showBenFormMsg('✅ Tersimpan!', 'success');
   setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 800);
+  } catch (fatalErr) {
+    showBenFormMsg('Terjadi kesalahan: ' + (fatalErr.message || fatalErr), 'error');
+    resetBtn();
+  }
 };
 
 
