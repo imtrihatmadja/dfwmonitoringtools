@@ -9,6 +9,24 @@ let _benFilteredData = [];   // setelah search
 let _benCurrentPage  = 1;
 const BEN_PAGE_SIZE  = 20;
 
+const SUPABASE_BATCH_SIZE = 1000;
+
+async function fetchAllRows(queryBuilderFactory, batchSize = SUPABASE_BATCH_SIZE) {
+  let from = 0;
+  let all = [];
+  while (true) {
+    const to = from + batchSize - 1;
+    const { data, error } = await queryBuilderFactory().range(from, to);
+    if (error) throw error;
+    const chunk = data || [];
+    all = all.concat(chunk);
+    if (chunk.length < batchSize) break;
+    from += batchSize;
+  }
+  return all;
+}
+
+
 // ── Load utama ────────────────────────────────────────────────────────
 window.loadBeneficiaries = async function () {
   const _client = window.client || client;
@@ -16,16 +34,12 @@ window.loadBeneficiaries = async function () {
 
   let benData = [], partData = [], projData = [], logData = [];
   try {
-    const [r1, r2, r3, r4] = await Promise.all([
-      _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
-      _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
-      _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
-      _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source'),
+    [benData, partData, projData, logData] = await Promise.all([
+      fetchAllRows(() => _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note').order('id', { ascending: true })),
+      fetchAllRows(() => _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date').order('beneficiary_id', { ascending: true })),
+      fetchAllRows(() => _client.from('beneficiary_projects').select('beneficiary_id, project_name').order('beneficiary_id', { ascending: true })),
+      fetchAllRows(() => _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source').order('beneficiary_id', { ascending: true })),
     ]);
-    benData  = r1.data || [];
-    partData = r2.data || [];
-    projData = r3.data || [];
-    logData  = r4.data || [];
   } catch (loadErr) {
     const el = document.getElementById('benTableBody');
     if (el) el.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:#ef4444">
@@ -1038,7 +1052,7 @@ window.openAddParticipantModal = async function (activityId, activityName, proje
   const existingIds = new Set((existing||[]).map(e => e.beneficiary_id));
 
   // Load all beneficiaries
-  const { data: bens } = await _client.from('beneficiaries').select('id,name,phone,gender,location').order('name');
+  const bens = await fetchAllRows(() => _client.from('beneficiaries').select('id,name,phone,gender,location').order('id', { ascending: true }));
   window._benPickerAll  = bens || [];
   window._benPickerExisting = existingIds;
   renderBenPicker('');
@@ -1333,10 +1347,10 @@ window.exportBenToExcel = async function () {
 
   try {
     // Load data lengkap dari DB (termasuk activity log)
-    const [{ data: bens }, { data: parts }, { data: logs }] = await Promise.all([
-      _client.from('beneficiaries').select('*').order('name'),
-      _client.from('activity_participants').select('beneficiary_id,project_name,activity_name,attended_date,note'),
-      _client.from('beneficiary_activity_log').select('beneficiary_id,project_name,activity_name,attended_date,note,source'),
+    const [bens, parts, logs] = await Promise.all([
+      fetchAllRows(() => _client.from('beneficiaries').select('*').order('id', { ascending: true })),
+      fetchAllRows(() => _client.from('activity_participants').select('beneficiary_id,project_name,activity_name,attended_date,note').order('beneficiary_id', { ascending: true })),
+      fetchAllRows(() => _client.from('beneficiary_activity_log').select('beneficiary_id,project_name,activity_name,attended_date,note,source').order('beneficiary_id', { ascending: true })),
     ]);
 
     // Filter per proyek jika ada
