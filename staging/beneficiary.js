@@ -10,133 +10,118 @@ let _benCurrentPage  = 1;
 const BEN_PAGE_SIZE  = 20;
 
 // ── Load utama ────────────────────────────────────────────────────────
-
 window.loadBeneficiaries = async function () {
-  const client = window.client;
-  if (!client) return;
-
+  const _client = window.client || client;
   showBenLoading(true);
 
-  try {
-    const [
-      { data: benData, error: benErr },
-      { data: partData, error: partErr },
-      { data: projData, error: projErr },
-      { data: logData, error: logErr }
-    ] = await Promise.all([
-      client.from('beneficiaries').select('id, name, phone, gender, birthyear, location, occupation, email, note').order('name'),
-      client.from('activityparticipants').select('beneficiaryid, activityid, projectname, activityname, attendeddate, note'),
-      client.from('beneficiaryprojects').select('beneficiaryid, projectname'),
-      client.from('beneficiaryactivitylog').select('beneficiaryid, projectname, activityname, attendeddate, source, note')
-    ]);
+  const [
+    { data: benData },
+    { data: partData },
+    { data: projData },
+    { data: logData },
+  ] = await Promise.all([
+    _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
+    _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
+    _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
+    _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source'),
+  ]);
 
-    if (benErr) throw benErr;
-    if (partErr) throw partErr;
-    if (projErr) throw projErr;
-    if (logErr) throw logErr;
+  _benAllData        = benData  || [];
+  const participants = partData || [];
+  const benProjects  = projData || [];
+  const actLogs      = logData  || [];
 
-    benAllData = benData || [];
-    const participants = partData || [];
-    const benProjects = projData || [];
-    const actLogs = logData || [];
+  // Map: beneficiary_id → log entries (aktivitas free text)
+  window._benActLogMap = {};
+  actLogs.forEach(l => {
+    if (!window._benActLogMap[l.beneficiary_id]) window._benActLogMap[l.beneficiary_id] = [];
+    window._benActLogMap[l.beneficiary_id].push(l);
+  });
 
-    window.benActLogMap = {};
-    actLogs.forEach(l => {
-      if (!window.benActLogMap[l.beneficiaryid]) window.benActLogMap[l.beneficiaryid] = [];
-      window.benActLogMap[l.beneficiaryid].push(l);
-    });
+  // Map: beneficiary_id → Set<project_name>
+  const projMapBen = {};
+  benProjects.forEach(bp => {
+    if (!projMapBen[bp.beneficiary_id]) projMapBen[bp.beneficiary_id] = new Set();
+    projMapBen[bp.beneficiary_id].add(bp.project_name);
+  });
 
-    const projMapBen = {};
-    benProjects.forEach(bp => {
-      if (!projMapBen[bp.beneficiaryid]) projMapBen[bp.beneficiaryid] = new Set();
-      if (bp.projectname) projMapBen[bp.beneficiaryid].add(bp.projectname);
-    });
+  // Map: beneficiary_id → partisipasi kegiatan
+  const partMap = {};
+  participants.forEach(p => {
+    if (!partMap[p.beneficiary_id]) partMap[p.beneficiary_id] = [];
+    partMap[p.beneficiary_id].push(p);
+  });
 
-    const partMap = {};
-    participants.forEach(p => {
-      if (!partMap[p.beneficiaryid]) partMap[p.beneficiaryid] = [];
-      partMap[p.beneficiaryid].push(p);
-    });
+  // Gabungkan data
+  _benAllData = _benAllData.map(b => {
+    const fromProjTable = projMapBen[b.id] || new Set();
+    const fromParts     = new Set((partMap[b.id] || []).map(p => p.project_name).filter(Boolean));
+    const fromLogs      = new Set((window._benActLogMap[b.id] || []).map(l => l.project_name).filter(Boolean));
+    const allProjects   = new Set([...fromProjTable, ...fromParts, ...fromLogs]);
+    const linkedActs    = partMap[b.id] || [];
+    const logActs       = window._benActLogMap[b.id] || [];
+    return {
+      ...b,
+      projects      : [...allProjects],
+      participations: linkedActs,
+      activityLogs  : logActs,
+      totalKegiatan : linkedActs.length + logActs.length,
+      totalProyek   : allProjects.size,
+    };
+  });
 
-    benAllData = benAllData.map(b => {
-      const fromProjTable = projMapBen[b.id] || new Set();
-      const linkedActs = partMap[b.id] || [];
-      const logActs = window.benActLogMap[b.id] || [];
-      const fromParts = new Set(linkedActs.map(p => p.projectname).filter(Boolean));
-      const fromLogs = new Set(logActs.map(l => l.projectname).filter(Boolean));
-      const allProjects = new Set([...fromProjTable, ...fromParts, ...fromLogs]);
+  // Kumpulkan semua proyek unik dari data
+  const allProjNames = [...new Set(
+    _benAllData.flatMap(b => b.projects)
+  )].filter(Boolean).sort();
 
-      return {
-        ...b,
-        projects: [...allProjects],
-        participations: linkedActs,
-        activityLogs: logActs,
-        totalKegiatan: linkedActs.length + logActs.length,
-        totalProyek: allProjects.size
-      };
-    });
-
-    window.benCanonicalData = buildCanonicalBeneficiaries(benAllData);
-
-    const allProjNames = [...new Set(window.benCanonicalData.flatMap(b => b.projects || []).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
-
-    const selMain = document.getElementById('benProjectSelector');
-    if (selMain) {
-      const curVal = allProjNames.includes(selMain.value) ? selMain.value : '';
-      selMain.innerHTML = `<option value="">Semua Proyek</option>` + allProjNames.map(p => `<option value="${esc(p)}" ${curVal === p ? 'selected' : ''}>${esc(p)}</option>`).join('');
-    }
-
-    const selFilter = document.getElementById('benFilterProject');
-    if (selFilter) {
-      const curVal = allProjNames.includes(selFilter.value) ? selFilter.value : '';
-      selFilter.innerHTML = `<option value="">Semua Proyek</option>` + allProjNames.map(p => `<option value="${esc(p)}" ${curVal === p ? 'selected' : ''}>${esc(p)}</option>`).join('');
-    }
-
-    const activeSel = document.getElementById('benProjectSelector')?.value || '';
-    benFilteredData = activeSel ? window.benCanonicalData.filter(b => matchBeneficiaryProject(b, activeSel)) : [...window.benCanonicalData];
-
-    updateBenStats(activeSel);
-    benCurrentPage = 1;
-    renderBenTable();
-    if (window.initBenModalStability) window.initBenModalStability();
-  } catch (err) {
-    alert(`Gagal memuat penerima manfaat: ${err.message}`);
-  } finally {
-    showBenLoading(false);
+  // Populate benProjectSelector (selector bar utama)
+  const selMain = document.getElementById('benProjectSelector');
+  if (selMain) {
+    const curVal = selMain.value;
+    selMain.innerHTML = '<option value="">📊 Semua Proyek</option>' +
+      allProjNames.map(p => `<option value="${p}" ${p===curVal?'selected':''}>${p}</option>`).join('');
   }
+
+  // Populate benFilterProject (filter di toolbar)
+  const selFilter = document.getElementById('benFilterProject');
+  if (selFilter) {
+    const curF = selFilter.value;
+    selFilter.innerHTML = '<option value="">Semua Proyek</option>' +
+      allProjNames.map(p => `<option value="${p}" ${p===curF?'selected':''}>${p}</option>`).join('');
+  }
+
+  // Hitung & tampilkan stats (gunakan selektor aktif)
+  const activeSel = selMain?.value || '';
+  updateBenStats(activeSel);
+
+  _benFilteredData = [..._benAllData];
+  _benCurrentPage  = 1;
+  renderBenTable();
+  window.initBenModalStability && window.initBenModalStability();
+  showBenLoading(false);
 };
 
 // Hitung ulang stat cards berdasarkan proyek yang dipilih
-
 function updateBenStats(projectFilter) {
-  const source = window.benCanonicalData || [];
-  const subset = projectFilter ? source.filter(b => matchBeneficiaryProject(b, projectFilter)) : source;
+  const subset = projectFilter
+    ? _benAllData.filter(b => (b.projects||[]).includes(projectFilter))
+    : _benAllData;
+  const parts  = projectFilter
+    ? subset.flatMap(b => b.participations.filter(p => p.project_name === projectFilter))
+    : subset.flatMap(b => b.participations);
 
-  const totalPartisipasiResmi = projectFilter
-    ? subset.reduce((sum, b) => sum + filterParticipationsByProject(b, projectFilter).length, 0)
-    : subset.reduce((sum, b) => sum + Number(b.totalPartisipasiResmi || 0), 0);
+  document.getElementById('benStatUnique').textContent    = subset.length.toLocaleString('id-ID');
+  document.getElementById('benStatMale').textContent      = subset.filter(b=>b.gender==='Laki-laki').length.toLocaleString('id-ID');
+  document.getElementById('benStatFemale').textContent    = subset.filter(b=>b.gender==='Perempuan').length.toLocaleString('id-ID');
+  document.getElementById('benStatParticip').textContent  = parts.length.toLocaleString('id-ID');
 
-  const totalOrangPernahIkut = projectFilter
-    ? subset.filter(b => filterParticipationsByProject(b, projectFilter).length > 0 || filterLogsByProject(b, projectFilter).length > 0).length
-    : subset.filter(b => b.pernahIkutKegiatan).length;
-
-  const uniqueEl = document.getElementById('benStatUnique');
-  const participEl = document.getElementById('benStatParticip');
-  const everEl = document.getElementById('benStatEverJoined');
-
-  if (uniqueEl) uniqueEl.textContent = subset.length.toLocaleString('id-ID');
-  if (participEl) participEl.textContent = totalPartisipasiResmi.toLocaleString('id-ID');
-  if (everEl) everEl.textContent = totalOrangPernahIkut.toLocaleString('id-ID');
-
-  const lblUnique = document.getElementById('benStatUniqueLabel');
-  const lblParticip = document.getElementById('benStatParticipLabel');
-  const lblEver = document.getElementById('benStatEverJoinedLabel');
-
-  if (lblUnique) lblUnique.textContent = 'Jumlah Unik';
-  if (lblParticip) lblParticip.textContent = 'Partisipasi Resmi';
-  if (lblEver) lblEver.textContent = 'Pernah Ikut Kegiatan';
+  // Label stat card sesuai konteks
+  const participLbl = document.getElementById('benStatParticipLabel');
+  if (participLbl) participLbl.textContent = 'Total Data Terinput';
+  const lbl = document.getElementById('benStatUniqueLabel');
+  if (lbl) lbl.textContent = projectFilter ? `Penerima — ${projectFilter.length > 25 ? projectFilter.slice(0,25)+'…' : projectFilter}` : 'Total Unik';
 }
-
 
 // Handler saat project selector bar berubah
 window.onBenProjectSelectorChange = function (val) {
@@ -168,102 +153,104 @@ window.onBenProjectSelectorChange = function (val) {
 };
 
 // ── Filter & Search ───────────────────────────────────────────────────
-
 window.filterBeneficiaries = function () {
-  const q = (document.getElementById('benSearchInput')?.value || '').trim().toLowerCase();
-  const gender = document.getElementById('benFilterGender')?.value || '';
-  const project = document.getElementById('benFilterProject')?.value || document.getElementById('benProjectSelector')?.value || '';
+  const q       = (document.getElementById('benSearchInput')?.value || '').toLowerCase();
+  const gender  = document.getElementById('benFilterGender')?.value || '';
+  // Project filter: ambil dari toolbar ATAU dari selector bar (mana yang berisi)
+  const project = document.getElementById('benFilterProject')?.value ||
+                  document.getElementById('benProjectSelector')?.value || '';
 
+  // Sync kedua selector agar konsisten
   const selFilter = document.getElementById('benFilterProject');
-  const selMain = document.getElementById('benProjectSelector');
-  if (selFilter) selFilter.value = project;
-  if (selMain) selMain.value = project;
-
-  const lbl = document.getElementById('benActiveProjectLabel');
-  if (lbl) lbl.textContent = project || 'Semua Proyek';
-
-  const bar = document.getElementById('benProjectSelectorBar');
-  if (bar) {
-    bar.style.background = project ? 'linear-gradient(135deg,#eff6ff,#dbeafe)' : '#fff';
-    bar.style.borderColor = project ? '#93c5fd' : '#e2e8f0';
+  const selMain   = document.getElementById('benProjectSelector');
+  if (selFilter && selFilter.value !== project) selFilter.value = project;
+  if (selMain   && selMain.value   !== project) {
+    selMain.value = project;
+    // Update label & warna selector bar
+    const lbl = document.getElementById('benActiveProjectLabel');
+    if (lbl) lbl.textContent = project || 'Semua Proyek';
+    const bar = document.getElementById('benProjectSelectorBar');
+    if (bar) {
+      bar.style.background  = project ? 'linear-gradient(135deg,#eff6ff,#dbeafe)' : '#fff';
+      bar.style.borderColor = project ? '#93c5fd' : '#e2e8f0';
+    }
   }
 
-  updateBenStats(project);
+  // Update stat cards sesuai proyek
+  if (typeof updateBenStats === 'function') updateBenStats(project);
 
-  const source = window.benCanonicalData || [];
-  benFilteredData = source.filter(b => {
-    const name = String(b.name || '').toLowerCase();
-    const phone = String(b.phone || '').toLowerCase();
-    const location = String(b.location || '').toLowerCase();
-    const occupation = String(b.occupation || '').toLowerCase();
-    const matchQ = !q || name.includes(q) || phone.includes(q) || location.includes(q) || occupation.includes(q);
+  _benFilteredData = _benAllData.filter(b => {
+    const matchQ = !q ||
+      (b.name||'').toLowerCase().includes(q) ||
+      (b.phone||'').toLowerCase().includes(q) ||
+      (b.location||'').toLowerCase().includes(q) ||
+      (b.occupation||'').toLowerCase().includes(q);
     const matchG = !gender || b.gender === gender;
-    const matchP = !project || matchBeneficiaryProject(b, project);
+    const matchP = !project || (b.projects || []).includes(project) ||
+                   b.participations.some(p => p.project_name === project);
     return matchQ && matchG && matchP;
   });
-
-  benCurrentPage = 1;
+  _benCurrentPage = 1;
   renderBenTable();
 };
 
 // ── Render tabel ──────────────────────────────────────────────────────
-
 function renderBenTable() {
   const tbody = document.getElementById('benTableBody');
   if (!tbody) return;
+  const total = _benFilteredData.length;
+  const start = (_benCurrentPage - 1) * BEN_PAGE_SIZE;
+  const rows  = _benFilteredData.slice(start, start + BEN_PAGE_SIZE);
 
-  const total = benFilteredData.length;
-  const start = (benCurrentPage - 1) * BENPAGESIZE;
-  const rows = benFilteredData.slice(start, start + BENPAGESIZE);
+  document.getElementById('benCountLabel').textContent =
+    `Menampilkan ${Math.min(start+1, total)}–${Math.min(start+BEN_PAGE_SIZE, total)} dari ${total} orang`;
 
-  const countLabel = document.getElementById('benCountLabel');
-  if (countLabel) countLabel.textContent = `Menampilkan ${total ? start + 1 : 0}-${Math.min(start + BENPAGESIZE, total)} dari ${total} orang unik`;
-
-  const activeProj = document.getElementById('benProjectSelector')?.value || '';
-  if (typeof renderBenCharts === 'function') renderBenCharts(benFilteredData, activeProj);
+  // Update charts dengan data yang sedang difilter
+  const _activeProj = document.getElementById('benProjectSelector')?.value || '';
+  if (typeof renderBenCharts === 'function') renderBenCharts(_benFilteredData, _activeProj);
 
   if (!rows.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="9" style="text-align:center;padding:28px;color:#94a3b8">
-          ${(window.benCanonicalData || []).length ? 'Tidak ada data yang cocok.' : 'Belum ada penerima manfaat. Tambah atau import dari Excel.'}
-        </td>
-      </tr>
-    `;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:#94a3b8;">
+      ${_benAllData.length ? '🔍 Tidak ada data yang cocok.' : '👤 Belum ada penerima manfaat. Tambah atau import dari Excel.'}</td></tr>`;
     renderBenPagination(0);
     return;
   }
 
   tbody.innerHTML = rows.map((b, i) => {
-    const usia = b.birthyear ? `${new Date().getFullYear() - b.birthyear} th` : '-';
-    const rowKey = encodeURIComponent(String(b.dedupKey || b.primaryId || b.id));
-    const projs = b.projects || [];
-    const projLabel = projs.length ? projs.map(p => `<span style="background:#eff6ff;color:#2563eb;border-radius:4px;padding:1px 6px;font-size:10px;white-space:nowrap">${esc(p)}</span>`).join(' ') : `<span style="color:#94a3b8">-</span>`;
-    const officialCount = Number(b.totalPartisipasiResmi || 0);
-    const logCount = Number(b.totalLogBebas || 0);
+    const usia = b.birth_year ? (new Date().getFullYear() - b.birth_year) + ' th' : '-';
+    const projs = (b.projects && b.projects.length) ? b.projects : [...new Set(b.participations.map(p => p.project_name))].filter(Boolean);
+    const projLabel = projs.length
+      ? projs.map(p => `<span style="background:#eff6ff;color:#2563eb;border-radius:4px;padding:1px 6px;font-size:10px;white-space:nowrap">${p}</span>`).join(' ')
+      : '<span style="color:#94a3b8">-</span>';
 
-    return `
-      <tr>
-        <td style="color:#94a3b8;font-size:12px">${start + i + 1}</td>
-        <td><div style="font-weight:600;font-size:13px;color:#0f172a">${esc(b.name || '-')}</div><div style="font-size:11px;color:#94a3b8">${esc(b.phone || '-')}</div></td>
-        <td><span class="badge ${b.gender === 'Laki-laki' ? 'badge-output' : 'badge-outcome'}" style="font-size:10px">${esc(b.gender || '-')}</span></td>
-        <td style="font-size:12px;color:#475569">${usia}</td>
-        <td style="font-size:12px;color:#475569">${esc(b.location || '-')}</td>
-        <td style="font-size:12px;color:#475569">${esc(b.occupation || '-')}</td>
-        <td><div style="font-size:12px;font-weight:700;color:#2563eb">${officialCount}x resmi</div><div style="font-size:10px;color:${logCount ? '#92400e' : '#94a3b8'}">${logCount ? `+${logCount} log bebas` : 'tanpa log bebas'}</div></td>
-        <td style="max-width:220px">${projLabel}</td>
-        <td>
-          <button class="btn-secondary btn-sm" style="margin-right:4px" onclick="openBenDetail('${rowKey}')">Detail</button>
-          <button class="btn-secondary btn-sm" style="margin-right:4px;color:#d97706;border-color:#fde68a" onclick="openEditBenModal('${rowKey}')"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
-          <button class="btn-danger btn-sm" onclick="deleteBeneficiary('${rowKey}')">Hapus</button>
-        </td>
-      </tr>
-    `;
+    return `<tr>
+      <td style="color:#94a3b8;font-size:12px">${start + i + 1}</td>
+      <td>
+        <div style="font-weight:600;font-size:13px;color:#0f172a">${_esc(b.name)}</div>
+        ${b.phone ? `<div style="font-size:11px;color:#94a3b8">${_esc(b.phone)}</div>` : ''}
+      </td>
+      <td><span class="badge ${b.gender==='Laki-laki'?'badge-output':'badge-outcome'}" style="font-size:10px">${b.gender||'-'}</span></td>
+      <td style="font-size:12px;color:#475569">${usia}</td>
+      <td style="font-size:12px;color:#475569">${_esc(b.location||'-')}</td>
+      <td style="font-size:12px;color:#475569">${_esc(b.occupation||'-')}</td>
+      <td>
+        <div style="font-size:12px;font-weight:600;color:#2563eb">${b.totalKegiatan}x</div>
+        <div style="font-size:10px;color:#94a3b8">${b.totalProyek} proyek</div>
+      </td>
+      <td style="max-width:200px">${projLabel}</td>
+      <td>
+        <button class="btn-secondary btn-sm" style="margin-right:4px"
+          onclick="openBenDetail('${b.id}')">Detail</button>
+        <button class="btn-secondary btn-sm" style="margin-right:4px;color:#d97706;border-color:#fde68a"
+          onclick="openEditBenModal('${b.id}')"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+        <button class="btn-danger btn-sm"
+          onclick="deleteBeneficiary('${b.id}','${_esc(b.name).replace(/'/g,"\\\\'")}')">Hapus</button>
+      </td>
+    </tr>`;
   }).join('');
 
   renderBenPagination(total);
 }
-
 
 function renderBenPagination(total) {
   const container = document.getElementById('benPagination');
@@ -489,81 +476,98 @@ window.saveBeneficiary = async function () {
 };
 
 // ── Detail beneficiary + riwayat kegiatan ─────────────────────────────
-
-window.openBenDetail = async function (ref) {
-  const ben = getCanonicalBeneficiary(ref) || benAllData.find(b => String(b.id) === String(ref));
+window.openBenDetail = async function (id) {
+  const _client = window.client || client;
+  const ben = _benAllData.find(b => b.id === id);
   if (!ben) return;
 
   const overlay = document.getElementById('benDetailOverlay');
   overlay.classList.remove('hidden');
 
-  document.getElementById('benDetailName').textContent = ben.name || '-';
-  document.getElementById('benDetailMeta').textContent = [ben.gender, ben.birthyear ? `${new Date().getFullYear() - ben.birthyear} tahun` : null, ben.location, ben.occupation].filter(Boolean).join(' • ');
+  document.getElementById('benDetailName').textContent = ben.name;
+  document.getElementById('benDetailMeta').textContent =
+    [ben.gender, ben.birth_year ? (new Date().getFullYear()-ben.birth_year)+' tahun' : null,
+     ben.location, ben.occupation].filter(Boolean).join(' · ');
 
-  const linked = (ben.participations || []).map(p => ({ ...p, type: 'linked' }));
-  const free = (ben.activityLogs || []).map(l => ({ ...l, type: 'log' }));
-  const list = [...linked, ...free].sort((a, b) => String(b.attendeddate || '').localeCompare(String(a.attendeddate || '')));
-  const allProjects = new Set(list.map(x => x.projectname).filter(Boolean));
+  // Load riwayat dari kedua tabel paralel
+  const [{ data: parts }, { data: logs }] = await Promise.all([
+    _client.from('activity_participants')
+      .select('activity_name, project_name, attended_date, note')
+      .eq('beneficiary_id', id)
+      .order('attended_date', { ascending: false }),
+    _client.from('beneficiary_activity_log')
+      .select('activity_name, project_name, attended_date, source, note')
+      .eq('beneficiary_id', id)
+      .order('attended_date', { ascending: false }),
+  ]);
 
+  // Gabungkan: linked + log, beri label
+  const linked = (parts||[]).map(p => ({ ...p, _type: 'linked' }));
+  const free   = (logs ||[]).map(l => ({ ...l, _type: 'log'    }));
+  const list   = [...linked, ...free].sort((a,b) => {
+    if (!a.attended_date) return 1;
+    if (!b.attended_date) return -1;
+    return b.attended_date.localeCompare(a.attended_date);
+  });
+
+  const allProjects = new Set(list.map(p=>p.project_name).filter(Boolean));
   document.getElementById('benDetailStats').innerHTML = `
-    <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">${linked.length} partisipasi resmi</span>
-    <span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">${free.length} log bebas</span>
-    <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">${allProjects.size} proyek</span>
-  `;
+    <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+      ${list.length}x kegiatan
+    </span>
+    <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+      ${allProjects.size} proyek
+    </span>
+    ${free.length ? `<span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+      📝 ${free.length} log bebas
+    </span>` : ''}`;
 
   if (!list.length) {
-    document.getElementById('benDetailHistory').innerHTML = `<div style="padding:16px;color:#94a3b8;font-size:13px">Belum ada riwayat kegiatan.</div>`;
+    document.getElementById('benDetailHistory').innerHTML =
+      '<div style="padding:16px;color:#94a3b8;font-size:13px">Belum ada riwayat kegiatan.</div>';
     return;
   }
 
+  // Group by proyek
   const byProj = {};
-  list.forEach(item => {
-    const proj = item.projectname || 'Tanpa Proyek';
+  list.forEach(p => {
+    const proj = p.project_name || 'Tanpa Proyek';
     if (!byProj[proj]) byProj[proj] = [];
-    byProj[proj].push(item);
+    byProj[proj].push(p);
   });
 
   document.getElementById('benDetailHistory').innerHTML = Object.entries(byProj).map(([proj, items]) => `
     <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9">${esc(proj)} <span style="color:#94a3b8;font-weight:400">${items.length} catatan</span></div>
+      <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9">
+        📁 ${_esc(proj)} <span style="color:#94a3b8;font-weight:400">(${items.length} kegiatan)</span>
+      </div>
       ${items.map(it => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-radius:6px;background:${it.type === 'log' ? '#fffbeb' : '#f8fafc'};margin-bottom:4px;border:1px solid ${it.type === 'log' ? '#fde68a' : 'transparent'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-radius:6px;background:${it._type==='log'?'#fffbeb':'#f8fafc'};margin-bottom:4px;border:1px solid ${it._type==='log'?'#fde68a':'transparent'}">
           <div>
-            <div style="font-size:12px;font-weight:600;color:#334155">${esc(it.activityname || '-')}${it.type === 'log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : '<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px;margin-left:4px">resmi</span>'}</div>
-            ${it.note ? `<div style="font-size:11px;color:#94a3b8">${esc(it.note)}</div>` : ''}
+            <div style="font-size:12px;font-weight:600;color:#334155">
+              ${_esc(it.activity_name||'-')}
+              ${it._type==='log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : ''}
+            </div>
+            ${it.note ? `<div style="font-size:11px;color:#94a3b8">${_esc(it.note)}</div>` : ''}
           </div>
-          <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">${it.attendeddate ? new Date(it.attendeddate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}</div>
-        </div>
-      `).join('')}
-    </div>
-  `).join('');
+          <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">
+            ${it.attended_date ? new Date(it.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-'}
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
 };
-
 window.closeBenDetail = function () {
   document.getElementById('benDetailOverlay').classList.add('hidden');
 };
 
 // ── Delete beneficiary ────────────────────────────────────────────────
-
-window.deleteBeneficiary = async function (ref) {
-  const ben = getCanonicalBeneficiary(ref) || benAllData.find(x => String(x.id) === String(ref));
-  if (!ben) return;
-
-  const ids = (ben.sourceIds && ben.sourceIds.length) ? ben.sourceIds : [ben.primaryId || ben.id].filter(Boolean);
-  const name = ben.name || 'data ini';
-  const extra = ids.length > 1 ? ` Termasuk ${ids.length} record yang tergabung.` : '';
-
-  if (!confirm(`Hapus ${name} dari daftar penerima manfaat?${extra} Kegiatan orang ini juga akan terhapus.`)) return;
-
-  const client = window.client;
-  const { error } = await client.from('beneficiaries').delete().in('id', ids);
-  if (error) {
-    alert(`Gagal hapus: ${error.message}`);
-    return;
-  }
+window.deleteBeneficiary = async function (id, name) {
+  if (!confirm(`Hapus "${name}" dari daftar penerima manfaat?\nRiwayat kegiatan orang ini juga akan terhapus.`)) return;
+  const _client = window.client || client;
+  const { error } = await _client.from('beneficiaries').delete().eq('id', id);
+  if (error) { alert('Gagal hapus: ' + error.message); return; }
   loadBeneficiaries();
 };
-
 
 // ── Import dari Excel ─────────────────────────────────────────────────
 window.openBenImport = function () {
@@ -644,13 +648,11 @@ function getBeneficiaryUniqueKey(r) {
 }
 
 
-
 function normalizeBenText(v) {
-  return String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return String(v || '').trim().toLowerCase();
 }
-
 function normalizeBenPhone(v) {
-  const raw = String(v ?? '').trim();
+  const raw = String(v || '').trim();
   if (!raw) return '';
   const digits = raw.replace(/[^0-9]/g, '');
   if (!digits) return '';
@@ -658,150 +660,43 @@ function normalizeBenPhone(v) {
   if (digits.startsWith('0')) return '62' + digits.slice(1);
   return digits;
 }
-
-function normalizeBenLocation(v) {
-  return String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+function getBeneficiaryUniqueKey(r) {
+  const name = normalizeBenText(r?.name);
+  const phone = normalizeBenPhone(r?.phone);
+  const gender = normalizeBenText(normGender(r?.gender || '') || '');
+  if (name && phone && gender) return `${name}|${phone}|${gender}`;
+  if (name && gender) return `${name}|no-phone|${gender}`;
+  if (name && phone) return `${name}|${phone}|no-gender`;
+  if (name) return `${name}|unverified`;
+  return 'unknown|unverified';
 }
-
-function buildBenIdentity(row) {
+function isSameBeneficiary(existing, incoming) {
+  const exName = normalizeBenText(existing?.name);
+  const exPhone = normalizeBenPhone(existing?.phone);
+  const exGender = normalizeBenText(normGender(existing?.gender || '') || '');
+  const inName = normalizeBenText(incoming?.name);
+  const inPhone = normalizeBenPhone(incoming?.phone);
+  const inGender = normalizeBenText(normGender(incoming?.gender || '') || '');
+  if (!exName || !inName || exName !== inName) return false;
+  if (inPhone && inGender) return exPhone === inPhone && exGender === inGender;
+  if (!inPhone && inGender) return exGender === inGender;
+  if (inPhone && !inGender) return exPhone === inPhone;
+  return false;
+}
+function mergeBeneficiaryPayload(existing, incoming) {
+  const incomingBirthYear = incoming?.birth_year ? parseInt(incoming.birth_year, 10) : null;
+  const existingBirthYear = existing?.birth_year ? parseInt(existing.birth_year, 10) : null;
   return {
-    name: normalizeBenText(row?.name),
-    phone: normalizeBenPhone(row?.phone),
-    location: normalizeBenLocation(row?.location)
+    name: String(incoming?.name || '').trim() || existing?.name || null,
+    phone: normalizeBenPhone(incoming?.phone) || existing?.phone || null,
+    gender: normGender(incoming?.gender || '') || existing?.gender || null,
+    birth_year: Number.isFinite(incomingBirthYear) ? incomingBirthYear : existingBirthYear,
+    location: String(incoming?.location || '').trim() || existing?.location || null,
+    occupation: String(incoming?.occupation || '').trim() || existing?.occupation || null,
+    email: String(incoming?.email || '').trim() || existing?.email || null,
+    note: String(incoming?.note || '').trim() || existing?.note || null,
   };
 }
-
-function getBeneficiaryUniqueKey(row, fallbackId = null) {
-  const { name, phone, location } = buildBenIdentity(row);
-  if (name && phone && location) return `npl:${name}|${phone}|${location}`;
-  if (name && phone) return `np:${name}|${phone}`;
-  if (name && location) return `nl:${name}|${location}`;
-  if (name) return `n:${name}`;
-  return fallbackId ? `id:${fallbackId}` : 'unknown';
-}
-
-function isSameBeneficiary(existing, incoming) {
-  const ex = buildBenIdentity(existing);
-  const inc = buildBenIdentity(incoming);
-
-  if (!ex.name || !inc.name || ex.name !== inc.name) return false;
-  if (inc.phone && inc.location) return ex.phone === inc.phone && ex.location === inc.location;
-  if (inc.phone) return ex.phone === inc.phone;
-  if (inc.location) return ex.location === inc.location;
-  return !ex.phone && !ex.location;
-}
-
-function uniqBy(arr, keyFn) {
-  const seen = new Set();
-  return (arr || []).filter(item => {
-    const key = keyFn(item);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function matchBeneficiaryProject(b, projectFilter) {
-  if (!projectFilter) return true;
-  return (
-    (b.projects || []).includes(projectFilter) ||
-    (b.participations || []).some(p => p.projectname === projectFilter) ||
-    (b.activityLogs || []).some(l => l.projectname === projectFilter)
-  );
-}
-
-function filterParticipationsByProject(b, projectFilter) {
-  if (!projectFilter) return b.participations || [];
-  return (b.participations || []).filter(p => p.projectname === projectFilter);
-}
-
-function filterLogsByProject(b, projectFilter) {
-  if (!projectFilter) return b.activityLogs || [];
-  return (b.activityLogs || []).filter(l => l.projectname === projectFilter);
-}
-
-function buildCanonicalBeneficiaries(rows) {
-  const grouped = new Map();
-
-  (rows || []).forEach((b, idx) => {
-    const key = getBeneficiaryUniqueKey(b, b.id || idx + 1);
-
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        ...b,
-        id: b.id,
-        primaryId: b.id,
-        dedupKey: key,
-        sourceIds: [b.id].filter(Boolean),
-        projects: [...(b.projects || [])],
-        participations: [...(b.participations || [])],
-        activityLogs: [...(b.activityLogs || [])]
-      });
-      return;
-    }
-
-    const cur = grouped.get(key);
-    cur.sourceIds = uniqBy([...(cur.sourceIds || []), b.id].filter(Boolean), x => String(x));
-    cur.projects = uniqBy([...(cur.projects || []), ...(b.projects || [])].filter(Boolean), x => String(x).trim().toLowerCase());
-    cur.participations = uniqBy(
-      [...(cur.participations || []), ...(b.participations || [])],
-      p => [p.activityid || '', p.projectname || '', p.activityname || '', p.attendeddate || ''].join('|')
-    );
-    cur.activityLogs = uniqBy(
-      [...(cur.activityLogs || []), ...(b.activityLogs || [])],
-      l => [l.projectname || '', l.activityname || '', l.attendeddate || '', l.source || '', l.note || ''].join('|')
-    );
-
-    cur.phone = cur.phone || b.phone || null;
-    cur.location = cur.location || b.location || null;
-    cur.gender = cur.gender || b.gender || null;
-    cur.birthyear = cur.birthyear || b.birthyear || null;
-    cur.occupation = cur.occupation || b.occupation || null;
-    cur.email = cur.email || b.email || null;
-    cur.note = cur.note || b.note || null;
-  });
-
-  return [...grouped.values()].map(b => {
-    const allProjects = new Set([
-      ...(b.projects || []),
-      ...(b.participations || []).map(p => p.projectname).filter(Boolean),
-      ...(b.activityLogs || []).map(l => l.projectname).filter(Boolean)
-    ]);
-
-    const totalPartisipasiResmi = (b.participations || []).length;
-    const totalLogBebas = (b.activityLogs || []).length;
-
-    return {
-      ...b,
-      id: b.primaryId || b.id,
-      projects: [...allProjects],
-      totalPartisipasiResmi,
-      totalLogBebas,
-      totalKegiatan: totalPartisipasiResmi,
-      totalSemuaJejakKegiatan: totalPartisipasiResmi + totalLogBebas,
-      totalProyek: allProjects.size,
-      pernahIkutKegiatan: (totalPartisipasiResmi + totalLogBebas) > 0
-    };
-  });
-}
-
-function getCanonicalBeneficiary(ref) {
-  const raw = String(ref ?? '').trim();
-  if (!raw) return null;
-
-  let decoded = raw;
-  try {
-    decoded = decodeURIComponent(raw);
-  } catch (_) {}
-
-  return (window.benCanonicalData || []).find(b =>
-    String(b.dedupKey) === decoded ||
-    String(b.primaryId) === raw ||
-    String(b.id) === raw ||
-    (b.sourceIds || []).map(String).includes(raw)
-  ) || null;
-}
-
 async function findExistingBeneficiary(client, row) {
   const name = String(row?.name || '').trim();
   if (!name) return null;
@@ -1390,102 +1285,142 @@ window.renderBenCharts = function (data, projectFilter) {
 // ══════════════════════════════════════════════════════════════
 // EXPORT EXCEL — Penerima Manfaat
 // ══════════════════════════════════════════════════════════════
-
 window.exportBenToExcel = async function () {
+  const _client   = window.client || client;
+  const projFilter = document.getElementById('benProjectSelector')?.value || '';
+
+  // Tampilkan loading di tombol
   const btn = document.getElementById('benExportBtn');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Exporting...`;
-  }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…'; }
 
   try {
-    const projFilter = document.getElementById('benProjectSelector')?.value || '';
-    const source = window.benCanonicalData || [];
-    const subset = projFilter ? source.filter(b => matchBeneficiaryProject(b, projFilter)) : source;
+    // Load data lengkap dari DB (termasuk activity log)
+    const [{ data: bens }, { data: parts }, { data: logs }] = await Promise.all([
+      _client.from('beneficiaries').select('*').order('name'),
+      _client.from('activity_participants').select('beneficiary_id,project_name,activity_name,attended_date,note'),
+      _client.from('beneficiary_activity_log').select('beneficiary_id,project_name,activity_name,attended_date,note,source'),
+    ]);
+
+    // Filter per proyek jika ada
+    let benList = bens || [];
+    if (projFilter) {
+      const { data: bp } = await _client.from('beneficiary_projects')
+        .select('beneficiary_id').eq('project_name', projFilter);
+      const bpIds = new Set((bp||[]).map(r=>r.beneficiary_id));
+      benList = benList.filter(b => bpIds.has(b.id));
+    }
+
+    const partMap = {};
+    (parts||[]).forEach(p => { if(!partMap[p.beneficiary_id]) partMap[p.beneficiary_id]=[]; partMap[p.beneficiary_id].push(p); });
+    const logMap = {};
+    (logs||[]).forEach(l => { if(!logMap[l.beneficiary_id]) logMap[l.beneficiary_id]=[]; logMap[l.beneficiary_id].push(l); });
 
     const wb = XLSX.utils.book_new();
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const niceDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
 
-    const headers1 = ['No', 'Nama', 'No HP', 'Lokasi', 'Jenis Kelamin', 'Pekerjaan', 'Partisipasi Resmi', 'Log Bebas', 'Total Jejak Kegiatan', 'Jumlah Proyek', 'Proyek', 'Catatan'];
-    const rows1 = subset.map((b, i) => {
-      const official = filterParticipationsByProject(b, projFilter).length;
-      const logs = filterLogsByProject(b, projFilter).length;
-      const projs = projFilter ? [projFilter] : (b.projects || []);
-      return [i + 1, b.name || '', b.phone || '', b.location || '', b.gender || '', b.occupation || '', official, logs, official + logs, projs.length, projs.join(', '), b.note || ''];
+    // ── Sheet 1: Master Penerima Manfaat ──────────────────────
+    const headers1 = ['No','Nama','No HP','Jenis Kelamin','Tahun Lahir','Usia',
+                       'Lokasi/Asal','Pekerjaan','Email','Total Kegiatan','Proyek','Catatan'];
+    const now = new Date().getFullYear();
+    const rows1 = benList.map((b, i) => {
+      const allParts = [...(partMap[b.id]||[]), ...(logMap[b.id]||[])];
+      const projs    = [...new Set(allParts.map(p=>p.project_name).filter(Boolean))].join(', ');
+      return [
+        i+1, b.name, b.phone||'', b.gender||'', b.birth_year||'',
+        b.birth_year ? now - b.birth_year : '',
+        b.location||'', b.occupation||'', b.email||'',
+        allParts.length, projs, b.note||''
+      ];
     });
     const ws1 = XLSX.utils.aoa_to_sheet([headers1, ...rows1]);
-    ws1['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 16 }, { wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 40 }, { wch: 24 }];
+    ws1['!cols'] = [5,25,15,14,12,8,25,18,25,14,40,20].map(w=>({wch:w}));
     XLSX.utils.book_append_sheet(wb, ws1, 'Penerima Manfaat');
 
-    const headers2 = ['No', 'Nama', 'No HP', 'Proyek', 'Kegiatan', 'Tanggal Hadir', 'Sumber', 'Catatan'];
+    // ── Sheet 2: Riwayat Kegiatan (flat) ──────────────────────
+    const headers2 = ['No','Nama','No HP','Proyek','Kegiatan','Tanggal Hadir','Sumber','Catatan'];
     const rows2 = [];
     let no2 = 1;
-    subset.forEach(b => {
-      filterParticipationsByProject(b, projFilter).forEach(p => {
-        rows2.push([no2++, b.name || '', b.phone || '', p.projectname || '', p.activityname || '', p.attendeddate ? new Date(p.attendeddate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '', 'Resmi', p.note || '']);
-      });
-      filterLogsByProject(b, projFilter).forEach(l => {
-        rows2.push([no2++, b.name || '', b.phone || '', l.projectname || '', l.activityname || '', l.attendeddate ? new Date(l.attendeddate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '', 'Log Bebas', l.note || '']);
+    benList.forEach(b => {
+      const allParts = [
+        ...(partMap[b.id]||[]).map(p=>({...p,_src:'Sistem'})),
+        ...(logMap[b.id] ||[]).map(l=>({...l,_src:'Log Bebas'})),
+      ].sort((a,c) => (b.attended_date||'').localeCompare(c.attended_date||''));
+      allParts.forEach(p => {
+        rows2.push([no2++, b.name, b.phone||'', p.project_name||'', p.activity_name||'',
+          p.attended_date ? new Date(p.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'}) : '',
+          p._src, p.note||'']);
       });
     });
-    const ws2 = XLSX.utils.aoa_to_sheet([headers2, ...rows2]);
-    ws2['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 16 }, { wch: 30 }, { wch: 30 }, { wch: 14 }, { wch: 12 }, { wch: 24 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'Riwayat Kegiatan');
+    if (rows2.length) {
+      const ws2 = XLSX.utils.aoa_to_sheet([headers2, ...rows2]);
+      ws2['!cols'] = [5,25,15,35,35,14,12,25].map(w=>({wch:w}));
+      XLSX.utils.book_append_sheet(wb, ws2, 'Riwayat Kegiatan');
+    }
 
-    const totalUnik = subset.length;
-    const totalPartisipasiResmi = subset.reduce((sum, b) => sum + filterParticipationsByProject(b, projFilter).length, 0);
-    const totalPernahIkut = subset.filter(b => filterParticipationsByProject(b, projFilter).length > 0 || filterLogsByProject(b, projFilter).length > 0).length;
-    const statsData = [['RINGKASAN PENERIMA MANFAAT'], ['Scope', projFilter || 'Semua Proyek'], ['Tanggal Export', niceDate], [], ['Jumlah Unik', totalUnik], ['Partisipasi Resmi', totalPartisipasiResmi], ['Pernah Ikut Kegiatan', totalPernahIkut]];
+    // ── Sheet 3: Statistik ringkas ─────────────────────────────
+    const totalL   = benList.filter(b=>b.gender==='Laki-laki').length;
+    const totalP   = benList.filter(b=>b.gender==='Perempuan').length;
+    const occMap   = {};
+    benList.forEach(b => { const o=b.occupation||'Tidak Diketahui'; occMap[o]=(occMap[o]||0)+1; });
+    const occRows  = Object.entries(occMap).sort((a,c)=>c[1]-a[1])
+                       .map(([occ,cnt])=>[occ, cnt, `${Math.round(cnt/benList.length*100)}%`]);
+
+    const statsData = [
+      ['RINGKASAN PENERIMA MANFAAT'],
+      projFilter ? ['Proyek', projFilter] : ['Scope', 'Semua Proyek'],
+      ['Tanggal Export', new Date().toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})],
+      [],
+      ['Total Penerima Manfaat Unik', benList.length],
+      ['Laki-laki', totalL, totalL ? `${Math.round(totalL/benList.length*100)}%` : ''],
+      ['Perempuan',  totalP, totalP ? `${Math.round(totalP/benList.length*100)}%` : ''],
+      [],
+      ['DISTRIBUSI PEKERJAAN','Jumlah','Persentase'],
+      ...occRows,
+    ];
     const ws3 = XLSX.utils.aoa_to_sheet(statsData);
-    ws3['!cols'] = [{ wch: 28 }, { wch: 18 }];
+    ws3['!cols'] = [{wch:35},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws3, 'Statistik');
 
-    const fname = projFilter ? `PenerimaManfaat_${projFilter.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}_${todayStr}.xlsx` : `PenerimaManfaat_SemuaProyek_${todayStr}.xlsx`;
+    const fname = projFilter
+      ? `PenerimManfaat_${projFilter.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${new Date().toISOString().slice(0,10)}.xlsx`
+      : `PenerimManfaat_SemuaProyek_${new Date().toISOString().slice(0,10)}.xlsx`;
     XLSX.writeFile(wb, fname);
-  } catch (err) {
-    alert(`Gagal export: ${err.message}`);
+
+  } catch(err) {
+    alert('Gagal export: ' + err.message);
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `<i class="fa-solid fa-file-export"></i> Export Excel`;
-    }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-export"></i> Export Excel'; }
   }
 };
-
 
 // ══════════════════════════════════════════════════════════════
 // EDIT PENERIMA MANFAAT — openEditBenModal
 // ══════════════════════════════════════════════════════════════
-
-window.openEditBenModal = async function (ref) {
-  const b = getCanonicalBeneficiary(ref) || benAllData.find(x => String(x.id) === String(ref));
+window.openEditBenModal = async function (id) {
+  const b = _benAllData.find(x => x.id === id);
   if (!b) return;
 
   window.resetBenModalState();
   document.getElementById('benFormOverlay').classList.remove('hidden');
   document.getElementById('benFormTitle').textContent = 'Edit Penerima Manfaat';
-  document.getElementById('benFormId').value = b.primaryId || b.id || '';
+  document.getElementById('benFormId').value = id;
 
-  document.getElementById('benF-name').value = b.name || '';
-  document.getElementById('benF-phone').value = b.phone || '';
-  document.getElementById('benF-gender').value = b.gender || '';
-  document.getElementById('benF-birthyear').value = b.birthyear || '';
-  document.getElementById('benF-location').value = b.location || '';
+  document.getElementById('benF-name').value       = b.name || '';
+  document.getElementById('benF-phone').value      = b.phone || '';
+  document.getElementById('benF-gender').value     = b.gender || '';
+  document.getElementById('benF-birthyear').value  = b.birth_year || '';
+  document.getElementById('benF-location').value   = b.location || '';
   document.getElementById('benF-occupation').value = b.occupation || '';
-  document.getElementById('benF-email').value = b.email || '';
-  document.getElementById('benF-note').value = b.note || '';
+  document.getElementById('benF-email').value      = b.email || '';
+  document.getElementById('benF-note').value       = b.note || '';
 
   const projSec = document.getElementById('benFormProjectSection');
   if (projSec) {
     projSec.style.display = 'none';
     projSec.dataset.editMode = 'true';
   }
-
   const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
   if (saveBtn) saveBtn.innerHTML = 'Update';
 };
-
 
 // ══════════════════════════════════════════════════════════════
 // VALIDASI DUPLIKAT — cek sebelum import
