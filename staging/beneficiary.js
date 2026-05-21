@@ -127,20 +127,33 @@ window.loadBeneficiaries = async function () {
 // Hitung ulang stat cards berdasarkan proyek yang dipilih
 function updateBenStats(projectFilter) {
   const subset = projectFilter
-    ? _benAllData.filter(b => (b.projects||[]).includes(projectFilter))
+    ? _benAllData.filter(b =>
+        (b.projects || []).includes(projectFilter) ||
+        (b.participations || []).some(p => p.project_name === projectFilter) ||
+        (b.activityLogs || []).some(l => l.project_name === projectFilter)
+      )
     : _benAllData;
-  const parts  = projectFilter
-    ? subset.flatMap(b => b.participations.filter(p => p.project_name === projectFilter))
-    : subset.flatMap(b => b.participations);
 
-  document.getElementById('benStatUnique').textContent    = subset.length.toLocaleString('id-ID');
-  document.getElementById('benStatMale').textContent      = subset.filter(b=>b.gender==='Laki-laki').length.toLocaleString('id-ID');
-  document.getElementById('benStatFemale').textContent    = subset.filter(b=>b.gender==='Perempuan').length.toLocaleString('id-ID');
-  document.getElementById('benStatParticip').textContent  = parts.length.toLocaleString('id-ID');
+  const linkedParts = projectFilter
+    ? subset.flatMap(b => (b.participations || []).filter(p => p.project_name === projectFilter))
+    : subset.flatMap(b => (b.participations || []));
 
-  // Label stat card sesuai konteks
+  const freeLogs = projectFilter
+    ? subset.flatMap(b => (b.activityLogs || []).filter(l => l.project_name === projectFilter))
+    : subset.flatMap(b => (b.activityLogs || []));
+
+  document.getElementById('benStatUnique').textContent   = subset.length.toLocaleString('id-ID');
+  document.getElementById('benStatMale').textContent     = subset.filter(b=>b.gender==='Laki-laki').length.toLocaleString('id-ID');
+  document.getElementById('benStatFemale').textContent   = subset.filter(b=>b.gender==='Perempuan').length.toLocaleString('id-ID');
+  document.getElementById('benStatParticip').textContent = linkedParts.length.toLocaleString('id-ID');
+
+  const logEl = document.getElementById('benStatFreeLog');
+  if (logEl) logEl.textContent = freeLogs.length.toLocaleString('id-ID');
+
   const participLbl = document.getElementById('benStatParticipLabel');
-  if (participLbl) participLbl.textContent = 'Total Data Terinput';
+  if (participLbl) participLbl.textContent = 'Total Partisipasi';
+  const freeLbl = document.getElementById('benStatFreeLogLabel');
+  if (freeLbl) freeLbl.textContent = 'Log Bebas';
   const lbl = document.getElementById('benStatUniqueLabel');
   if (lbl) lbl.textContent = projectFilter ? `Penerima — ${projectFilter.length > 25 ? projectFilter.slice(0,25)+'…' : projectFilter}` : 'Total Unik';
 }
@@ -208,8 +221,10 @@ window.filterBeneficiaries = function () {
       (b.location||'').toLowerCase().includes(q) ||
       (b.occupation||'').toLowerCase().includes(q);
     const matchG = !gender || b.gender === gender;
-    const matchP = !project || (b.projects || []).includes(project) ||
-                   b.participations.some(p => p.project_name === project);
+    const matchP = !project ||
+                   (b.projects || []).includes(project) ||
+                   (b.participations || []).some(p => p.project_name === project) ||
+                   (b.activityLogs || []).some(l => l.project_name === project);
     return matchQ && matchG && matchP;
   });
   _benCurrentPage = 1;
@@ -256,7 +271,10 @@ function renderBenTable() {
       <td style="font-size:12px;color:#475569">${_esc(b.location||'-')}</td>
       <td style="font-size:12px;color:#475569">${_esc(b.occupation||'-')}</td>
       <td>
-        <div style="font-size:12px;font-weight:600;color:#2563eb">${b.totalKegiatan}x</div>
+        <div style="font-size:12px;font-weight:700;color:#2563eb">${b.totalKegiatan}x</div>
+        <div style="font-size:10px;color:#64748b">
+          ${(b.participations || []).length} partisipasi · ${(b.activityLogs || []).length} log bebas
+        </div>
         <div style="font-size:10px;color:#94a3b8">${b.totalProyek} proyek</div>
       </td>
       <td style="max-width:200px">${projLabel}</td>
@@ -547,72 +565,82 @@ window.openBenDetail = async function (id) {
     [ben.gender, ben.birth_year ? (new Date().getFullYear()-ben.birth_year)+' tahun' : null,
      ben.location, ben.occupation].filter(Boolean).join(' · ');
 
-  // Load riwayat dari kedua tabel paralel
-  const [{ data: parts }, { data: logs }] = await Promise.all([
-    _client.from('activity_participants')
-      .select('activity_name, project_name, attended_date, note')
-      .eq('beneficiary_id', id)
-      .order('attended_date', { ascending: false }),
-    _client.from('beneficiary_activity_log')
-      .select('activity_name, project_name, attended_date, source, note')
-      .eq('beneficiary_id', id)
-      .order('attended_date', { ascending: false }),
-  ]);
+  const renderHistory = (parts, logs) => {
+    const linked = (parts || []).map(p => ({ ...p, _type: 'linked' }));
+    const free   = (logs  || []).map(l => ({ ...l, _type: 'log' }));
+    const list   = [...linked, ...free].sort((a,b) => {
+      if (!a.attended_date && !b.attended_date) return 0;
+      if (!a.attended_date) return 1;
+      if (!b.attended_date) return -1;
+      return String(b.attended_date).localeCompare(String(a.attended_date));
+    });
 
-  // Gabungkan: linked + log, beri label
-  const linked = (parts||[]).map(p => ({ ...p, _type: 'linked' }));
-  const free   = (logs ||[]).map(l => ({ ...l, _type: 'log'    }));
-  const list   = [...linked, ...free].sort((a,b) => {
-    if (!a.attended_date) return 1;
-    if (!b.attended_date) return -1;
-    return b.attended_date.localeCompare(a.attended_date);
-  });
+    const allProjects = new Set(list.map(p => p.project_name).filter(Boolean));
+    document.getElementById('benDetailStats').innerHTML = `
+      <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        ${list.length}x kegiatan
+      </span>
+      <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        ${(parts||[]).length} partisipasi
+      </span>
+      <span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        📝 ${(logs||[]).length} log bebas
+      </span>
+      <span style="background:#f8fafc;color:#475569;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        ${allProjects.size} proyek
+      </span>`;
 
-  const allProjects = new Set(list.map(p=>p.project_name).filter(Boolean));
-  document.getElementById('benDetailStats').innerHTML = `
-    <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      ${list.length}x kegiatan
-    </span>
-    <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      ${allProjects.size} proyek
-    </span>
-    ${free.length ? `<span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      📝 ${free.length} log bebas
-    </span>` : ''}`;
+    if (!list.length) {
+      document.getElementById('benDetailHistory').innerHTML =
+        '<div style="padding:16px;color:#94a3b8;font-size:13px">Belum ada riwayat kegiatan.</div>';
+      return;
+    }
 
-  if (!list.length) {
-    document.getElementById('benDetailHistory').innerHTML =
-      '<div style="padding:16px;color:#94a3b8;font-size:13px">Belum ada riwayat kegiatan.</div>';
-    return;
-  }
+    const byProj = {};
+    list.forEach(p => {
+      const proj = p.project_name || 'Tanpa Proyek';
+      if (!byProj[proj]) byProj[proj] = [];
+      byProj[proj].push(p);
+    });
 
-  // Group by proyek
-  const byProj = {};
-  list.forEach(p => {
-    const proj = p.project_name || 'Tanpa Proyek';
-    if (!byProj[proj]) byProj[proj] = [];
-    byProj[proj].push(p);
-  });
-
-  document.getElementById('benDetailHistory').innerHTML = Object.entries(byProj).map(([proj, items]) => `
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9">
-        📁 ${_esc(proj)} <span style="color:#94a3b8;font-weight:400">(${items.length} kegiatan)</span>
-      </div>
-      ${items.map(it => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-radius:6px;background:${it._type==='log'?'#fffbeb':'#f8fafc'};margin-bottom:4px;border:1px solid ${it._type==='log'?'#fde68a':'transparent'}">
-          <div>
-            <div style="font-size:12px;font-weight:600;color:#334155">
-              ${_esc(it.activity_name||'-')}
-              ${it._type==='log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : ''}
+    document.getElementById('benDetailHistory').innerHTML = Object.entries(byProj).map(([proj, items]) => `
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9">
+          📁 ${_esc(proj)} <span style="color:#94a3b8;font-weight:400">(${items.length} kegiatan)</span>
+        </div>
+        ${items.map(it => `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 10px;border-radius:6px;background:${it._type==='log'?'#fffbeb':'#f8fafc'};margin-bottom:6px;border:1px solid ${it._type==='log'?'#fde68a':'#e2e8f0'}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#334155">
+                ${_esc(it.activity_name||'-')}
+                ${it._type==='log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : '<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px;margin-left:4px">partisipasi</span>'}
+              </div>
+              ${it.note ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${_esc(it.note)}</div>` : ''}
+              ${it.source ? `<div style="font-size:10px;color:#a16207;margin-top:2px">sumber: ${_esc(it.source)}</div>` : ''}
             </div>
-            ${it.note ? `<div style="font-size:11px;color:#94a3b8">${_esc(it.note)}</div>` : ''}
-          </div>
-          <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">
-            ${it.attended_date ? new Date(it.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-'}
-          </div>
-        </div>`).join('')}
-    </div>`).join('');
+            <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">
+              ${it.attended_date ? new Date(it.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-'}
+            </div>
+          </div>`).join('')}
+      </div>`).join('');
+  };
+
+  renderHistory(ben.participations || [], ben.activityLogs || []);
+
+  try {
+    const [{ data: parts }, { data: logs }] = await Promise.all([
+      _client.from('activity_participants')
+        .select('activity_name, project_name, attended_date, note')
+        .eq('beneficiary_id', id)
+        .order('attended_date', { ascending: false }),
+      _client.from('beneficiary_activity_log')
+        .select('activity_name, project_name, attended_date, source, note')
+        .eq('beneficiary_id', id)
+        .order('attended_date', { ascending: false }),
+    ]);
+    renderHistory(parts || [], logs || []);
+  } catch (err) {
+  }
 };
 window.closeBenDetail = function () {
   document.getElementById('benDetailOverlay').classList.add('hidden');
