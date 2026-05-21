@@ -37,7 +37,6 @@
       <ul class="nav-submenu" id="projectSubmenu"></ul>
       <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
       <li data-tab="beneficiary" onclick="loadBeneficiaries();populateBenProjectFilter()"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Penerima Manfaat</span></li>
-      <li data-tab="issues"><span class="nav-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Isu</span></li>
       <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
@@ -104,96 +103,6 @@
       </table>
     </div>
   </div>
-
-  <!-- TAB ISU -->
-<div id="tab-issues" class="tab-content">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-    <div>
-      <div class="section-title" style="margin-bottom:4px;">Manajemen Isu</div>
-      <div style="font-size:12px;color:#94a3b8;">
-        Pantau kasus IUU Fishing, HAM, lingkungan, TPPO, dan isu lain
-      </div>
-    </div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn-secondary btn-sm" onclick="loadIssues()">
-        <i class="fa-solid fa-rotate-right"></i> Refresh
-      </button>
-      <button class="btn-primary btn-sm" onclick="openIssueModal()">
-        <i class="fa-solid fa-plus"></i> Tambah Isu
-      </button>
-    </div>
-  </div>
-
-  <div class="stat-grid">
-    <div class="stat-card blue">
-      <div class="stat-label">Total Isu</div>
-      <div class="stat-value" id="issueStatTotal">0</div>
-    </div>
-    <div class="stat-card red">
-      <div class="stat-label">Kritis</div>
-      <div class="stat-value" id="issueStatCritical">0</div>
-    </div>
-    <div class="stat-card green">
-      <div class="stat-label">Resolved</div>
-      <div class="stat-value" id="issueStatResolved">0</div>
-    </div>
-    <div class="stat-card orange">
-      <div class="stat-label">Total Update</div>
-      <div class="stat-value" id="issueStatUpdates">0</div>
-    </div>
-  </div>
-
-  <div class="table-toolbar" style="flex-wrap:wrap;gap:8px;">
-    <input
-      type="text"
-      class="search-input"
-      id="issueSearchInput"
-      placeholder="Cari judul, kategori, deskripsi, tag"
-      style="max-width:none;"
-    />
-
-    <select id="issueStatusFilter" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
-      <option value="">Semua Status</option>
-      <option value="pending_review">Pending Review</option>
-      <option value="active">Active</option>
-      <option value="monitoring">Monitoring</option>
-      <option value="resolved">Resolved</option>
-      <option value="rejected">Rejected</option>
-    </select>
-
-    <select id="issueCategoryFilter" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
-      <option value="">Semua Kategori</option>
-    </select>
-  </div>
-
-  <div id="issueMsg" class="form-msg hidden"></div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>No</th>
-          <th>Judul</th>
-          <th>Kategori</th>
-          <th>Severity</th>
-          <th>Status</th>
-          <th>Tanggal</th>
-          <th>Sumber</th>
-          <th>Update</th>
-          <th>Aksi</th>
-        </tr>
-      </thead>
-      <tbody id="issueTableBody">
-        <tr>
-          <td colspan="9" style="text-align:center;padding:28px;color:#94a3b8;">
-            Tab isu siap. Data akan muncul setelah file issues.js ditambahkan.
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
 
   <!-- TAB DOKUMEN -->
   <div id="tab-documents" class="tab-content">
@@ -373,24 +282,22 @@
   </div>
 
   <!-- Stat Cards -->
- <div class="stat-grid" style="margin-bottom:20px">
+  
+<div class="stat-grid" style="margin-bottom:20px">
   <div class="stat-card blue">
     <div class="stat-label" id="benStatUniqueLabel">Jumlah Unik</div>
     <div class="stat-value" id="benStatUnique">0</div>
   </div>
-
   <div class="stat-card yellow" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
     <div class="stat-label" id="benStatParticipLabel" style="color:#92400e">Partisipasi Resmi</div>
     <div class="stat-value" id="benStatParticip" style="color:#92400e">0</div>
   </div>
-
   <div class="stat-card purple" style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border-color:#e9d5ff">
     <div class="stat-label" id="benStatEverJoinedLabel" style="color:#7e22ce">Pernah Ikut Kegiatan</div>
     <div class="stat-value" id="benStatEverJoined" style="color:#7e22ce">0</div>
   </div>
 </div>
-
-  <!-- Toolbar -->
+<!-- Toolbar -->
   <div class="table-toolbar" style="flex-wrap:wrap;gap:8px">
     <input type="text" class="search-input" id="benSearchInput"
            placeholder="🔍 Cari nama, no HP, lokasi…"
@@ -466,22 +373,24 @@
 
   <!-- Tabel -->
   <div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Nama / No HP</th>
-        <th>Gender</th>
-        <th>Usia</th>
-        <th>Lokasi</th>
-        <th>Pekerjaan</th>
-        <th>Partisipasi</th>
-        <th>Proyek</th>
-        <th>Aksi</th>
-      </tr>
-    </thead>
-    <tbody id="benTableBody"></tbody>
-  </table>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama / No HP</th>
+          <th>Gender</th>
+          <th>Usia</th>
+          <th>Lokasi</th>
+          <th>Pekerjaan</th>
+          <th>Partisipasi</th>
+          <th>Proyek</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="benTableBody"></tbody>
+    </table>
+  </div>
+  <div id="benPagination"></div>
 </div>
 
 <!-- ===== TAB ARSIP PROYEK ===== -->
@@ -602,152 +511,11 @@
 </div>
 
 
-<!-- MODAL FORM ISU -->
-<div id="issueFormOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:760px;">
-    <div class="modal-header">
-      <span id="issueFormTitle">Tambah Isu</span>
-      <button class="modal-close" onclick="closeIssueModal()">×</button>
-    </div>
-
-    <div class="modal-body">
-      <input type="hidden" id="issueF-id" />
-
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Judul Isu <span class="required">*</span></label>
-          <input type="text" id="issueF-title" placeholder="Contoh: Dugaan IUU Fishing di perairan ..." />
-        </div>
-
-        <div class="form-group full">
-          <label>Deskripsi</label>
-          <textarea id="issueF-description" rows="3" placeholder="Ringkasan awal temuan lapangan"></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Kategori <span class="required">*</span></label>
-          <input type="text" id="issueF-category" placeholder="IUU Fishing / HAM / Lingkungan / TPPO" />
-        </div>
-
-        <div class="form-group">
-          <label>Proyek Terkait</label>
-          <select id="issueF-project-id">
-            <option value="">-- Pilih Proyek --</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Severity</label>
-          <select id="issueF-severity">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Status</label>
-          <select id="issueF-status">
-            <option value="pending_review">Pending Review</option>
-            <option value="active" selected>Active</option>
-            <option value="monitoring">Monitoring</option>
-            <option value="resolved">Resolved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Tanggal Kejadian</label>
-          <input type="date" id="issueF-date-occurred" />
-        </div>
-
-        <div class="form-group">
-          <label>Sumber</label>
-          <select id="issueF-source-type">
-            <option value="MANUAL" selected>MANUAL</option>
-            <option value="RSS">RSS</option>
-            <option value="GDRIVE">GDRIVE</option>
-            <option value="IMPORT">IMPORT</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Source Link</label>
-          <input type="text" id="issueF-source-link" placeholder="https://..." />
-        </div>
-
-        <div class="form-group full">
-          <label>Tags</label>
-          <input type="text" id="issueF-tags" placeholder="Pisahkan dengan koma, contoh: iuu fishing, kapal asing, laut" />
-        </div>
-
-        <div class="form-group full">
-          <label>Update Awal</label>
-          <textarea id="issueF-initial-update" rows="3" placeholder="Opsional, langsung simpan catatan perkembangan pertama"></textarea>
-        </div>
-      </div>
-
-      <div id="issueFormMsg" class="form-msg hidden"></div>
-
-      <div class="form-actions">
-        <button class="btn-secondary" onclick="closeIssueModal()">Batal</button>
-        <button class="btn-primary" onclick="saveIssue()">Simpan Isu</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<!-- MODAL DETAIL ISU -->
-<div id="issueDetailOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:860px;">
-    <div class="modal-header">
-      <span id="issueDetailTitle">Detail Isu</span>
-      <button class="modal-close" onclick="closeIssueDetail()">×</button>
-    </div>
-
-    <div class="modal-body">
-      <div id="issueDetailMeta" style="margin-bottom:14px;"></div>
-
-      <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">
-        Riwayat Update
-      </div>
-
-      <div id="issueDetailUpdates" style="max-height:300px;overflow-y:auto;margin-bottom:16px;"></div>
-
-      <div class="form-card" style="padding:16px;margin-bottom:0;">
-        <div class="form-card-title" style="margin-bottom:12px;">Tambah Update</div>
-
-        <div class="form-grid">
-          <div class="form-group full">
-            <label>Catatan Update <span class="required">*</span></label>
-            <textarea id="issueUpdText" rows="3" placeholder="Tulis perkembangan terbaru"></textarea>
-          </div>
-
-          <div class="form-group full">
-            <label>Evidence URL</label>
-            <input type="text" id="issueUpdEvidence" placeholder="Pisahkan dengan koma jika lebih dari satu" />
-          </div>
-        </div>
-
-        <div id="issueUpdateMsg" class="form-msg hidden"></div>
-
-        <div class="form-actions">
-          <button class="btn-secondary" onclick="closeIssueDetail()">Tutup</button>
-          <button class="btn-primary" onclick="saveIssueUpdate()">Simpan Update</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 
 
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
-  <script src="issues.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="import.js"></script>
   <script src="beneficiary.js"></script>
