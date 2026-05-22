@@ -210,7 +210,8 @@ const tabTitles = {
   input     : ["Tambah Proyek", "Tambah proyek baru"],
   beneficiary: ["Penerima Manfaat", "Data penerima manfaat unik & riwayat partisipasi kegiatan"],
   archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
-  detail    : ["Detail Proyek", ""]
+  detail    : ["Detail Proyek", ""],
+  learning  : ["Learning Loop", "Refleksi & pelajaran dari kegiatan"]
 };
 
 function switchTab(tab) {
@@ -230,6 +231,10 @@ function switchTab(tab) {
   if (tab === "input") renderOutcomeList();
   if (tab === "archive") loadArchivedProjects();
   if (tab === "beneficiary") { loadBeneficiaries(); populateBenProjectFilter(); }
+  if (tab === "learning" && typeof loadLearningLoop === "function") {
+    const _cp = window.currentProject || currentProject || null;
+    setTimeout(() => loadLearningLoop(_cp ? _cp.id : null), 0);
+  }
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
@@ -770,6 +775,7 @@ window.openProjectDetail = async function (proj) {
   renderDetailHeader(proj);
   await loadActivities(proj.name);
   renderIndicatorUpdatePanel(proj);
+  if (typeof populateDetailLearningActivities === "function") populateDetailLearningActivities();
 };
 
 
@@ -880,6 +886,37 @@ function renderDetailHeader(proj) {
           <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${new Date(proj.updated_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div></div>
+        </div>
+
+        <div id="detailReflectionBox" class="detail-budget-box" style="border-color:#bfdbfe;background:#eff6ff;margin-top:12px">
+          <div class="detail-budget-title">📝 Refleksi Cepat</div>
+          <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:10px">Isi refleksi singkat langsung dari detail proyek tanpa pindah tab.</div>
+          <div style="display:grid;gap:8px">
+            <select id="detailRefActivity" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
+              <option value="">— Pilih kegiatan (opsional) —</option>
+            </select>
+            <textarea id="detailRefGood" rows="2" placeholder="Apa yang berjalan baik?" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;resize:vertical"></textarea>
+            <textarea id="detailRefBad" rows="2" placeholder="Apa yang tidak berjalan?" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;resize:vertical"></textarea>
+            <textarea id="detailRefChange" rows="2" placeholder="Apa yang akan diubah?" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;resize:vertical"></textarea>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <select id="detailRefCat" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
+                <option value="program">program</option>
+                <option value="koordinasi">koordinasi</option>
+                <option value="komunikasi">komunikasi</option>
+                <option value="logistik">logistik</option>
+                <option value="advokasi">advokasi</option>
+                <option value="pemantauan">pemantauan</option>
+                <option value="lainnya">lainnya</option>
+              </select>
+              <select id="detailRefConf" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
+                <option value="rendah">rendah</option>
+                <option value="sedang" selected>sedang</option>
+                <option value="tinggi">tinggi</option>
+              </select>
+            </div>
+            <div id="detailRefMsg" class="form-msg hidden"></div>
+            <button class="btn-primary btn-sm" onclick="saveDetailReflection()">Simpan Refleksi</button>
+          </div>
         </div>
 
         <!-- Anggaran -->
@@ -1105,6 +1142,7 @@ window.saveOneIndicator = async function (i, indId, currentActual, target, indNa
       window.currentProject = updated;
       renderDetailHeader(currentProject);
       renderIndicatorUpdatePanel(currentProject);
+      if (typeof populateDetailLearningActivities === "function") populateDetailLearningActivities();
     }
 
   } catch (err) {
@@ -1778,3 +1816,10 @@ document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
 loadProjects();
+
+
+window.loadLearningLoopFromUI = function(){
+  switchTab("learning");
+  const _cp = window.currentProject || currentProject || null;
+  if (typeof loadLearningLoop === "function") loadLearningLoop(_cp ? _cp.id : null);
+};
