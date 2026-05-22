@@ -40,7 +40,7 @@ function renderLearningShell(){
         <div style="display:flex;align-items:center;gap:8px"><i class="fa-solid fa-clipboard-list" style="color:#2563eb"></i><span style="font-weight:700;color:#0f172a">Refleksi Kegiatan</span><span style="font-size:11px;color:#94a3b8;background:#f8fafc;border-radius:999px;padding:2px 9px">${refList.length}</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select id="learnFilterKegiatan" onchange="applyLearnFilter(this.value)" style="font-size:12px;padding:5px 10px;border:1px solid #d1d5db;border-radius:8px;color:#374151">
-            <option value="">Semua Kegiatan</option>${(LEARN.activities||[]).map(a=>`<option value="${_esc(a.id)}" ${LEARN.filterKegiatan===a.id?'selected':''}>${_esc(a.name)}</option>`).join('')}
+            <option value="">Semua Kegiatan</option>${(LEARN.activities||[]).map(a=>`<option value="${_esc(a.id)}" ${LEARN.filterKegiatan===a.id?'selected':''}>${_esc(a.title || a.name || '')}</option>`).join('')}
           </select>
           <button class="btn-secondary btn-sm" onclick="openLearnReflectionModal()"><i class="fa-solid fa-plus"></i> Tambah Refleksi</button>
         </div>
@@ -105,7 +105,7 @@ window.loadLearningLoop = async function(caseId){
       _lc().from('kasus_member').select('kasus_id').eq('user_id', user.id),
       _lc().from('refleksi').select('*').eq('kasus_id', LEARN.caseId).order('created_at', { ascending:false }),
       _lc().from('pelajaran').select('*').eq('kasus_id', LEARN.caseId).order('created_at', { ascending:false }),
-      _lc().from('activities').select('id,name').eq('project_id', LEARN.caseId).order('created_at', { ascending:true }),
+      _lc().from('project_activities').select('id,title,project_name').eq('project_name', (window.currentProject && window.currentProject.name) || LEARN.caseName).order('sort_order', { ascending:true }).order('created_at', { ascending:true }),
     ]);
     if (rMem.error) throw rMem.error;
     if (!((rMem.data||[]).map(x=>x.kasus_id)).includes(LEARN.caseId)) {
@@ -114,7 +114,7 @@ window.loadLearningLoop = async function(caseId){
     if (rRef.error) throw rRef.error;
     if (rLes.error) throw rLes.error;
     if (rAct.error) throw rAct.error;
-    LEARN.refleksi = (rRef.data||[]).map(x => ({ ...x, activity_name: (rAct.data||[]).find(a=>a.id===x.kegiatan_id)?.name || '' }));
+    LEARN.refleksi = (rRef.data||[]).map(x => ({ ...x, activity_name: (rAct.data||[]).find(a=>a.id===x.kegiatan_id)?.title || '' }));
     LEARN.pelajaran = rLes.data || [];
     LEARN.activities = rAct.data || [];
     renderLearningShell();
@@ -127,7 +127,7 @@ window.loadLearningLoopFromUI = function(){ switchTab('learning'); const cp = wi
 window.openLearnReflectionModal = function(){
   let o=document.getElementById('learnRefOverlay'); if(!o){ o=document.createElement('div'); o.id='learnRefOverlay'; document.body.appendChild(o);} o.className='modal-overlay';
   const cp = window.currentProject || (typeof currentProject !== 'undefined' ? currentProject : null);
-  o.innerHTML = `<div class="modal-box" style="max-width:640px;width:95vw"><div class="modal-header"><span style="font-size:15px;font-weight:700;color:#0f172a">Tambah Refleksi Kegiatan</span><button class="modal-close" onclick="closeLearnRefModal()">✕</button></div><div class="modal-body"><div class="form-grid"><div class="form-group full"><label>Kegiatan terkait</label><select id="learnRefAct" style="width:100%"><option value="">— Tidak terkait kegiatan spesifik —</option>${(LEARN.activities||[]).map(a=>`<option value="${_esc(a.id)}">${_esc(a.name)}</option>`).join('')}</select></div><div class="form-group full"><label>Apa yang berjalan baik <span class="required">*</span></label><textarea id="learnRefGood" rows="3"></textarea></div><div class="form-group full"><label>Apa yang tidak berjalan <span class="required">*</span></label><textarea id="learnRefBad" rows="3"></textarea></div><div class="form-group full"><label>Apa yang akan diubah <span class="required">*</span></label><textarea id="learnRefChange" rows="3"></textarea></div><div class="form-group"><label>Kategori</label><select id="learnRefCat">${LEARN_CAT.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div><div class="form-group"><label>Tingkat Kepercayaan</label><select id="learnRefConf">${LEARN_CONF.map(c=>`<option value="${c}" ${c==='sedang'?'selected':''}>${c}</option>`).join('')}</select></div></div><div id="learnRefMsg" class="form-msg hidden" style="margin-top:10px"></div><div class="form-actions"><button class="btn-secondary" onclick="closeLearnRefModal()">Batal</button><button class="btn-primary" onclick="saveLearnReflection()">💾 Simpan Refleksi</button></div></div></div>`;
+  o.innerHTML = `<div class="modal-box" style="max-width:640px;width:95vw"><div class="modal-header"><span style="font-size:15px;font-weight:700;color:#0f172a">Tambah Refleksi Kegiatan</span><button class="modal-close" onclick="closeLearnRefModal()">✕</button></div><div class="modal-body"><div class="form-grid"><div class="form-group full"><label>Kegiatan terkait</label><select id="learnRefAct" style="width:100%"><option value="">— Tidak terkait kegiatan spesifik —</option>${(LEARN.activities||[]).map(a=>`<option value="${_esc(a.id)}">${_esc(a.title || a.name || '')}</option>`).join('')}</select></div><div class="form-group full"><label>Apa yang berjalan baik <span class="required">*</span></label><textarea id="learnRefGood" rows="3"></textarea></div><div class="form-group full"><label>Apa yang tidak berjalan <span class="required">*</span></label><textarea id="learnRefBad" rows="3"></textarea></div><div class="form-group full"><label>Apa yang akan diubah <span class="required">*</span></label><textarea id="learnRefChange" rows="3"></textarea></div><div class="form-group"><label>Kategori</label><select id="learnRefCat">${LEARN_CAT.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div><div class="form-group"><label>Tingkat Kepercayaan</label><select id="learnRefConf">${LEARN_CONF.map(c=>`<option value="${c}" ${c==='sedang'?'selected':''}>${c}</option>`).join('')}</select></div></div><div id="learnRefMsg" class="form-msg hidden" style="margin-top:10px"></div><div class="form-actions"><button class="btn-secondary" onclick="closeLearnRefModal()">Batal</button><button class="btn-primary" onclick="saveLearnReflection()">💾 Simpan Refleksi</button></div></div></div>`;
 };
 window.closeLearnRefModal = function(){ const o=document.getElementById('learnRefOverlay'); if(o) o.remove(); };
 window.saveLearnReflection = async function(){
