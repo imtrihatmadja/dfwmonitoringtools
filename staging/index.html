@@ -38,7 +38,9 @@
       <li data-tab="documents"><span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span><span>Dokumen</span></li>
       <li data-tab="beneficiary" onclick="loadBeneficiaries();populateBenProjectFilter()"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Penerima Manfaat</span></li>
       <li data-tab="issues"><span class="nav-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Isu</span></li>
-      <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
+      <li data-tab="learning" onclick="loadLearningLoopFromUI()">
+            <span class="nav-icon"><i class="fa-solid fa-graduation-cap"></i></span><span>Learning</span></li>
+          <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
     </ul>
   </div>
@@ -387,12 +389,8 @@
       <div class="stat-value" style="color:#7e22ce" id="benStatFemale">–</div>
     </div>
     <div class="stat-card yellow" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
-      <div class="stat-label" id="benStatParticipLabel" style="color:#92400e">Total Partisipasi</div>
+      <div class="stat-label" style="color:#92400e">Total Partisipasi</div>
       <div class="stat-value" style="color:#92400e" id="benStatParticip">–</div>
-    </div>
-    <div class="stat-card" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fdba74">
-      <div class="stat-label" id="benStatFreeLogLabel" style="color:#9a3412">Log Bebas</div>
-      <div class="stat-value" id="benStatFreeLog" style="color:#c2410c">–</div>
     </div>
   </div>
 
@@ -493,6 +491,20 @@
 </div>
 
 <!-- ===== TAB ARSIP PROYEK ===== -->
+<!-- TAB LEARNING -->
+<div class="tab-content" id="tab-learning">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+    <div>
+      <div class="section-title" style="margin-bottom:4px">Learning Loop</div>
+      <div style="font-size:12px;color:#94a3b8">Refleksi kegiatan, pelajaran, dan adopsi pembelajaran per proyek.</div>
+    </div>
+    <button class="btn-secondary btn-sm" onclick="loadLearningLoopFromUI()">
+      <i class="fa-solid fa-rotate-right"></i> Refresh
+    </button>
+  </div>
+  <div id="learningTabShell" style="min-height:200px"></div>
+</div>
+
 <div class="tab-content" id="tab-archive">
   <div class="table-toolbar">
     <input type="text" class="search-input" id="archiveSearchInput"
@@ -761,6 +773,7 @@
   <script src="beneficiary.js"></script>
   <script src="documents.js"></script>
   <script src="impact.js"></script>
+  <script src="learning.js"></script>
   <script src="print-report.js"></script>
 <script>
 function toggleSidebar(){

@@ -210,13 +210,14 @@ const tabTitles = {
   input     : ["Tambah Proyek", "Tambah proyek baru"],
   beneficiary: ["Penerima Manfaat", "Data penerima manfaat unik & riwayat partisipasi kegiatan"],
   archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
-  detail    : ["Detail Proyek", ""]
+  detail    : ["Detail Proyek", ""],
+  learning  : ["Learning Loop", "Refleksi & pelajaran dari kegiatan"]
 };
 
 function switchTab(tab) {
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
-  if (tab !== "detail") currentProject = null;
+  if (tab !== "detail") { currentProject = null; window.currentProject = null; }
   const printBtn = document.getElementById('topbarPrintBtn');
   if (printBtn) printBtn.style.display = (tab === "detail") ? 'inline-flex' : 'none';
   const li = document.querySelector(`[data-tab="${tab}"]`);
@@ -230,6 +231,10 @@ function switchTab(tab) {
   if (tab === "input") renderOutcomeList();
   if (tab === "archive") loadArchivedProjects();
   if (tab === "beneficiary") { loadBeneficiaries(); populateBenProjectFilter(); }
+  if (tab === "learning" && typeof loadLearningLoop === "function") {
+    const _cp = window.currentProject || currentProject || null;
+    setTimeout(() => loadLearningLoop(_cp ? _cp.id : null), 0);
+  }
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
@@ -1778,3 +1783,10 @@ document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
 loadProjects();
+
+
+window.loadLearningLoopFromUI = function(){
+  switchTab("learning");
+  const _cp = window.currentProject || currentProject || null;
+  if(typeof loadLearningLoop === "function") loadLearningLoop(_cp ? _cp.id : null);
+};
