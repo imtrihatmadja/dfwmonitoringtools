@@ -19,6 +19,8 @@ let originalIndicatorIds      = [];
 let savedFiles                = [];
 const AUDIT_USER              = "Tim";
 const BUCKET        = "activity-files";
+const TEST_MODE      = true;
+window.TEST_USER_ID  = window.TEST_USER_ID || "00000000-0000-0000-0000-000000000001";
 
 // ===================== PROGRESS HELPERS =====================
 function getLatestActual(ind) {
@@ -210,8 +212,7 @@ const tabTitles = {
   input     : ["Tambah Proyek", "Tambah proyek baru"],
   beneficiary: ["Penerima Manfaat", "Data penerima manfaat unik & riwayat partisipasi kegiatan"],
   archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
-  detail    : ["Detail Proyek", ""],
-  learning  : ["Learning Loop", "Refleksi & pelajaran dari kegiatan"]
+  detail    : ["Detail Proyek", ""]
 };
 
 function switchTab(tab) {
@@ -231,10 +232,6 @@ function switchTab(tab) {
   if (tab === "input") renderOutcomeList();
   if (tab === "archive") loadArchivedProjects();
   if (tab === "beneficiary") { loadBeneficiaries(); populateBenProjectFilter(); }
-  if (tab === "learning" && typeof loadLearningLoop === "function") {
-    const _cp = window.currentProject || currentProject || null;
-    setTimeout(() => loadLearningLoop(_cp ? _cp.id : null), 0);
-  }
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
@@ -892,19 +889,13 @@ function renderDetailHeader(proj) {
           <div class="detail-budget-title">📝 Refleksi Cepat</div>
           <div style="font-size:12px;color:#475569;line-height:1.6;margin-bottom:10px">Isi refleksi singkat langsung dari detail proyek tanpa pindah tab.</div>
           <div style="display:grid;gap:8px">
-            <select id="detailRefActivity" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
-              <option value="">— Pilih kegiatan (opsional) —</option>
-            </select>
+            <select id="detailRefActivity" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px"><option value="">— Pilih kegiatan (opsional) —</option></select>
             <textarea id="detailRefGood" rows="2" placeholder="Apa yang berjalan baik?" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;resize:vertical"></textarea>
             <textarea id="detailRefBad" rows="2" placeholder="Apa yang tidak berjalan?" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;resize:vertical"></textarea>
             <textarea id="detailRefChange" rows="2" placeholder="Apa yang akan diubah?" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;resize:vertical"></textarea>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <select id="detailRefCat" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
-                <option value="program">program</option><option value="koordinasi">koordinasi</option><option value="komunikasi">komunikasi</option><option value="logistik">logistik</option><option value="advokasi">advokasi</option><option value="pemantauan">pemantauan</option><option value="lainnya">lainnya</option>
-              </select>
-              <select id="detailRefConf" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px">
-                <option value="rendah">rendah</option><option value="sedang" selected>sedang</option><option value="tinggi">tinggi</option>
-              </select>
+              <select id="detailRefCat" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px"><option value="program">program</option><option value="koordinasi">koordinasi</option><option value="komunikasi">komunikasi</option><option value="logistik">logistik</option><option value="advokasi">advokasi</option><option value="pemantauan">pemantauan</option><option value="lainnya">lainnya</option></select>
+              <select id="detailRefConf" style="font-size:12px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px"><option value="rendah">rendah</option><option value="sedang" selected>sedang</option><option value="tinggi">tinggi</option></select>
             </div>
             <div id="detailRefMsg" class="form-msg hidden"></div>
             <button class="btn-primary btn-sm" onclick="saveDetailReflection()">Simpan Refleksi</button>
@@ -1810,60 +1801,4 @@ setStep(1);
 loadProjects();
 
 
-window.loadLearningLoopFromUI = function(){
-  switchTab("learning");
-  const _cp = window.currentProject || currentProject || null;
-  if (typeof loadLearningLoop === "function") loadLearningLoop(_cp ? _cp.id : null);
-};
-
-
-window.populateDetailLearningActivities = async function(){
-  const sel = document.getElementById('detailRefActivity');
-  if (!sel) return;
-  const cp = window.currentProject || currentProject || null;
-  if (!cp || !cp.name) { sel.innerHTML = '<option value="">— Buka detail proyek —</option>'; return; }
-  try {
-    const { data, error } = await (window.client || client)
-      .from('project_activities')
-      .select('id,title,project_name')
-      .eq('project_name', cp.name)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    const rows = data || [];
-    sel.innerHTML = '<option value="">— Pilih kegiatan (opsional) —</option>' + rows.map(a => `<option value="${a.id}">${a.title || ''}</option>`).join('');
-  } catch (e) {
-    sel.innerHTML = '<option value="">— Gagal memuat aktivitas —</option>';
-  }
-};
-
-window.saveDetailReflection = async function(){
-  const cp = window.currentProject || currentProject || null;
-  const msg = document.getElementById('detailRefMsg');
-  const btn = document.querySelector('#detailReflectionBox .btn-primary');
-  if (!cp || !cp.id) { if (msg) { msg.textContent = 'Buka detail proyek dahulu.'; msg.className = 'form-msg error'; msg.style.display='block'; } return; }
-  const good = document.getElementById('detailRefGood')?.value.trim() || '';
-  const bad = document.getElementById('detailRefBad')?.value.trim() || '';
-  const chg = document.getElementById('detailRefChange')?.value.trim() || '';
-  const act = document.getElementById('detailRefActivity')?.value || null;
-  const cat = document.getElementById('detailRefCat')?.value || 'program';
-  const conf = document.getElementById('detailRefConf')?.value || 'sedang';
-  if (!good || !bad || !chg) { if (msg) { msg.textContent = 'Semua field wajib diisi.'; msg.className = 'form-msg error'; msg.style.display='block'; } return; }
-  if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
-  try {
-    const auth = await (window.client || client).auth.getUser();
-    const user = auth?.data?.user;
-    if (!user) throw new Error('User belum login');
-    const { error } = await (window.client || client).from('refleksi').insert([{ kegiatan_id: act, kasus_id: cp.id, dibuat_oleh: user.id, tanggal: new Date().toISOString().split('T')[0], apa_yang_berjalan_baik: good, apa_yang_tidak_berjalan: bad, apa_yang_akan_diubah: chg, kategori: cat, tingkat_kepercayaan: conf }], { returning: 'minimal' });
-    if (error) throw error;
-    if (msg) { msg.textContent = 'Refleksi tersimpan.'; msg.className = 'form-msg success'; msg.style.display='block'; }
-    document.getElementById('detailRefGood').value='';
-    document.getElementById('detailRefBad').value='';
-    document.getElementById('detailRefChange').value='';
-    if (typeof loadLearningLoop === 'function') await loadLearningLoop(cp.id);
-  } catch (e) {
-    if (msg) { msg.textContent = 'Gagal simpan refleksi: ' + (e.message || e); msg.className = 'form-msg error'; msg.style.display='block'; }
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Simpan Refleksi'; }
-  }
-};
+window.loadLearningLoopFromUI = function(){ switchTab("learning"); const cp = window.currentProject || currentProject || null; if (typeof loadLearningLoop === "function") loadLearningLoop(cp ? cp.id : null); };
