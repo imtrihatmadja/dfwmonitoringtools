@@ -9,22 +9,44 @@ let _benFilteredData = [];   // setelah search
 let _benCurrentPage  = 1;
 const BEN_PAGE_SIZE  = 20;
 
+const SUPABASE_BATCH_SIZE = 1000;
+
+async function fetchAllRows(queryBuilderFactory, batchSize = SUPABASE_BATCH_SIZE) {
+  let from = 0;
+  let all = [];
+  while (true) {
+    const to = from + batchSize - 1;
+    const { data, error } = await queryBuilderFactory().range(from, to);
+    if (error) throw error;
+    const chunk = data || [];
+    all = all.concat(chunk);
+    if (chunk.length < batchSize) break;
+    from += batchSize;
+  }
+  return all;
+}
+
+
 // ── Load utama ────────────────────────────────────────────────────────
 window.loadBeneficiaries = async function () {
   const _client = window.client || client;
   showBenLoading(true);
 
-  const [
-    { data: benData },
-    { data: partData },
-    { data: projData },
-    { data: logData },
-  ] = await Promise.all([
-    _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note'),
-    _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date'),
-    _client.from('beneficiary_projects').select('beneficiary_id, project_name'),
-    _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source'),
-  ]);
+  let benData = [], partData = [], projData = [], logData = [];
+  try {
+    [benData, partData, projData, logData] = await Promise.all([
+      fetchAllRows(() => _client.from('beneficiaries').select('id, name, phone, gender, birth_year, location, occupation, email, note').order('id', { ascending: true })),
+      fetchAllRows(() => _client.from('activity_participants').select('beneficiary_id, project_name, activity_name, attended_date').order('beneficiary_id', { ascending: true })),
+      fetchAllRows(() => _client.from('beneficiary_projects').select('beneficiary_id, project_name').order('beneficiary_id', { ascending: true })),
+      fetchAllRows(() => _client.from('beneficiary_activity_log').select('beneficiary_id, project_name, activity_name, attended_date, source').order('beneficiary_id', { ascending: true })),
+    ]);
+  } catch (loadErr) {
+    const el = document.getElementById('benTableBody');
+    if (el) el.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:#ef4444">
+      ⚠️ Gagal memuat data: ${loadErr.message || loadErr}. Coba refresh halaman.
+    </td></tr>`;
+    return;
+  }
 
   _benAllData        = benData  || [];
   const participants = partData || [];
@@ -105,20 +127,33 @@ window.loadBeneficiaries = async function () {
 // Hitung ulang stat cards berdasarkan proyek yang dipilih
 function updateBenStats(projectFilter) {
   const subset = projectFilter
-    ? _benAllData.filter(b => (b.projects||[]).includes(projectFilter))
+    ? _benAllData.filter(b =>
+        (b.projects || []).includes(projectFilter) ||
+        (b.participations || []).some(p => p.project_name === projectFilter) ||
+        (b.activityLogs || []).some(l => l.project_name === projectFilter)
+      )
     : _benAllData;
-  const parts  = projectFilter
-    ? subset.flatMap(b => b.participations.filter(p => p.project_name === projectFilter))
-    : subset.flatMap(b => b.participations);
 
-  document.getElementById('benStatUnique').textContent    = subset.length.toLocaleString('id-ID');
-  document.getElementById('benStatMale').textContent      = subset.filter(b=>b.gender==='Laki-laki').length.toLocaleString('id-ID');
-  document.getElementById('benStatFemale').textContent    = subset.filter(b=>b.gender==='Perempuan').length.toLocaleString('id-ID');
-  document.getElementById('benStatParticip').textContent  = parts.length.toLocaleString('id-ID');
+  const linkedParts = projectFilter
+    ? subset.flatMap(b => (b.participations || []).filter(p => p.project_name === projectFilter))
+    : subset.flatMap(b => (b.participations || []));
 
-  // Label stat card sesuai konteks
+  const freeLogs = projectFilter
+    ? subset.flatMap(b => (b.activityLogs || []).filter(l => l.project_name === projectFilter))
+    : subset.flatMap(b => (b.activityLogs || []));
+
+  document.getElementById('benStatUnique').textContent   = subset.length.toLocaleString('id-ID');
+  document.getElementById('benStatMale').textContent     = subset.filter(b=>b.gender==='Laki-laki').length.toLocaleString('id-ID');
+  document.getElementById('benStatFemale').textContent   = subset.filter(b=>b.gender==='Perempuan').length.toLocaleString('id-ID');
+  document.getElementById('benStatParticip').textContent = linkedParts.length.toLocaleString('id-ID');
+
+  const logEl = document.getElementById('benStatFreeLog');
+  if (logEl) logEl.textContent = freeLogs.length.toLocaleString('id-ID');
+
   const participLbl = document.getElementById('benStatParticipLabel');
-  if (participLbl) participLbl.textContent = 'Total Data Terinput';
+  if (participLbl) participLbl.textContent = 'Total Partisipasi';
+  const freeLbl = document.getElementById('benStatFreeLogLabel');
+  if (freeLbl) freeLbl.textContent = 'Log Bebas';
   const lbl = document.getElementById('benStatUniqueLabel');
   if (lbl) lbl.textContent = projectFilter ? `Penerima — ${projectFilter.length > 25 ? projectFilter.slice(0,25)+'…' : projectFilter}` : 'Total Unik';
 }
@@ -186,8 +221,10 @@ window.filterBeneficiaries = function () {
       (b.location||'').toLowerCase().includes(q) ||
       (b.occupation||'').toLowerCase().includes(q);
     const matchG = !gender || b.gender === gender;
-    const matchP = !project || (b.projects || []).includes(project) ||
-                   b.participations.some(p => p.project_name === project);
+    const matchP = !project ||
+                   (b.projects || []).includes(project) ||
+                   (b.participations || []).some(p => p.project_name === project) ||
+                   (b.activityLogs || []).some(l => l.project_name === project);
     return matchQ && matchG && matchP;
   });
   _benCurrentPage = 1;
@@ -234,7 +271,10 @@ function renderBenTable() {
       <td style="font-size:12px;color:#475569">${_esc(b.location||'-')}</td>
       <td style="font-size:12px;color:#475569">${_esc(b.occupation||'-')}</td>
       <td>
-        <div style="font-size:12px;font-weight:600;color:#2563eb">${b.totalKegiatan}x</div>
+        <div style="font-size:12px;font-weight:700;color:#2563eb">${b.totalKegiatan}x</div>
+        <div style="font-size:10px;color:#64748b">
+          ${(b.participations || []).length} partisipasi · ${(b.activityLogs || []).length} log bebas
+        </div>
         <div style="font-size:10px;color:#94a3b8">${b.totalProyek} proyek</div>
       </td>
       <td style="max-width:200px">${projLabel}</td>
@@ -279,14 +319,29 @@ function showBenLoading(show) {
   if (el && show) el.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:28px;color:#94a3b8">⏳ Memuat data...</td></tr>`;
 }
 
+function showBenFormMsg(msg, type) {
+  let el = document.getElementById('benFormMsg');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'benFormMsg';
+    const body = document.querySelector('#benFormOverlay .modal-body');
+    if (body) body.appendChild(el);
+  }
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `form-msg ${type}`;
+  el.classList.remove('hidden');
+}
+
 // ── Populate filter proyek ────────────────────────────────────────────
 window.populateBenProjectFilter = async function () {
   const _client = window.client || client;
-  const { data } = await _client.from('projects').select('name').eq('archived', false).order('name');
+  const { data } = await _client.from('projects').select('name').order('name');
   const sel = document.getElementById('benFilterProject');
   if (!sel || !data) return;
+  const active = (data || []).filter(p => !p.archived);
   sel.innerHTML = '<option value="">Semua Proyek</option>' +
-    (data || []).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    active.map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
 };
 
 // ── Form Tambah Beneficiary ───────────────────────────────────────────
@@ -339,13 +394,14 @@ window.openAddBenModal = async function () {
   if (selProj) {
     selProj.disabled = true;
     selProj.innerHTML = '<option value="">Memuat proyek…</option>';
-    const { data: projs, error } = await _client.from('projects').select('id,name').eq('archived', false).order('name');
-    if (error) {
-      selProj.innerHTML = '<option value="">Gagal memuat proyek</option>';
-      showBenFormMsg('Gagal memuat daftar proyek. Silakan tutup dan coba lagi.', 'error');
-    } else {
+    try {
+      const { data: projs, error } = await _client.from('projects').select('id,name').order('name');
+      if (error) throw error;
+      const activeProjs = (projs || []).filter(p => !p.archived);
       selProj.innerHTML = '<option value="">-- Pilih Proyek (opsional) --</option>' +
-        (projs||[]).map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+        activeProjs.map(p => `<option value="${_esc(p.name)}">${_esc(p.name)}</option>`).join('');
+    } catch (err) {
+      selProj.innerHTML = '<option value="">-- Pilih Proyek --</option>';
     }
     selProj.disabled = false;
   }
@@ -365,27 +421,28 @@ window.loadActivitiesForBenForm = async function () {
 
   selAct.disabled = true;
   selAct.innerHTML = '<option value="">Memuat kegiatan…</option>';
-  const { data: acts, error } = await _client
-    .from('project_activities')
-    .select('id,title')
-    .eq('project_name', projName)
-    .order('created_at', { ascending: true });
+  try {
+    const { data: acts, error } = await _client
+      .from('project_activities')
+      .select('id,title')
+      .eq('project_name', projName)
+      .order('title', { ascending: true });
 
-  if (error) {
-    selAct.innerHTML = '<option value="">Gagal memuat kegiatan</option>';
-    showBenFormMsg('Gagal memuat kegiatan proyek.', 'error');
-    return;
+    if (error) throw error;
+
+    if (!acts || !acts.length) {
+      selAct.innerHTML = '<option value="">Belum ada kegiatan untuk proyek ini</option>';
+      selAct.disabled = true;
+      return;
+    }
+
+    selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
+      acts.map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
+    selAct.disabled = false;
+  } catch (err) {
+    selAct.innerHTML = '<option value="">-- Gagal memuat kegiatan --</option>';
+    selAct.disabled = false;
   }
-
-  if (!acts || !acts.length) {
-    selAct.innerHTML = '<option value="">Belum ada kegiatan untuk proyek ini</option>';
-    selAct.disabled = true;
-    return;
-  }
-
-  selAct.innerHTML = '<option value="">-- Pilih Kegiatan (opsional) --</option>' +
-    acts.map(a => `<option value="${a.id}" data-title="${_esc(a.title)}">${_esc(a.title)}</option>`).join('');
-  selAct.disabled = false;
 };
 
 window.closeBenModal = function () {
@@ -393,24 +450,33 @@ window.closeBenModal = function () {
   window.resetBenModalState();
 };
 
+
 window.saveBeneficiary = async function () {
   const _client = window.client || client;
   const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
+  const resetBtn = () => { if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId')?.value ? 'Update' : 'Simpan'; } };
   if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = 'Menyimpan…'; }
-  const id   = document.getElementById('benFormId').value;
-  const name = document.getElementById('benF-name').value.trim();
-  const phone= document.getElementById('benF-phone').value.trim();
-  if (!name) { showBenFormMsg('Nama wajib diisi.', 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
+
+  try {
+  const id    = document.getElementById('benFormId').value;
+  const name  = document.getElementById('benF-name').value.trim();
+  const phone = document.getElementById('benF-phone').value.trim();
+
+  if (!name) {
+    showBenFormMsg('Nama wajib diisi.', 'error');
+    resetBtn();
+    return;
+  }
 
   const payload = {
     name,
-    phone       : normalizeBenPhone(phone) || null,
-    gender      : document.getElementById('benF-gender').value || null,
-    birth_year  : parseInt(document.getElementById('benF-birthyear').value) || null,
-    location    : document.getElementById('benF-location').value.trim() || null,
-    occupation  : document.getElementById('benF-occupation').value.trim() || null,
-    email       : document.getElementById('benF-email').value.trim() || null,
-    note        : document.getElementById('benF-note').value.trim() || null,
+    phone      : normalizeBenPhone(phone) || null,
+    gender     : normGender(document.getElementById('benF-gender').value) || null,
+    birth_year : parseInt(document.getElementById('benF-birthyear').value) || null,
+    location   : document.getElementById('benF-location').value.trim() || null,
+    occupation : document.getElementById('benF-occupation').value.trim() || null,
+    email      : document.getElementById('benF-email').value.trim() || null,
+    note       : document.getElementById('benF-note').value.trim() || null,
   };
 
   let benId = id;
@@ -420,7 +486,7 @@ window.saveBeneficiary = async function () {
     ({ error } = await _client.from('beneficiaries').update(payload).eq('id', id));
   } else {
     const existing = await findExistingBeneficiary(_client, payload);
-    if (existing) {
+    if (existing && canAutoMergeBeneficiary(existing, payload)) {
       benId = existing.id;
       const merged = mergeBeneficiaryPayload(existing, payload);
       ({ error } = await _client.from('beneficiaries').update(merged).eq('id', benId));
@@ -434,25 +500,29 @@ window.saveBeneficiary = async function () {
     }
   }
 
-  if (error) { showBenFormMsg('❌ ' + error.message, 'error'); if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = document.getElementById('benFormId').value ? 'Update' : 'Simpan'; } return; }
+  if (error) {
+    showBenFormMsg(error.message, 'error');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = id ? 'Update' : 'Simpan'; }
+    return;
+  }
 
-  // Jika ada proyek dipilih, catat relasi beneficiary-proyek
   const projName = document.getElementById('benF-project')?.value;
   const actSel   = document.getElementById('benF-activity');
   const actId    = actSel?.value;
-  const actTitle = actSel?.options[actSel.selectedIndex]?.getAttribute('data-title');
+  const actTitle = actSel?.options?.[actSel.selectedIndex]?.getAttribute('data-title');
 
   if (benId && projName) {
     const { data: projData } = await _client.from('projects').select('id').eq('name', projName).single();
     await _client.from('beneficiary_projects').upsert({
-      beneficiary_id: benId,
-      project_name : projName,
-      project_id   : projData?.id || null,
+      beneficiary_id : benId,
+      project_name   : projName,
+      project_id     : projData?.id || null,
     }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
 
     if (actId) {
       const attendedDate = document.getElementById('benF-attended-date')?.value || null;
       const attendNote   = document.getElementById('benF-attend-note')?.value.trim() || null;
+
       const { error: errPart } = await _client.from('activity_participants').upsert({
         activity_id    : actId,
         activity_name  : actTitle,
@@ -465,6 +535,7 @@ window.saveBeneficiary = async function () {
 
       if (errPart) {
         showBenFormMsg('Data tersimpan, tapi gagal daftarkan ke kegiatan: ' + errPart.message, 'error');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = id ? 'Update' : 'Simpan'; }
         setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 1500);
         return;
       }
@@ -473,7 +544,12 @@ window.saveBeneficiary = async function () {
 
   showBenFormMsg('✅ Tersimpan!', 'success');
   setTimeout(() => { closeBenModal(); loadBeneficiaries(); }, 800);
+  } catch (fatalErr) {
+    showBenFormMsg('Terjadi kesalahan: ' + (fatalErr.message || fatalErr), 'error');
+    resetBtn();
+  }
 };
+
 
 // ── Detail beneficiary + riwayat kegiatan ─────────────────────────────
 window.openBenDetail = async function (id) {
@@ -489,72 +565,82 @@ window.openBenDetail = async function (id) {
     [ben.gender, ben.birth_year ? (new Date().getFullYear()-ben.birth_year)+' tahun' : null,
      ben.location, ben.occupation].filter(Boolean).join(' · ');
 
-  // Load riwayat dari kedua tabel paralel
-  const [{ data: parts }, { data: logs }] = await Promise.all([
-    _client.from('activity_participants')
-      .select('activity_name, project_name, attended_date, note')
-      .eq('beneficiary_id', id)
-      .order('attended_date', { ascending: false }),
-    _client.from('beneficiary_activity_log')
-      .select('activity_name, project_name, attended_date, source, note')
-      .eq('beneficiary_id', id)
-      .order('attended_date', { ascending: false }),
-  ]);
+  const renderHistory = (parts, logs) => {
+    const linked = (parts || []).map(p => ({ ...p, _type: 'linked' }));
+    const free   = (logs  || []).map(l => ({ ...l, _type: 'log' }));
+    const list   = [...linked, ...free].sort((a,b) => {
+      if (!a.attended_date && !b.attended_date) return 0;
+      if (!a.attended_date) return 1;
+      if (!b.attended_date) return -1;
+      return String(b.attended_date).localeCompare(String(a.attended_date));
+    });
 
-  // Gabungkan: linked + log, beri label
-  const linked = (parts||[]).map(p => ({ ...p, _type: 'linked' }));
-  const free   = (logs ||[]).map(l => ({ ...l, _type: 'log'    }));
-  const list   = [...linked, ...free].sort((a,b) => {
-    if (!a.attended_date) return 1;
-    if (!b.attended_date) return -1;
-    return b.attended_date.localeCompare(a.attended_date);
-  });
+    const allProjects = new Set(list.map(p => p.project_name).filter(Boolean));
+    document.getElementById('benDetailStats').innerHTML = `
+      <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        ${list.length}x kegiatan
+      </span>
+      <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        ${(parts||[]).length} partisipasi
+      </span>
+      <span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        📝 ${(logs||[]).length} log bebas
+      </span>
+      <span style="background:#f8fafc;color:#475569;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
+        ${allProjects.size} proyek
+      </span>`;
 
-  const allProjects = new Set(list.map(p=>p.project_name).filter(Boolean));
-  document.getElementById('benDetailStats').innerHTML = `
-    <span style="background:#eff6ff;color:#2563eb;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      ${list.length}x kegiatan
-    </span>
-    <span style="background:#f0fdf4;color:#15803d;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      ${allProjects.size} proyek
-    </span>
-    ${free.length ? `<span style="background:#fffbeb;color:#92400e;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">
-      📝 ${free.length} log bebas
-    </span>` : ''}`;
+    if (!list.length) {
+      document.getElementById('benDetailHistory').innerHTML =
+        '<div style="padding:16px;color:#94a3b8;font-size:13px">Belum ada riwayat kegiatan.</div>';
+      return;
+    }
 
-  if (!list.length) {
-    document.getElementById('benDetailHistory').innerHTML =
-      '<div style="padding:16px;color:#94a3b8;font-size:13px">Belum ada riwayat kegiatan.</div>';
-    return;
-  }
+    const byProj = {};
+    list.forEach(p => {
+      const proj = p.project_name || 'Tanpa Proyek';
+      if (!byProj[proj]) byProj[proj] = [];
+      byProj[proj].push(p);
+    });
 
-  // Group by proyek
-  const byProj = {};
-  list.forEach(p => {
-    const proj = p.project_name || 'Tanpa Proyek';
-    if (!byProj[proj]) byProj[proj] = [];
-    byProj[proj].push(p);
-  });
-
-  document.getElementById('benDetailHistory').innerHTML = Object.entries(byProj).map(([proj, items]) => `
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9">
-        📁 ${_esc(proj)} <span style="color:#94a3b8;font-weight:400">(${items.length} kegiatan)</span>
-      </div>
-      ${items.map(it => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-radius:6px;background:${it._type==='log'?'#fffbeb':'#f8fafc'};margin-bottom:4px;border:1px solid ${it._type==='log'?'#fde68a':'transparent'}">
-          <div>
-            <div style="font-size:12px;font-weight:600;color:#334155">
-              ${_esc(it.activity_name||'-')}
-              ${it._type==='log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : ''}
+    document.getElementById('benDetailHistory').innerHTML = Object.entries(byProj).map(([proj, items]) => `
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #f1f5f9">
+          📁 ${_esc(proj)} <span style="color:#94a3b8;font-weight:400">(${items.length} kegiatan)</span>
+        </div>
+        ${items.map(it => `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 10px;border-radius:6px;background:${it._type==='log'?'#fffbeb':'#f8fafc'};margin-bottom:6px;border:1px solid ${it._type==='log'?'#fde68a':'#e2e8f0'}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#334155">
+                ${_esc(it.activity_name||'-')}
+                ${it._type==='log' ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:4px">log bebas</span>' : '<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;border-radius:3px;padding:1px 5px;margin-left:4px">partisipasi</span>'}
+              </div>
+              ${it.note ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${_esc(it.note)}</div>` : ''}
+              ${it.source ? `<div style="font-size:10px;color:#a16207;margin-top:2px">sumber: ${_esc(it.source)}</div>` : ''}
             </div>
-            ${it.note ? `<div style="font-size:11px;color:#94a3b8">${_esc(it.note)}</div>` : ''}
-          </div>
-          <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">
-            ${it.attended_date ? new Date(it.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-'}
-          </div>
-        </div>`).join('')}
-    </div>`).join('');
+            <div style="font-size:11px;color:#94a3b8;white-space:nowrap;margin-left:8px">
+              ${it.attended_date ? new Date(it.attended_date).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-'}
+            </div>
+          </div>`).join('')}
+      </div>`).join('');
+  };
+
+  renderHistory(ben.participations || [], ben.activityLogs || []);
+
+  try {
+    const [{ data: parts }, { data: logs }] = await Promise.all([
+      _client.from('activity_participants')
+        .select('activity_name, project_name, attended_date, note')
+        .eq('beneficiary_id', id)
+        .order('attended_date', { ascending: false }),
+      _client.from('beneficiary_activity_log')
+        .select('activity_name, project_name, attended_date, source, note')
+        .eq('beneficiary_id', id)
+        .order('attended_date', { ascending: false }),
+    ]);
+    renderHistory(parts || [], logs || []);
+  } catch (err) {
+  }
 };
 window.closeBenDetail = function () {
   document.getElementById('benDetailOverlay').classList.add('hidden');
@@ -570,46 +656,27 @@ window.deleteBeneficiary = async function (id, name) {
 };
 
 // ── Import dari Excel ─────────────────────────────────────────────────
+// ── Import dari Excel ─────────────────────────────────────────────────
 window.openBenImport = function () {
   document.getElementById('benImportOverlay').classList.remove('hidden');
   document.getElementById('benImportFileInput').value = '';
   document.getElementById('benImportPreview').innerHTML = '';
   document.getElementById('benImportMsg').className = 'form-msg hidden';
   document.getElementById('benImportConfirmBtn').classList.add('hidden');
+  document.getElementById('benImportConfirmBtn').disabled = false;
+  document.getElementById('benImportConfirmBtn').innerHTML = '<i class="fa-solid fa-upload"></i> Import Sekarang';
   window._benImportRows = null;
 };
 window.closeBenImport = function () {
   document.getElementById('benImportOverlay').classList.add('hidden');
 };
 
-window.handleBenImportFile = function (input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const wb   = XLSX.read(e.target.result, { type: 'array', raw: false });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
-      const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      const rows = raw.map(r => {
-        const n = {};
-        Object.keys(r).forEach(k => { n[k.toLowerCase().trim().replace(/\s+/g,'_')] = String(r[k]||'').trim(); });
-        return n;
-      });
-      previewBenImport(rows);
-    } catch(err) {
-      showBenImportMsg('❌ Gagal baca file: ' + err.message, 'error');
-    }
-  };
-  reader.readAsArrayBuffer(file);
-};
-
-// ── Flat column mapping (1 sheet: Project | Aktivitas | Nama | ...) ──
+// ── Flat column mapping ───────────────────────────────────────────────
 const FLAT_COL_MAP = {
   project_name  : ['project','proyek','nama proyek','project name','nama_proyek','project_name'],
   activity_name : ['aktivitas','kegiatan','activity','nama kegiatan','event','nama_kegiatan','activity_name'],
   name          : ['name','nama','nama lengkap','full name','nama_lengkap','full_name'],
-  phone         : ['handphone','hp','no hp','no_hp','telepon','phone','nomor_hp','handphone'],
+  phone         : ['handphone','hp','no hp','no_hp','telepon','phone','nomor_hp'],
   gender        : ['jenis kelamin','gender','kelamin','jenis_kelamin','sex'],
   location      : ['asal','lokasi','desa','alamat','location','domisili','kecamatan','asal/lokasi'],
   occupation    : ['pekerjaan','occupation','profesi','job'],
@@ -630,84 +697,104 @@ function mapFlatRow(row) {
 }
 function normGender(v) {
   if (!v) return null;
-  const vl = v.toLowerCase();
+  const vl = String(v).toLowerCase();
   if (vl.startsWith('l') || vl === 'm' || vl.includes('laki')) return 'Laki-laki';
   if (vl.startsWith('p') || vl === 'f' || vl.includes('perempuan') || vl.includes('wanita')) return 'Perempuan';
-  return v;
+  return String(v).trim();
 }
 
-function getBeneficiaryUniqueKey(r) {
-  const name = String(r?.name || '').trim().toLowerCase();
-  const phone = String(r?.phone || '').trim().toLowerCase();
-  const gender = String(normGender(r?.gender || '') || '').trim().toLowerCase();
-  if (name && phone && gender) return `${name}|${phone}|${gender}`;
-  if (name && gender) return `${name}|no-phone|${gender}`;
-  if (name && phone) return `${name}|${phone}|no-gender`;
-  if (name) return `${name}|unverified`;
-  return 'unknown|unverified';
-}
-
-
+// ── Dedup helpers — identitas bertingkat ─────────────────────────────
 function normalizeBenText(v) {
-  return String(v || '').trim().toLowerCase();
+  return String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+function normalizeBenName(v) {
+  return normalizeBenText(v);
+}
+function normalizeBenLocation(v) {
+  return normalizeBenText(v).replace(/[.,\/\\-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function normalizeBenPhone(v) {
   const raw = String(v || '').trim();
-  if (!raw) return '';
-  const digits = raw.replace(/[^0-9]/g, '');
-  if (!digits) return '';
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return null;
   if (digits.startsWith('62')) return digits;
   if (digits.startsWith('0')) return '62' + digits.slice(1);
   return digits;
 }
-function getBeneficiaryUniqueKey(r) {
-  const name = normalizeBenText(r?.name);
-  const phone = normalizeBenPhone(r?.phone);
-  const gender = normalizeBenText(normGender(r?.gender || '') || '');
-  if (name && phone && gender) return `${name}|${phone}|${gender}`;
-  if (name && gender) return `${name}|no-phone|${gender}`;
-  if (name && phone) return `${name}|${phone}|no-gender`;
-  if (name) return `${name}|unverified`;
-  return 'unknown|unverified';
+function safeInt(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
 }
-function isSameBeneficiary(existing, incoming) {
-  const exName = normalizeBenText(existing?.name);
-  const exPhone = normalizeBenPhone(existing?.phone);
-  const exGender = normalizeBenText(normGender(existing?.gender || '') || '');
-  const inName = normalizeBenText(incoming?.name);
-  const inPhone = normalizeBenPhone(incoming?.phone);
-  const inGender = normalizeBenText(normGender(incoming?.gender || '') || '');
-  if (!exName || !inName || exName !== inName) return false;
-  if (inPhone && inGender) return exPhone === inPhone && exGender === inGender;
-  if (!inPhone && inGender) return exGender === inGender;
-  if (inPhone && !inGender) return exPhone === inPhone;
+function cleanNullable(v) {
+  const s = String(v || '').trim();
+  return s ? s : null;
+}
+function getBeneficiaryIdentityParts(r) {
+  return {
+    name     : normalizeBenName(r?.name),
+    phone    : normalizeBenPhone(r?.phone),
+    location : normalizeBenLocation(r?.location),
+  };
+}
+function getBeneficiaryUniqueKey(r) {
+  const { name, phone, location } = getBeneficiaryIdentityParts(r);
+  if (name && phone && location) return `npl:${name}|${phone}|${location}`;
+  if (name && phone)             return `np:${name}|${phone}`;
+  if (name && location)          return `nl:${name}|${location}`;
+  if (name)                      return `n:${name}`;
+  return 'unknown';
+}
+function canAutoMergeBeneficiary(existing, incoming) {
+  const ex  = getBeneficiaryIdentityParts(existing);
+  const inc = getBeneficiaryIdentityParts(incoming);
+  if (!ex.name || !inc.name || ex.name !== inc.name) return false;
+  if (ex.phone && inc.phone && ex.location && inc.location)
+    return ex.phone === inc.phone && ex.location === inc.location;
+  if (ex.phone && inc.phone)    return ex.phone === inc.phone;
+  if (ex.location && inc.location) return ex.location === inc.location;
   return false;
 }
 function mergeBeneficiaryPayload(existing, incoming) {
-  const incomingBirthYear = incoming?.birth_year ? parseInt(incoming.birth_year, 10) : null;
-  const existingBirthYear = existing?.birth_year ? parseInt(existing.birth_year, 10) : null;
   return {
-    name: String(incoming?.name || '').trim() || existing?.name || null,
-    phone: normalizeBenPhone(incoming?.phone) || existing?.phone || null,
-    gender: normGender(incoming?.gender || '') || existing?.gender || null,
-    birth_year: Number.isFinite(incomingBirthYear) ? incomingBirthYear : existingBirthYear,
-    location: String(incoming?.location || '').trim() || existing?.location || null,
-    occupation: String(incoming?.occupation || '').trim() || existing?.occupation || null,
-    email: String(incoming?.email || '').trim() || existing?.email || null,
-    note: String(incoming?.note || '').trim() || existing?.note || null,
+    name       : cleanNullable(incoming?.name)       || cleanNullable(existing?.name),
+    phone      : normalizeBenPhone(incoming?.phone)  || normalizeBenPhone(existing?.phone),
+    gender     : normGender(incoming?.gender)        || existing?.gender || null,
+    birth_year : safeInt(incoming?.birth_year)       || safeInt(existing?.birth_year),
+    location   : cleanNullable(incoming?.location)   || cleanNullable(existing?.location),
+    occupation : cleanNullable(incoming?.occupation) || cleanNullable(existing?.occupation),
+    email      : cleanNullable(incoming?.email)      || cleanNullable(existing?.email),
+    note       : cleanNullable(incoming?.note)       || cleanNullable(existing?.note),
   };
 }
 async function findExistingBeneficiary(client, row) {
-  const name = String(row?.name || '').trim();
+  const name = cleanNullable(row?.name);
   if (!name) return null;
+  const { phone, location } = getBeneficiaryIdentityParts(row);
   const { data, error } = await client
     .from('beneficiaries')
     .select('id, name, phone, gender, birth_year, location, occupation, email, note')
     .ilike('name', name);
   if (error || !data?.length) return null;
-  return data.find(item => isSameBeneficiary(item, row)) || null;
+  const norm = normalizeBenName(name);
+  return (
+    data.find(item => {
+      const ex = getBeneficiaryIdentityParts(item);
+      return ex.name === norm && phone && ex.phone === phone && location && ex.location === location;
+    }) ||
+    data.find(item => {
+      const ex = getBeneficiaryIdentityParts(item);
+      return ex.name === norm && phone && ex.phone === phone;
+    }) ||
+    data.find(item => {
+      const ex = getBeneficiaryIdentityParts(item);
+      return ex.name === norm && location && ex.location === location;
+    }) ||
+    null
+  );
 }
 
+// ── parseDate + normalizeRow ──────────────────────────────────────────
 function parseDate(v) {
   if (!v) return null;
   const s = String(v).trim();
@@ -722,25 +809,25 @@ function parseDate(v) {
 }
 function normalizeRow(r) {
   const n = {};
-  Object.keys(r).forEach(k => { n[k.toLowerCase().trim().replace(/\s+/g,'_')] = String(r[k]||'').trim(); });
+  Object.keys(r).forEach(k => { n[k.toLowerCase().trim().replace(/\s+/g,' ')] = String(r[k]||'').trim(); });
   return n;
 }
 
 // ── handleBenImportFile ───────────────────────────────────────────────
 window.handleBenImportFile = function (input) {
-  const file = input.files[0];
+  const file = input?.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const wb      = XLSX.read(e.target.result, { type: 'array', raw: false });
-      const ws      = wb.Sheets[wb.SheetNames[0]];
-      const raw     = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      const rows    = raw.map(r => mapFlatRow(normalizeRow(r))).filter(r => r.name);
+      const wb   = XLSX.read(e.target.result, { type: 'array', raw: false });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const rows = raw.map(r => mapFlatRow(normalizeRow(r))).filter(r => cleanNullable(r.name));
       window._benImportRows = rows;
       previewBenImport(rows);
     } catch(err) {
-      showBenImportMsg('❌ Gagal baca file: ' + err.message, 'error');
+      showBenImportMsg('\u274c Gagal baca file: ' + err.message, 'error');
     }
   };
   reader.readAsArrayBuffer(file);
@@ -749,72 +836,71 @@ window.handleBenImportFile = function (input) {
 // ── previewBenImport ──────────────────────────────────────────────────
 function previewBenImport(rows) {
   const area = document.getElementById('benImportPreview');
-  if (!rows.length) {
+  if (!area) return;
+  if (!rows?.length) {
     area.innerHTML = '<div style="color:#ef4444;font-size:13px">Tidak ada data valid. Pastikan kolom Nama terisi.</div>';
+    document.getElementById('benImportConfirmBtn')?.classList.add('hidden');
     return;
   }
-  // Hitung unik
-  const uniquePeople = new Set(rows.map(r => getBeneficiaryUniqueKey(r))).size;
+
+  const uniquePeople   = new Set(rows.map(r => getBeneficiaryUniqueKey(r))).size;
   const uniqueProjects = new Set(rows.map(r => r.project_name).filter(Boolean)).size;
-  const uniqueActs     = new Set(rows.map(r => `${r.project_name}|${r.activity_name}`).filter(Boolean)).size;
+  const uniqueActs     = new Set(rows.map(r => `${r.project_name}|${r.activity_name}`).filter(r => r.activity_name)).size;
+
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   area.innerHTML = `
     <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;color:#1d4ed8;font-weight:600">
-        👤 ${uniquePeople} orang unik
-      </div>
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:6px 12px;font-size:12px;color:#15803d;font-weight:600">
-        📁 ${uniqueProjects} proyek
-      </div>
-      <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:6px;padding:6px 12px;font-size:12px;color:#7e22ce;font-weight:600">
-        📋 ${uniqueActs} kegiatan
-      </div>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 12px;font-size:12px;color:#475569;font-weight:600">
-        📊 ${rows.length} total baris
-      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;color:#1d4ed8;font-weight:600">${uniquePeople} orang unik</div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:6px 12px;font-size:12px;color:#15803d;font-weight:600">${uniqueProjects} proyek</div>
+      <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:6px;padding:6px 12px;font-size:12px;color:#7e22ce;font-weight:600">${uniqueActs} kegiatan</div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 12px;font-size:12px;color:#475569;font-weight:600">${rows.length} total baris</div>
     </div>
     <div class="table-wrap" style="max-height:220px;overflow-y:auto">
       <table style="font-size:11px">
-        <thead>
-          <tr>
-            <th>#</th><th>Proyek</th><th>Aktivitas</th><th>Nama</th>
-            <th>Gender</th><th>Asal</th><th>HP</th><th>Pekerjaan</th><th>Tanggal</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>#</th><th>Proyek</th><th>Aktivitas</th><th>Nama</th>
+          <th>Gender</th><th>Asal</th><th>HP</th><th>Pekerjaan</th><th>Tanggal</th>
+        </tr></thead>
         <tbody>
           ${rows.map((r,i) => `<tr>
             <td style="color:#94a3b8">${i+1}</td>
-            <td style="color:#2563eb;font-size:10px;font-weight:600">${_esc(r.project_name||'-')}</td>
-            <td style="font-size:10px">${_esc(r.activity_name||'-')}</td>
-            <td style="font-weight:600">${_esc(r.name)}</td>
+            <td style="color:#2563eb;font-size:10px;font-weight:600">${esc(r.project_name||'-')}</td>
+            <td style="font-size:10px">${esc(r.activity_name||'-')}</td>
+            <td style="font-weight:600">${esc(r.name)}</td>
             <td>${r.gender ? normGender(r.gender) : '-'}</td>
-            <td style="font-size:10px">${_esc(r.location||'-')}</td>
-            <td style="font-size:10px">${_esc(r.phone||'-')}</td>
-            <td style="font-size:10px">${_esc(r.occupation||'-')}</td>
-            <td style="font-size:10px;color:#64748b">${r.attended_date ? parseDate(r.attended_date)||r.attended_date : '-'}</td>
+            <td style="font-size:10px">${esc(r.location||'-')}</td>
+            <td style="font-size:10px">${esc(r.phone||'-')}</td>
+            <td style="font-size:10px">${esc(r.occupation||'-')}</td>
+            <td style="font-size:10px;color:#64748b">${r.attended_date ? (parseDate(r.attended_date)||r.attended_date) : '-'}</td>
           </tr>`).join('')}
         </tbody>
       </table>
     </div>`;
 
-  showBenImportMsg(`✅ ${rows.length} baris siap diimport (${uniquePeople} penerima manfaat unik).`, 'success');
-  document.getElementById('benImportConfirmBtn').classList.remove('hidden');
+  showBenImportMsg(`${rows.length} baris siap diimport, ${uniquePeople} penerima manfaat unik terdeteksi.`, 'success');
+
+  const btn = document.getElementById('benImportConfirmBtn');
+  if (btn) {
+    btn.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-upload"></i> Import Sekarang';
+    btn.onclick = window.runBenImport;
+  }
 }
 
 // ── runBenImport ──────────────────────────────────────────────────────
 window.runBenImport = async function () {
-  const rows = window._benImportRows || [];
-  if (!rows.length) return;
+  const rows = window._benImportRows;
+  if (!rows?.length) return;
 
   const btn = document.getElementById('benImportConfirmBtn');
-  btn.disabled = true;
-  const _client = window.client || client;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengimport...'; }
 
+  const _client = window.client || client;
   let processed = 0;
-  const total = rows.length;
-  const updateProgress = () => {
-    btn.textContent = `⏳ ${processed}/${total}...`;
-  };
+  const total   = rows.length;
+  const updateProgress = () => { if (btn) btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Mengimport ${processed}/${total}`; };
   updateProgress();
 
   const [{ data: allProjs }, { data: allActs }] = await Promise.all([
@@ -823,10 +909,11 @@ window.runBenImport = async function () {
   ]);
 
   const projMap = {};
-  (allProjs || []).forEach(p => { projMap[(p.name || '').toLowerCase()] = p.id; });
+  (allProjs||[]).forEach(p => { projMap[String(p.name||'').toLowerCase()] = p.id; });
+
   const actMap = {};
-  (allActs || []).forEach(a => {
-    const key = `${(a.project_name || '').toLowerCase()}|${(a.title || '').toLowerCase()}`;
+  (allActs||[]).forEach(a => {
+    const key = `${String(a.project_name||'').toLowerCase()}|${String(a.title||'').toLowerCase()}`;
     actMap[key] = a;
   });
 
@@ -835,14 +922,14 @@ window.runBenImport = async function () {
 
   for (const r of rows) {
     const normalizedRow = {
-      name       : String(r.name || '').trim(),
-      phone      : normalizeBenPhone(r.phone) || null,
+      name       : cleanNullable(r.name),
+      phone      : normalizeBenPhone(r.phone),
       gender     : normGender(r.gender) || null,
-      birth_year : parseInt(r.birth_year) || null,
-      location   : r.location || null,
-      occupation : r.occupation || null,
-      email      : r.email || null,
-      note       : r.note || null,
+      birth_year : safeInt(r.birth_year),
+      location   : cleanNullable(r.location),
+      occupation : cleanNullable(r.occupation),
+      email      : cleanNullable(r.email),
+      note       : cleanNullable(r.note),
     };
 
     const cacheKey = getBeneficiaryUniqueKey(normalizedRow);
@@ -850,32 +937,17 @@ window.runBenImport = async function () {
 
     if (!benId) {
       const existing = await findExistingBeneficiary(_client, normalizedRow);
-      if (existing) {
+
+      if (existing && canAutoMergeBeneficiary(existing, normalizedRow)) {
         benId = existing.id;
         const merged = mergeBeneficiaryPayload(existing, normalizedRow);
-        const { error: errUpd } = await _client
-          .from('beneficiaries')
-          .update(merged)
-          .eq('id', benId);
-        if (errUpd) {
-          skipPart++;
-          processed++;
-          updateProgress();
-          continue;
-        }
+        const { error: errUpd } = await _client.from('beneficiaries').update(merged).eq('id', benId);
+        if (errUpd) { skipPart++; processed++; updateProgress(); continue; }
         okBen++;
       } else {
         const { data: inserted, error: errBen } = await _client
-          .from('beneficiaries')
-          .insert(normalizedRow)
-          .select('id')
-          .single();
-        if (errBen || !inserted) {
-          skipPart++;
-          processed++;
-          updateProgress();
-          continue;
-        }
+          .from('beneficiaries').insert(normalizedRow).select('id').single();
+        if (errBen || !inserted) { skipPart++; processed++; updateProgress(); continue; }
         benId = inserted.id;
         okBen++;
       }
@@ -886,14 +958,14 @@ window.runBenImport = async function () {
       await _client.from('beneficiary_projects').upsert({
         beneficiary_id : benId,
         project_name   : r.project_name,
-        project_id     : projMap[(r.project_name || '').toLowerCase()] || null,
+        project_id     : projMap[String(r.project_name||'').toLowerCase()] || null,
       }, { onConflict: 'beneficiary_id,project_name', ignoreDuplicates: true });
     }
 
     if (benId && r.activity_name) {
-      const actKey = `${(r.project_name || '').toLowerCase()}|${(r.activity_name || '').toLowerCase()}`;
-      const act = actMap[actKey];
-      const projId = r.project_name ? (projMap[(r.project_name || '').toLowerCase()] || null) : null;
+      const projId  = projMap[String(r.project_name||'').toLowerCase()] || null;
+      const actKey  = `${String(r.project_name||'').toLowerCase()}|${String(r.activity_name||'').toLowerCase()}`;
+      const act     = actMap[actKey];
 
       if (act) {
         const { error: errPart } = await _client.from('activity_participants').upsert({
@@ -903,7 +975,7 @@ window.runBenImport = async function () {
           project_id     : projId,
           beneficiary_id : benId,
           attended_date  : parseDate(r.attended_date) || null,
-          note           : r.note || null,
+          note           : cleanNullable(r.note),
         }, { onConflict: 'activity_id,beneficiary_id', ignoreDuplicates: true });
         if (!errPart) okPart++; else skipPart++;
       } else {
@@ -914,7 +986,7 @@ window.runBenImport = async function () {
           activity_name  : r.activity_name,
           attended_date  : parseDate(r.attended_date) || null,
           source         : 'import',
-          note           : r.note || null,
+          note           : cleanNullable(r.note),
         }, { onConflict: 'beneficiary_id,project_name,activity_name', ignoreDuplicates: true });
         if (!errLog) { okPart++; logPart++; } else skipPart++;
       }
@@ -924,17 +996,22 @@ window.runBenImport = async function () {
     updateProgress();
   }
 
-  btn.disabled = false;
-  btn.textContent = 'Import Sekarang';
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-upload"></i> Import Sekarang';
+    btn.onclick   = window.runBenImport;
+  }
+
   const uniqueBen = Object.keys(benIdCache).length;
   let msg = `${uniqueBen} penerima manfaat diproses`;
-  if (okPart) msg += `, ${okPart} data aktivitas terekam`;
-  if (logPart) msg += `, ${logPart} sebagai log bebas`;
+  if (okPart)   msg += `, ${okPart} data aktivitas terekam`;
+  if (logPart)  msg += ` (${logPart} sebagai log bebas)`;
   if (skipPart) msg += `, ${skipPart} gagal`;
-  showBenImportMsg('✅ ' + msg + '.', 'success');
+  showBenImportMsg(msg + '.', 'success');
 
   if (logPart) {
-    document.getElementById('benImportPreview').innerHTML += `
+    const area = document.getElementById('benImportPreview');
+    if (area) area.innerHTML += `
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;font-size:11px;color:#92400e;margin-top:8px">
         <strong>${logPart} kegiatan tersimpan sebagai catatan bebas</strong><br>
         Nama aktivitas tidak cocok dengan sistem, namun kehadiran tetap direkam di log.
@@ -942,14 +1019,17 @@ window.runBenImport = async function () {
       </div>`;
   }
 
-  window._benDupDecisions = null;
   setTimeout(() => { closeBenImport(); loadBeneficiaries(); }, logPart ? 2000 : 1500);
 };
+
+// ── checkBenDuplicates — alias ke runBenImport (dedup otomatis) ───────
+window.checkBenDuplicates = function () { return window.runBenImport(); };
 
 function showBenImportMsg(msg, type) {
   const el = document.getElementById('benImportMsg');
   el.textContent = msg; el.className = `form-msg ${type}`; el.classList.remove('hidden');
 }
+
 
 // ── Download template beneficiary ─────────────────────────────────────
 window.downloadBenTemplate = function () {
@@ -1000,7 +1080,7 @@ window.openAddParticipantModal = async function (activityId, activityName, proje
   const existingIds = new Set((existing||[]).map(e => e.beneficiary_id));
 
   // Load all beneficiaries
-  const { data: bens } = await _client.from('beneficiaries').select('id,name,phone,gender,location').order('name');
+  const bens = await fetchAllRows(() => _client.from('beneficiaries').select('id,name,phone,gender,location').order('id', { ascending: true }));
   window._benPickerAll  = bens || [];
   window._benPickerExisting = existingIds;
   renderBenPicker('');
@@ -1295,10 +1375,10 @@ window.exportBenToExcel = async function () {
 
   try {
     // Load data lengkap dari DB (termasuk activity log)
-    const [{ data: bens }, { data: parts }, { data: logs }] = await Promise.all([
-      _client.from('beneficiaries').select('*').order('name'),
-      _client.from('activity_participants').select('beneficiary_id,project_name,activity_name,attended_date,note'),
-      _client.from('beneficiary_activity_log').select('beneficiary_id,project_name,activity_name,attended_date,note,source'),
+    const [bens, parts, logs] = await Promise.all([
+      fetchAllRows(() => _client.from('beneficiaries').select('*').order('id', { ascending: true })),
+      fetchAllRows(() => _client.from('activity_participants').select('beneficiary_id,project_name,activity_name,attended_date,note').order('beneficiary_id', { ascending: true })),
+      fetchAllRows(() => _client.from('beneficiary_activity_log').select('beneficiary_id,project_name,activity_name,attended_date,note,source').order('beneficiary_id', { ascending: true })),
     ]);
 
     // Filter per proyek jika ada
@@ -1420,165 +1500,6 @@ window.openEditBenModal = async function (id) {
   }
   const saveBtn = document.querySelector('#benFormOverlay .btn-primary[onclick="saveBeneficiary()"]');
   if (saveBtn) saveBtn.innerHTML = 'Update';
-};
-
-// ══════════════════════════════════════════════════════════════
-// VALIDASI DUPLIKAT — cek sebelum import
-// ══════════════════════════════════════════════════════════════
-window.checkBenDuplicates = async function () {
-  const rows = window._benImportRows || [];
-  if (!rows.length) return;
-
-  const _client = window.client || client;
-  const btn = document.getElementById('benImportConfirmBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Cek duplikat…'; }
-
-  // Ambil semua nama yang ada di import
-  const importNames = [...new Set(rows.map(r => r.name.toLowerCase().trim()))];
-
-  // Cari yang sudah ada di DB dengan nama sama tapi HP berbeda
-  const { data: existing } = await _client.from('beneficiaries')
-    .select('id,name,phone,gender,location,occupation')
-    .in('name', rows.map(r => r.name));
-
-  const existMap = {};
-  (existing||[]).forEach(e => { existMap[e.name.toLowerCase()] = existMap[e.name.toLowerCase()] || []; existMap[e.name.toLowerCase()].push(e); });
-
-  // Deteksi duplikat potensial: nama sama, HP berbeda
-  const dupList = [];
-  rows.forEach(r => {
-    const key = r.name.toLowerCase().trim();
-    const inDB = existMap[key] || [];
-    inDB.forEach(db => {
-      if (db.phone !== (r.phone||'') && !dupList.find(d => d.importName === r.name && d.dbId === db.id)) {
-        dupList.push({
-          importName  : r.name,
-          importPhone : r.phone || '-',
-          importLoc   : r.location || '-',
-          dbId        : db.id,
-          dbPhone     : db.phone || '-',
-          dbLoc       : db.location || '-',
-          dbGender    : db.gender || '-',
-        });
-      }
-    });
-  });
-
-  if (btn) { btn.disabled = false; btn.textContent = 'Import Sekarang'; }
-
-  if (!dupList.length) {
-    // Tidak ada duplikat — langsung import
-    window.runBenImport();
-    return;
-  }
-
-  // Tampilkan modal konfirmasi duplikat
-  showDuplicateConfirm(dupList);
-};
-
-function showDuplicateConfirm(dupList) {
-  // Buat overlay konfirmasi duplikat
-  let overlay = document.getElementById('benDupOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id        = 'benDupOverlay';
-    overlay.className = 'modal-overlay';
-    document.body.appendChild(overlay);
-  }
-
-  overlay.innerHTML = `
-    <div class="modal-box" style="max-width:580px">
-      <div class="modal-header">
-        <span>⚠️ Potensi Data Duplikat Ditemukan</span>
-        <button class="modal-close" onclick="document.getElementById('benDupOverlay').classList.add('hidden')">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400e">
-          <strong>${dupList.length} orang</strong> dalam file Excel memiliki nama yang sama dengan data di sistem, namun nomor HP berbeda.
-          Pilih tindakan untuk masing-masing:
-        </div>
-        <div style="max-height:320px;overflow-y:auto">
-          ${dupList.map((d,i) => `
-            <div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;background:#f8fafc">
-              <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:8px">👤 ${_esc(d.importName)}</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
-                <div style="background:#eff6ff;border-radius:6px;padding:8px">
-                  <div style="font-weight:700;color:#2563eb;margin-bottom:4px">📥 Data Import</div>
-                  <div>HP: ${_esc(d.importPhone)}</div>
-                  <div>Lokasi: ${_esc(d.importLoc)}</div>
-                </div>
-                <div style="background:#f0fdf4;border-radius:6px;padding:8px">
-                  <div style="font-weight:700;color:#15803d;margin-bottom:4px">💾 Data di Sistem</div>
-                  <div>HP: ${_esc(d.dbPhone)}</div>
-                  <div>Lokasi: ${_esc(d.dbLoc)}</div>
-                  <div>Gender: ${_esc(d.dbGender)}</div>
-                </div>
-              </div>
-              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                  <input type="radio" name="dup_${i}" value="skip" checked>
-                  Pakai data di sistem (lewati import)
-                </label>
-                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                  <input type="radio" name="dup_${i}" value="update">
-                  Update data di sistem dengan data import
-                </label>
-                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                  <input type="radio" name="dup_${i}" value="new">
-                  Simpan sebagai orang baru (beda HP)
-                </label>
-              </div>
-            </div>`).join('')}
-        </div>
-        <div id="benDupMsg" class="form-msg hidden"></div>
-        <div class="form-actions" style="margin-top:14px">
-          <button class="btn-secondary" onclick="document.getElementById('benDupOverlay').classList.add('hidden')">Batal</button>
-          <button class="btn-primary" onclick="applyDupDecisions(${JSON.stringify(dupList).replace(/</g,'\u003c')})">
-            ✅ Lanjutkan Import
-          </button>
-        </div>
-      </div>
-    </div>`;
-
-  overlay.classList.remove('hidden');
-}
-
-window.applyDupDecisions = async function (dupList) {
-  const _client = window.client || client;
-  // Baca pilihan user
-  const decisions = dupList.map((d, i) => {
-    const radio = document.querySelector(`input[name="dup_${i}"]:checked`);
-    return { ...d, decision: radio?.value || 'skip' };
-  });
-
-  // Terapkan keputusan: update data di sistem jika 'update'
-  for (const d of decisions) {
-    if (d.decision === 'update') {
-      const rowData = (window._benImportRows||[]).find(r => r.name === d.importName);
-      if (rowData) {
-        await _client.from('beneficiaries').update({
-          phone      : rowData.phone || null,
-          gender     : normGender(rowData.gender) || null,
-          location   : rowData.location || null,
-          occupation : rowData.occupation || null,
-          birth_year : parseInt(rowData.birth_year) || null,
-          note       : rowData.note || null,
-        }).eq('id', d.dbId);
-      }
-    } else if (d.decision === 'new') {
-      // Hapus constraint UNIQUE agar bisa simpan sebagai baru — force phone berbeda tetap tersimpan
-      // Import tetap jalan normal untuk nama ini
-    }
-    // 'skip' → tidak lakukan apapun, upsert normal akan merge ke data existing
-  }
-
-  document.getElementById('benDupOverlay')?.classList.add('hidden');
-
-  // Tandai rows yang harus di-'new' agar tidak di-merge saat upsert
-  window._benDupDecisions = {};
-  decisions.forEach(d => { window._benDupDecisions[d.importName] = d.decision; });
-
-  window.runBenImport();
 };
 
 
