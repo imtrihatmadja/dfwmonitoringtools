@@ -19,8 +19,6 @@ let originalIndicatorIds      = [];
 let savedFiles                = [];
 const AUDIT_USER              = "Tim";
 const BUCKET        = "activity-files";
-const TEST_MODE      = true;
-window.TEST_USER_ID  = window.TEST_USER_ID || "00000000-0000-0000-0000-000000000001";
 
 // ===================== PROGRESS HELPERS =====================
 function getLatestActual(ind) {
@@ -212,7 +210,8 @@ const tabTitles = {
   input     : ["Tambah Proyek", "Tambah proyek baru"],
   beneficiary: ["Penerima Manfaat", "Data penerima manfaat unik & riwayat partisipasi kegiatan"],
   archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
-  detail    : ["Detail Proyek", ""]
+  detail    : ["Detail Proyek", ""],
+  learning  : ["Learning Loop", "Refleksi & pelajaran dari kegiatan"]
 };
 
 function switchTab(tab) {
@@ -232,6 +231,10 @@ function switchTab(tab) {
   if (tab === "input") renderOutcomeList();
   if (tab === "archive") loadArchivedProjects();
   if (tab === "beneficiary") { loadBeneficiaries(); populateBenProjectFilter(); }
+  if (tab === "learning" && typeof loadLearningLoop === "function") {
+    const cp = window.currentProject || currentProject || null;
+    setTimeout(() => loadLearningLoop(cp ? cp.id : null), 0);
+  }
 }
 document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
@@ -1801,4 +1804,73 @@ setStep(1);
 loadProjects();
 
 
-window.loadLearningLoopFromUI = function(){ switchTab("learning"); const cp = window.currentProject || currentProject || null; if (typeof loadLearningLoop === "function") loadLearningLoop(cp ? cp.id : null); };
+window.TEST_USER_ID = window.TEST_USER_ID || '00000000-0000-0000-0000-000000000001';
+
+window.populateDetailLearningActivities = async function(){
+  const sel = document.getElementById('detailRefActivity');
+  if (!sel) return;
+  const cp = window.currentProject || currentProject || null;
+  if (!cp || !cp.name) {
+    sel.innerHTML = '<option value="">— Buka detail proyek —</option>';
+    return;
+  }
+  try {
+    const { data, error } = await (window.client || client)
+      .from('project_activities')
+      .select('id,title,project_name,sort_order')
+      .eq('project_name', cp.name)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    const rows = data || [];
+    sel.innerHTML = '<option value="">— Pilih kegiatan (opsional) —</option>' + rows.map(a => `<option value="${a.id}">${a.title || ''}</option>`).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">— Gagal memuat aktivitas —</option>';
+  }
+};
+
+window.saveDetailReflection = async function(){
+  const cp = window.currentProject || currentProject || null;
+  const msg = document.getElementById('detailRefMsg');
+  const btn = document.querySelector('#detailReflectionBox .btn-primary');
+  if (!cp || !cp.id) {
+    if (msg) { msg.textContent = 'Buka detail proyek dahulu.'; msg.className = 'form-msg error'; msg.style.display='block'; }
+    return;
+  }
+  const good = document.getElementById('detailRefGood')?.value.trim() || '';
+  const bad = document.getElementById('detailRefBad')?.value.trim() || '';
+  const chg = document.getElementById('detailRefChange')?.value.trim() || '';
+  const act = document.getElementById('detailRefActivity')?.value || null;
+  const cat = document.getElementById('detailRefCat')?.value || 'program';
+  const conf = document.getElementById('detailRefConf')?.value || 'sedang';
+  if (!good || !bad || !chg) {
+    if (msg) { msg.textContent = 'Semua field wajib diisi.'; msg.className = 'form-msg error'; msg.style.display='block'; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan…'; }
+  try {
+    let userId = window.TEST_USER_ID;
+    try {
+      const auth = await (window.client || client).auth.getUser();
+      if (auth?.data?.user?.id) userId = auth.data.user.id;
+    } catch(e) {}
+    const { error } = await (window.client || client).from('refleksi').insert([{ kegiatan_id: act, kasus_id: cp.id, dibuat_oleh: userId, tanggal: new Date().toISOString().split('T')[0], apa_yang_berjalan_baik: good, apa_yang_tidak_berjalan: bad, apa_yang_akan_diubah: chg, kategori: cat, tingkat_kepercayaan: conf }], { returning: 'minimal' });
+    if (error) throw error;
+    if (msg) { msg.textContent = 'Refleksi tersimpan.'; msg.className = 'form-msg success'; msg.style.display='block'; }
+    document.getElementById('detailRefGood').value='';
+    document.getElementById('detailRefBad').value='';
+    document.getElementById('detailRefChange').value='';
+    if (typeof loadLearningLoop === 'function') await loadLearningLoop(cp.id);
+  } catch (e) {
+    if (msg) { msg.textContent = 'Gagal simpan refleksi: ' + (e.message || e); msg.className = 'form-msg error'; msg.style.display='block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Simpan Refleksi'; }
+  }
+};
+
+
+window.loadLearningLoopFromUI = function(){
+  switchTab("learning");
+  const cp = window.currentProject || currentProject || null;
+  if (typeof loadLearningLoop === "function") loadLearningLoop(cp ? cp.id : null);
+};
