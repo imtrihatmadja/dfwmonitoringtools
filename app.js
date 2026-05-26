@@ -1356,8 +1356,10 @@ function renderActivityListDetail() {
               <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
             </div>
           </div>
-        </div>`;
-    }).join("")}`;
+      </div>`;
+    }).join("")}
+  `;
+}
   
         // Sprint 2: badge isu di card aktivitas
   setTimeout(() => {
