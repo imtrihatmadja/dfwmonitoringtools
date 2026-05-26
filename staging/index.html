@@ -300,6 +300,70 @@
       </div>
     </div>
 
+    <!-- PANEL: Refleksi & Pembelajaran Proyek (Sprint 3) -->
+<div class="detail-panel" id="projectReflectionPanel">
+  <div class="panel-titlebar">
+    <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
+    <div class="panel-count" id="pr-reflection-count">0 catatan</div>
+  </div>
+  <div class="panel-scroll-wrap">
+    <div class="panel-scroll">
+      <!-- List refleksi -->
+      <div id="pr-reflection-list" class="activity-list">
+        <div class="empty-state" style="padding:18px 12px">
+          Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
+        </div>
+      </div>
+
+      <!-- Form tambah refleksi -->
+      <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:10px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <input type="date" id="pr-reflection-date"
+            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+          <select id="pr-reflection-type"
+            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+            <option value="lesson">Lesson Learned</option>
+            <option value="success">Success</option>
+            <option value="challenge">Challenge</option>
+            <option value="recommendation">Rekomendasi</option>
+          </select>
+          <input type="text" id="pr-reflection-title" placeholder="Judul singkat (opsional)"
+            style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+        </div>
+
+        <textarea id="pr-what-happened" rows="2"
+          placeholder="Apa yang terjadi? (konteks singkat)"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <textarea id="pr-what-worked" rows="2"
+            placeholder="Apa yang berjalan baik?"
+            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+          <textarea id="pr-what-didnt" rows="2"
+            placeholder="Apa yang tidak berjalan?"
+            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+        </div>
+
+        <textarea id="pr-lesson" rows="2"
+          placeholder="Pelajaran utama / insight kunci"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <textarea id="pr-next-steps" rows="2"
+          placeholder="Apa yang akan dilakukan berbeda ke depan?"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <div id="pr-reflection-msg" class="form-msg hidden" style="margin-bottom:6px"></div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn-primary btn-sm" onclick="saveProjectReflection()">
+            Simpan Refleksi
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
   </div><!-- /tab-input -->
 
   <!-- TAB DETAIL PROYEK -->
