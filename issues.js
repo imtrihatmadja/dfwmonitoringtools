@@ -260,6 +260,57 @@ function renderIssueTable() {
   }).join('');
 }
 
+function getProjectNameById(projectId) {
+  // ... yang sudah ada
+}
+
+// ─── Sprint 2: aktivitas per proyek ─────────────────────
+
+// Cache aktivitas per proyek (key: project_id)
+let issueActivitiesCache = {};
+
+async function loadActivitiesForProject(projectId) {
+  if (!projectId) return [];
+  if (issueActivitiesCache[projectId]) return issueActivitiesCache[projectId];
+  const client = window.client;
+  if (!client) return [];
+  try {
+    const { data, error } = await client
+      .from('project_activities')
+      .select('id, title, status, project_id')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error('loadActivitiesForProject error:', error.message);
+      return [];
+    }
+    const rows = data || [];
+    issueActivitiesCache[projectId] = rows;
+    return rows;
+  } catch (e) {
+    console.error('loadActivitiesForProject exception:', e);
+    return [];
+  }
+}
+
+// Dipanggil saat project berubah di form Isu
+window.onIssueProjectChange = async function () {
+  const projectId = document.getElementById('issueF-project-id')?.value;
+  const actSel    = document.getElementById('issueF-activity-id');
+  if (!actSel) return;
+
+  actSel.innerHTML = '<option value="">-- Pilih Aktivitas (opsional) --</option>';
+  actSel.disabled  = true;
+  if (!projectId) return;
+
+  const acts = await loadActivitiesForProject(projectId);
+  if (!acts.length) return;
+
+  actSel.innerHTML = '<option value="">-- Pilih Aktivitas (opsional) --</option>' +
+    acts.map(a => `<option value="${a.id}">${a.title}</option>`).join('');
+  actSel.disabled = false;
+};
+
 window.filterIssues = function () {
   const q = (document.getElementById('issueSearchInput')?.value || '').toLowerCase().trim();
   const status = document.getElementById('issueStatusFilter')?.value || '';
