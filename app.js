@@ -1358,6 +1358,14 @@ function renderActivityListDetail() {
           </div>
         </div>`;
     }).join("")}`;
+    }).join("")}\`;
+        // Sprint 2: badge isu di card aktivitas
+  setTimeout(() => {
+    if (typeof window.injectIssueBadgesToActivities === "function") {
+      window.injectIssueBadgesToActivities();
+    }
+  }, 150);
+}
 }
 
 // Update badge jumlah peserta di card aktivitas
@@ -1470,6 +1478,13 @@ window.openActModal = async function (id) {
   document.getElementById("actNoteList").innerHTML  = `<div class="history-empty">Belum ada catatan.</div>`;
   stagedFiles = []; savedFiles = [];
   renderStagingList(); renderSavedFiles();
+  renderStagingList(); renderSavedFiles();
+  document.getElementById("actUploadProgress").textContent = "";
+  // Sprint 2: reset panel isu
+  const _ip = document.getElementById("actIssuesPanel");
+  if (_ip) _ip.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">Simpan aktivitas terlebih dahulu.</div>';
+
+  
   document.getElementById("actUploadProgress").textContent = "";
 
   if (id) {
@@ -1487,6 +1502,11 @@ window.openActModal = async function (id) {
       const notes = allActNotes.filter(n => n.activity_id === id);
       document.getElementById("actNoteList").innerHTML = renderActNotes(notes);
       await loadSavedFiles(id);
+      await loadSavedFiles(id);
+      // Sprint 2
+      if (typeof window.renderActivityIssuesPanel === "function") {
+        window.renderActivityIssuesPanel(id);
+      }
     }
   }
   document.getElementById("actModalOverlay").classList.remove("hidden");
