@@ -850,7 +850,10 @@ window.renderProjectReflectionsPanel = function () {
               ${lbl}
             </span>
           </div>
-        </div>
+          <button type="button" onclick="deleteProjectReflection('${r.id}')"
+      style="border:none;background:#fee2e2;color:#dc2626;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer;font-weight:600"
+      title="Hapus refleksi">Hapus</button>
+      </div>
         ${r.title ? `<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${r.title}</div>` : ''}
         ${r.what_happened ? `<div style="font-size:12px;color:#334155;margin-bottom:4px">${r.what_happened}</div>` : ''}
         ${r.lesson_learned ? `<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${r.lesson_learned}</div>` : ''}
