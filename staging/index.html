@@ -304,7 +304,49 @@
 
   <!-- TAB DETAIL PROYEK -->
   <div id="tab-detail" class="tab-content">
-    <!-- PANEL: Refleksi & Pembelajaran Proyek (Sprint 3) -->
+    <div class="detail-header" id="detailHeader"></div>
+    <div class="detail-split">
+
+      <!-- PANEL KIRI: Aktivitas -->
+      <div class="detail-panel">
+        <div class="panel-titlebar">
+          <span class="panel-title">📋 Aktivitas Pelaksanaan</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="panel-count" id="activityCount">0 aktivitas</span>
+            <button class="btn-primary btn-sm" id="addActivityBtnDetail">＋ Tambah</button>
+          </div>
+        </div>
+        <div class="panel-scroll-wrap" id="actScrollWrap">
+          <div class="panel-scroll" id="actScrollArea">
+            <div class="activity-list" id="activityListDetail"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL KANAN: Update Indikator -->
+      <div class="detail-panel">
+        <div class="panel-titlebar">
+          <span class="panel-title">📊 Update Capaian Indikator</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="panel-count" id="indCount">0 indikator</span>
+            <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit Proyek</button>
+          </div>
+        </div>
+        <div class="panel-scroll-wrap" id="indScrollWrap">
+          <div class="panel-scroll" id="indScrollArea">
+            <div class="indicator-update-list" id="indicatorUpdateList"></div>
+          </div>
+        </div>
+        <div style="padding:12px 14px;border-top:1px solid #f1f5f9;flex-shrink:0">
+          <div id="indUpdateMsg" class="form-msg hidden"></div>
+          <div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0;line-height:1.5">
+            💡 Gunakan tombol <strong style="color:#2563eb">💾 Simpan Update</strong><br>
+            pada masing-masing indikator di atas
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL: Refleksi & Pembelajaran Proyek (Sprint 3) -->
 <div class="detail-panel" id="projectReflectionPanel">
   <div class="panel-titlebar">
     <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
@@ -367,51 +409,6 @@
     </div>
   </div>
 </div>
-
-
-
-    
-    <div class="detail-header" id="detailHeader"></div>
-    <div class="detail-split">
-
-      <!-- PANEL KIRI: Aktivitas -->
-      <div class="detail-panel">
-        <div class="panel-titlebar">
-          <span class="panel-title">📋 Aktivitas Pelaksanaan</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="panel-count" id="activityCount">0 aktivitas</span>
-            <button class="btn-primary btn-sm" id="addActivityBtnDetail">＋ Tambah</button>
-          </div>
-        </div>
-        <div class="panel-scroll-wrap" id="actScrollWrap">
-          <div class="panel-scroll" id="actScrollArea">
-            <div class="activity-list" id="activityListDetail"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- PANEL KANAN: Update Indikator -->
-      <div class="detail-panel">
-        <div class="panel-titlebar">
-          <span class="panel-title">📊 Update Capaian Indikator</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="panel-count" id="indCount">0 indikator</span>
-            <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit Proyek</button>
-          </div>
-        </div>
-        <div class="panel-scroll-wrap" id="indScrollWrap">
-          <div class="panel-scroll" id="indScrollArea">
-            <div class="indicator-update-list" id="indicatorUpdateList"></div>
-          </div>
-        </div>
-        <div style="padding:12px 14px;border-top:1px solid #f1f5f9;flex-shrink:0">
-          <div id="indUpdateMsg" class="form-msg hidden"></div>
-          <div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0;line-height:1.5">
-            💡 Gunakan tombol <strong style="color:#2563eb">💾 Simpan Update</strong><br>
-            pada masing-masing indikator di atas
-          </div>
-        </div>
-      </div>
 
     </div>
   </div><!-- /tab-detail -->
