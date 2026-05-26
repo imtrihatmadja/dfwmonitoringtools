@@ -201,6 +201,7 @@ window.jumpToProject = async function(projIndex, event) {
   const proj = window.allProjects[projIndex];
   if (!proj) return;
   await openProjectDetail(proj);
+  await loadProjectReflections(proj.id);
 };
 
 // ===================== TAB NAVIGATION =====================
@@ -773,7 +774,31 @@ window.openProjectDetail = async function (proj) {
   renderIndicatorUpdatePanel(proj);
 };
 
+// ===================== PROJECT REFLECTIONS (SPRINT 3) =====================
 
+async function loadProjectReflections(projectId) {
+  const client = window.client || client;
+  projectReflections = [];
+  if (!projectId || !client || typeof client.from !== "function") return [];
+
+  const { data, error } = await client
+    .from('project_reflections')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('reflection_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('loadProjectReflections error:', error.message);
+    return [];
+  }
+
+  projectReflections = data || [];
+  if (typeof renderProjectReflectionsPanel === "function") {
+    renderProjectReflectionsPanel();
+  }
+  return projectReflections;
+}
 
 function renderDetailHeader(proj) {
   const inds    = proj.project_indicators;
@@ -797,6 +822,98 @@ function renderDetailHeader(proj) {
   const ovLabel   = progressLabel(overall);
   const avgActPct = calcAvgAktivitas(proj);
   const avgIndPct = calcAvgIndikator(proj);
+
+
+  window.saveProjectReflection = async function () {
+  const client = window.client || client;
+  if (!currentProject || !client || typeof client.from !== "function") return;
+
+  const projId = currentProject.id;
+  const dateEl   = document.getElementById('pr-reflection-date');
+  const typeEl   = document.getElementById('pr-reflection-type');
+  const titleEl  = document.getElementById('pr-reflection-title');
+  const whatEl   = document.getElementById('pr-what-happened');
+  const workEl   = document.getElementById('pr-what-worked');
+  const didntEl  = document.getElementById('pr-what-didnt');
+  const lessonEl = document.getElementById('pr-lesson');
+  const nextEl   = document.getElementById('pr-next-steps');
+  const msgEl    = document.getElementById('pr-reflection-msg');
+
+  const reflection_date = dateEl?.value || new Date().toISOString().slice(0,10);
+  const type            = typeEl?.value || 'lesson';
+  const title           = (titleEl?.value || '').trim();
+  const what_happened   = (whatEl?.value || '').trim();
+  const what_worked     = (workEl?.value || '').trim();
+  const what_didnt      = (didntEl?.value || '').trim();
+  const lesson_learned  = (lessonEl?.value || '').trim();
+  const next_steps      = (nextEl?.value || '').trim();
+
+  if (!lesson_learned && !what_happened) {
+    if (msgEl) {
+      msgEl.textContent = 'Isi minimal \"Apa yang terjadi\" atau \"Pelajaran utama\".';
+      msgEl.className = 'form-msg error';
+    }
+    return;
+  }
+
+  if (msgEl) {
+    msgEl.textContent = '';
+    msgEl.className = 'form-msg hidden';
+  }
+
+  try {
+    const payload = {
+      project_id: projId,
+      reflection_date,
+      type,
+      title: title || null,
+      what_happened: what_happened || null,
+      what_worked: what_worked || null,
+      what_didnt: what_didnt || null,
+      lesson_learned: lesson_learned || null,
+      next_steps: next_steps || null,
+      tags: null,
+      created_by: AUDIT_USER || null
+    };
+
+    const { error } = await client
+      .from('project_reflections')
+      .insert(payload);
+
+    if (error) {
+      console.error('saveProjectReflection error:', error.message);
+      if (msgEl) {
+        msgEl.textContent = 'Gagal menyimpan refleksi: ' + error.message;
+        msgEl.className = 'form-msg error';
+      }
+      return;
+    }
+
+    // kosongkan form
+    if (titleEl)  titleEl.value  = '';
+    if (whatEl)   whatEl.value   = '';
+    if (workEl)   workEl.value   = '';
+    if (didntEl)  didntEl.value  = '';
+    if (lessonEl) lessonEl.value = '';
+    if (nextEl)   nextEl.value   = '';
+
+    if (msgEl) {
+      msgEl.textContent = 'Refleksi tersimpan.';
+      msgEl.className = 'form-msg success';
+      setTimeout(() => {
+        msgEl.className = 'form-msg hidden';
+      }, 1200);
+    }
+
+    await loadProjectReflections(projId);
+  } catch (e) {
+    console.error('saveProjectReflection exception:', e);
+    if (msgEl) {
+      msgEl.textContent = 'Terjadi error tak terduga.';
+      msgEl.className = 'form-msg error';
+    }
+  }
+};
 
   document.getElementById("detailHeader").innerHTML = `
     <!-- Tombol Kembali + badge status -->
