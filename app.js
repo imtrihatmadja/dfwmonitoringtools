@@ -800,6 +800,66 @@ async function loadProjectReflections(projectId) {
   return projectReflections;
 }
 
+window.renderProjectReflectionsPanel = function () {
+  const listEl  = document.getElementById('pr-reflection-list');
+  const countEl = document.getElementById('pr-reflection-count');
+
+  if (!listEl) return;
+
+  if (!Array.isArray(projectReflections) || !projectReflections.length) {
+    listEl.innerHTML = `
+      <div class="empty-state" style="padding:18px 12px">
+        Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
+      </div>`;
+    if (countEl) countEl.textContent = '0 catatan';
+    return;
+  }
+
+  if (countEl) countEl.textContent = projectReflections.length + ' catatan';
+
+  listEl.innerHTML = projectReflections.map((r) => {
+    const d   = r.reflection_date || r.created_at;
+    const dt  = d ? new Date(d).toLocaleDateString('id-ID', {
+      day:'2-digit', month:'short', year:'numeric'
+    }) : '-';
+    const t   = (r.type || '').toLowerCase();
+    const lbl = t === 'success' ? 'Success'
+              : t === 'challenge' ? 'Challenge'
+              : t === 'recommendation' ? 'Rekomendasi'
+              : 'Lesson Learned';
+    const badgeColor =
+      t === 'success'        ? '#22c55e' :
+      t === 'challenge'      ? '#f97316' :
+      t === 'recommendation' ? '#0ea5e9' :
+                               '#7c3aed';
+
+    return `
+      <div class="activity-card" style="border-radius:10px;border:1px solid #e2e8f0;padding:10px 11px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:#64748b">${dt}</span>
+            <span style="
+              font-size:10px;
+              padding:2px 7px;
+              border-radius:999px;
+              background:${badgeColor}15;
+              color:${badgeColor};
+              font-weight:700;
+              text-transform:uppercase;
+              letter-spacing:.03em;">
+              ${lbl}
+            </span>
+          </div>
+        </div>
+        ${r.title ? `<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${r.title}</div>` : ''}
+        ${r.what_happened ? `<div style="font-size:12px;color:#334155;margin-bottom:4px">${r.what_happened}</div>` : ''}
+        ${r.lesson_learned ? `<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${r.lesson_learned}</div>` : ''}
+        ${r.next_steps ? `<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${r.next_steps}</div>` : ''}
+      </div>`;
+  }).join('');
+};
+
+
 function renderDetailHeader(proj) {
   const inds    = proj.project_indicators;
   const indDone = inds.filter(ind => {
