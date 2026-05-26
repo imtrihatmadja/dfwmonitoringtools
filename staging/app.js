@@ -772,6 +772,7 @@ window.openProjectDetail = async function (proj) {
   renderDetailHeader(proj);
   await loadActivities(proj.name);
   renderIndicatorUpdatePanel(proj);
+  loadProjectReflections(proj.id);
 };
 
 // ===================== PROJECT REFLECTIONS (SPRINT 3) =====================
@@ -978,6 +979,40 @@ function renderDetailHeader(proj) {
   }
 };
 
+window.deleteProjectReflection = async function (id) {
+  if (!id) return;
+  if (!currentProject || !currentProject.id) return;
+  if (!confirm('Hapus catatan refleksi ini?')) return;
+
+  const c = window.client || client;
+  if (!c || typeof c.from !== "function") return;
+
+  try {
+    const { error } = await c
+      .from("project_reflections")
+      .delete()
+      .eq("id", id)
+      .eq("project_id", currentProject.id);
+
+    if (error) {
+      console.error("deleteProjectReflection error:", error.message);
+      alert("Gagal menghapus: " + error.message);
+      return;
+    }
+
+    projectReflections = projectReflections.filter(r => r.id !== id);
+    if (typeof window.renderProjectReflectionsPanel === "function") {
+      window.renderProjectReflectionsPanel();
+    }
+    await loadProjects();
+  } catch (e) {
+    console.error("deleteProjectReflection exception:", e);
+    alert("Terjadi error saat menghapus refleksi.");
+  }
+};
+
+
+  
   document.getElementById("detailHeader").innerHTML = `
     <!-- Tombol Kembali + badge status -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
