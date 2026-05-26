@@ -387,12 +387,8 @@
       <div class="stat-value" style="color:#7e22ce" id="benStatFemale">–</div>
     </div>
     <div class="stat-card yellow" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
-      <div class="stat-label" id="benStatParticipLabel" style="color:#92400e">Total Partisipasi</div>
+      <div class="stat-label" style="color:#92400e">Total Partisipasi</div>
       <div class="stat-value" style="color:#92400e" id="benStatParticip">–</div>
-    </div>
-    <div class="stat-card" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-color:#fdba74">
-      <div class="stat-label" id="benStatFreeLogLabel" style="color:#9a3412">Log Bebas</div>
-      <div class="stat-value" id="benStatFreeLog" style="color:#c2410c">–</div>
     </div>
   </div>
 
@@ -617,6 +613,26 @@
 
       <div id="actFormMsg" class="form-msg hidden" style="margin-top:12px"></div>
 
+              <div class="file-saved-list" id="actSavedFilesList"></div>
+      </div>
+
+      <!-- Sprint 2: Panel Isu Terkait -->
+      <div id="actIssuesPanelWrap" style="margin-top:16px;border-top:1px solid #f1f5f9;padding-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="act-note-title" style="margin:0">⚠️ Isu Terkait Aktivitas Ini</div>
+          <button class="btn-primary btn-sm" style="font-size:11px" onclick="openIssueModal()">+ Tambah Isu</button>
+        </div>
+        <div id="actIssuesPanel" style="max-height:220px;overflow-y:auto">
+          <div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">
+            Simpan aktivitas terlebih dahulu untuk melihat isu terkait.
+          </div>
+        </div>
+      </div>
+
+      <div id="actFormMsg" class="form-msg hidden" style="margin-top:12px"></div>
+
+      
+
       <div id="actFormMsg" class="form-msg hidden" style="margin-top:12px"></div>
       <div class="form-actions" style="margin-top:16px">
         <button class="btn-secondary" id="actModalClose2">Batal</button>
@@ -658,8 +674,8 @@
           <label>Proyek Terkait</label>
           <select id="issueF-project-id" onchange="onIssueProjectChange()">
           <option value="">-- Pilih Proyek --</option>
-        </select>
-      </div>
+          </select>
+        </div>
 
 <div class="form-group">
   <label>Aktivitas Terkait
