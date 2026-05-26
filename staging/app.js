@@ -834,71 +834,29 @@ window.renderProjectReflectionsPanel = function () {
                                '#7c3aed';
 
     return `
-  <div class="activity-card" style="border-radius:10px;border:1px solid #e2e8f0;padding:10px 11px;margin-bottom:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px;color:#64748b">${dt}</span>
-        <span style="
-          font-size:10px;
-          padding:2px 7px;
-          border-radius:999px;
-          background:${badgeColor}15;
-          color:${badgeColor};
-          font-weight:700;
-          text-transform:uppercase;
-          letter-spacing:.03em;">
-          ${lbl}
-        </span>
-      </div>
-      <button
-        type="button"
-        onclick="deleteProjectReflection('${r.id}')"
-        style="
-          border:none;
-          background:none;
-          color:#94a3b8;
-          font-size:11px;
-          cursor:pointer;
-          padding:2px 6px;
-          border-radius:6px;">
-        Hapus
-      </button>
-    </div>
-    ${r.title ? `<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${r.title}</div>` : ''}
-    ${r.what_happened ? `<div style="font-size:12px;color:#334155;margin-bottom:4px">${r.what_happened}</div>` : ''}
-    ${r.lesson_learned ? `<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${r.lesson_learned}</div>` : ''}
-    ${r.next_steps ? `<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${r.next_steps}</div>` : ''}
-  </div>`;
-};
-
-window.deleteProjectReflection = async function (id) {
-  if (!id) return;
-  if (!confirm('Hapus catatan refleksi ini?')) return;
-
-  const c = window.client || client;
-  if (!c || typeof c.from !== "function") return;
-
-  try {
-    const { error } = await c
-      .from('project_reflections')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('deleteProjectReflection error:', error.message);
-      alert('Gagal menghapus refleksi: ' + error.message);
-      return;
-    }
-
-    // update state lokal tanpa reload penuh
-    projectReflections = projectReflections.filter(r => r.id !== id);
-    if (typeof window.renderProjectReflectionsPanel === "function") {
-      window.renderProjectReflectionsPanel();
-    }
-  } catch (e) {
-    console.error('deleteProjectReflection exception:', e);
-    alert('Terjadi error saat menghapus refleksi.');
-  }
+      <div class="activity-card" style="border-radius:10px;border:1px solid #e2e8f0;padding:10px 11px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:#64748b">${dt}</span>
+            <span style="
+              font-size:10px;
+              padding:2px 7px;
+              border-radius:999px;
+              background:${badgeColor}15;
+              color:${badgeColor};
+              font-weight:700;
+              text-transform:uppercase;
+              letter-spacing:.03em;">
+              ${lbl}
+            </span>
+          </div>
+        </div>
+        ${r.title ? `<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${r.title}</div>` : ''}
+        ${r.what_happened ? `<div style="font-size:12px;color:#334155;margin-bottom:4px">${r.what_happened}</div>` : ''}
+        ${r.lesson_learned ? `<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${r.lesson_learned}</div>` : ''}
+        ${r.next_steps ? `<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${r.next_steps}</div>` : ''}
+      </div>`;
+  }).join('');
 };
 
 
