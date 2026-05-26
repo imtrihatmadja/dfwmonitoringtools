@@ -1358,7 +1358,7 @@ function renderActivityListDetail() {
           </div>
         </div>`;
     }).join("")}`;
-    }).join("")}\`;
+    }).join("")}\;
         // Sprint 2: badge isu di card aktivitas
   setTimeout(() => {
     if (typeof window.injectIssueBadgesToActivities === "function") {
