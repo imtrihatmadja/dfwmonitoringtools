@@ -596,6 +596,26 @@
         <div class="file-saved-list" id="actSavedFilesList"></div>
       </div>
 
+              <div class="file-saved-list" id="actSavedFilesList"></div>
+      </div>
+
+      <!-- Sprint 2: Panel Isu Terkait -->
+      <div id="actIssuesPanelWrap" style="margin-top:16px;border-top:1px solid #f1f5f9;padding-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="act-note-title" style="margin:0">⚠️ Isu Terkait Aktivitas Ini</div>
+          <button class="btn-primary btn-sm" style="font-size:11px" onclick="openIssueModal()">+ Tambah Isu</button>
+        </div>
+        <div id="actIssuesPanel" style="max-height:220px;overflow-y:auto">
+          <div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">
+            Simpan aktivitas terlebih dahulu untuk melihat isu terkait.
+          </div>
+        </div>
+      </div>
+
+      <div id="actFormMsg" class="form-msg hidden" style="margin-top:12px"></div>
+
+      
+
       <div id="actFormMsg" class="form-msg hidden" style="margin-top:12px"></div>
       <div class="form-actions" style="margin-top:16px">
         <button class="btn-secondary" id="actModalClose2">Batal</button>
@@ -633,12 +653,24 @@
           <input type="text" id="issueF-category" placeholder="IUU Fishing / HAM / Lingkungan / TPPO" />
         </div>
 
-        <div class="form-group">
+       <div class="form-group">
           <label>Proyek Terkait</label>
-          <select id="issueF-project-id">
-            <option value="">-- Pilih Proyek --</option>
+          <select id="issueF-project-id" onchange="onIssueProjectChange()">
+          <option value="">-- Pilih Proyek --</option>
           </select>
         </div>
+
+<div class="form-group">
+  <label>Aktivitas Terkait
+    <span style="font-weight:400;color:#94a3b8;font-size:11px">opsional</span>
+  </label>
+  <select id="issueF-activity-id" disabled>
+    <option value="">-- Pilih Aktivitas (opsional) --</option>
+  </select>
+  <span style="font-size:11px;color:#64748b;display:block;margin-top:4px">
+    Pilih proyek terlebih dahulu.
+  </span>
+</div>
 
         <div class="form-group">
           <label>Severity</label>
