@@ -1300,8 +1300,10 @@ function renderActivityListDetail() {
     container.innerHTML = `<div class="empty-state" style="padding:20px">Belum ada aktivitas.<br>Klik <strong>Tambah</strong> untuk menambah.</div>`;
     return;
   }
-  const avg  = Math.round(allActivities.reduce((a,b) => a + b.progress, 0) / allActivities.length);
+
+  const avg  = Math.round(allActivities.reduce((a, b) => a + (Number(b.progress) || 0), 0) / allActivities.length);
   const done = allActivities.filter(a => a.status === "Selesai").length;
+
   container.innerHTML = `
     <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#15803d;font-weight:600">
       ${done}/${allActivities.length} selesai &nbsp;&nbsp; Rata-rata progress ${avg}%
@@ -1311,6 +1313,7 @@ function renderActivityListDetail() {
       const notes    = allActNotes.filter(n => n.activity_id === act.id);
       const checked  = act.status === "Selesai";
       const badgeCls = cls === "selesai" ? "badge-selesai-act" : `badge-${cls}`;
+
       return `
         <div class="activity-card ${cls}" id="actcard-${act.id}">
           <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
@@ -1323,7 +1326,7 @@ function renderActivityListDetail() {
                 ${act.pic      ? `<span>${act.pic}</span>`      : ""}
                 ${act.due_date ? `<span>${act.due_date}</span>` : ""}
                 <span><span class="badge ${badgeCls}" style="font-size:10px">${act.status}</span></span>
-                ${notes.length ? `<span>${notes.length} ðŸ“</span>` : ""}
+                ${notes.length ? `<span>${notes.length} 📝</span>` : ""}
                 <span class="file-count-badge" id="filecount-${act.id}"></span>
               </div>
             </div>
@@ -1346,7 +1349,7 @@ function renderActivityListDetail() {
           <div class="activity-card-body" id="actbody-${act.id}">
             ${act.description ? `<p style="font-size:12px;color:#475569;margin:10px 0 6px">${act.description}</p>` : ""}
             <div class="act-note-section">
-              <div class="act-note-title">⚠️ Tantangan &amp; Hambatan</div>
+              <div class="act-note-title">⚠️ Tantangan & Hambatan</div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
                 <textarea id="inline-note-${act.id}" rows="2"
                   placeholder="Tulis catatan pelaksanaan…"
@@ -1357,8 +1360,11 @@ function renderActivityListDetail() {
             </div>
           </div>
         </div>`;
-    }).join("")}`;
+    }).join("")}
+  `;
 }
+  
+ 
 
 // Update badge jumlah peserta di card aktivitas
 window.refreshParticipantBadge = async function (activityId) {
@@ -1470,6 +1476,13 @@ window.openActModal = async function (id) {
   document.getElementById("actNoteList").innerHTML  = `<div class="history-empty">Belum ada catatan.</div>`;
   stagedFiles = []; savedFiles = [];
   renderStagingList(); renderSavedFiles();
+  renderStagingList(); renderSavedFiles();
+  document.getElementById("actUploadProgress").textContent = "";
+  // Sprint 2: reset panel isu
+  const _ip = document.getElementById("actIssuesPanel");
+  if (_ip) _ip.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">Simpan aktivitas terlebih dahulu.</div>';
+
+  
   document.getElementById("actUploadProgress").textContent = "";
 
   if (id) {
@@ -1487,6 +1500,11 @@ window.openActModal = async function (id) {
       const notes = allActNotes.filter(n => n.activity_id === id);
       document.getElementById("actNoteList").innerHTML = renderActNotes(notes);
       await loadSavedFiles(id);
+      await loadSavedFiles(id);
+      // Sprint 2
+      if (typeof window.renderActivityIssuesPanel === "function") {
+        window.renderActivityIssuesPanel(id);
+      }
     }
   }
   document.getElementById("actModalOverlay").classList.remove("hidden");
@@ -1778,3 +1796,9 @@ document.getElementById("refreshBtn").addEventListener("click", loadProjects);
 
 setStep(1);
 loadProjects();
+
+
+window.auditRefleksiSchema = async function(){
+  const { data, error } = await (window.client || client).rpc('sql', { query: "select column_name, is_nullable, data_type from information_schema.columns where table_name='refleksi' order by ordinal_position;" });
+  return { data, error };
+};

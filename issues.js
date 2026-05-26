@@ -260,6 +260,57 @@ function renderIssueTable() {
   }).join('');
 }
 
+function getProjectNameById(projectId) {
+  // ... yang sudah ada
+}
+
+// ─── Sprint 2: aktivitas per proyek ─────────────────────
+
+// Cache aktivitas per proyek (key: project_id)
+let issueActivitiesCache = {};
+
+async function loadActivitiesForProject(projectId) {
+  if (!projectId) return [];
+  if (issueActivitiesCache[projectId]) return issueActivitiesCache[projectId];
+  const client = window.client;
+  if (!client) return [];
+  try {
+    const { data, error } = await client
+      .from('project_activities')
+      .select('id, title, status, project_id')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error('loadActivitiesForProject error:', error.message);
+      return [];
+    }
+    const rows = data || [];
+    issueActivitiesCache[projectId] = rows;
+    return rows;
+  } catch (e) {
+    console.error('loadActivitiesForProject exception:', e);
+    return [];
+  }
+}
+
+// Dipanggil saat project berubah di form Isu
+window.onIssueProjectChange = async function () {
+  const projectId = document.getElementById('issueF-project-id')?.value;
+  const actSel    = document.getElementById('issueF-activity-id');
+  if (!actSel) return;
+
+  actSel.innerHTML = '<option value="">-- Pilih Aktivitas (opsional) --</option>';
+  actSel.disabled  = true;
+  if (!projectId) return;
+
+  const acts = await loadActivitiesForProject(projectId);
+  if (!acts.length) return;
+
+  actSel.innerHTML = '<option value="">-- Pilih Aktivitas (opsional) --</option>' +
+    acts.map(a => `<option value="${a.id}">${a.title}</option>`).join('');
+  actSel.disabled = false;
+};
+
 window.filterIssues = function () {
   const q = (document.getElementById('issueSearchInput')?.value || '').toLowerCase().trim();
   const status = document.getElementById('issueStatusFilter')?.value || '';
@@ -427,27 +478,26 @@ window.closeIssueModal = function () {
 window.saveIssue = async function () {
   const client = window.client;
   if (!client) return;
-
   hideIssueMsg('issueFormMsg');
 
-  const id = document.getElementById('issueF-id')?.value || '';
-  const title = document.getElementById('issueF-title')?.value.trim();
-  const description = document.getElementById('issueF-description')?.value.trim() || null;
-  const category = document.getElementById('issueF-category')?.value.trim();
-  const projectId = document.getElementById('issueF-project-id')?.value || '';
-  const severity = document.getElementById('issueF-severity')?.value || 'medium';
-  const status = document.getElementById('issueF-status')?.value || 'active';
+  const id           = document.getElementById('issueF-id')?.value;
+  const title        = document.getElementById('issueF-title')?.value.trim();
+  const description  = document.getElementById('issueF-description')?.value.trim() || null;
+  const category     = document.getElementById('issueF-category')?.value.trim();
+  const projectId    = document.getElementById('issueF-project-id')?.value || null;
+  const activityId   = document.getElementById('issueF-activity-id')?.value || null;
+  const severity     = document.getElementById('issueF-severity')?.value || 'medium';
+  const status       = document.getElementById('issueF-status')?.value || 'active';
   const dateOccurred = document.getElementById('issueF-date-occurred')?.value || null;
-  const sourceType = document.getElementById('issueF-source-type')?.value || 'MANUAL';
-  const sourceLink = document.getElementById('issueF-source-link')?.value.trim() || null;
-  const tags = parseTextList(document.getElementById('issueF-tags')?.value || '');
+  const sourceType   = document.getElementById('issueF-source-type')?.value || 'MANUAL';
+  const sourceLink   = document.getElementById('issueF-source-link')?.value.trim() || null;
+  const tags         = parseTextList(document.getElementById('issueF-tags')?.value);
   const initialUpdate = document.getElementById('issueF-initial-update')?.value.trim() || null;
 
   if (!title) {
     showIssueMsg('Judul isu wajib diisi.', 'error', 'issueFormMsg');
     return;
   }
-
   if (!category) {
     showIssueMsg('Kategori wajib diisi.', 'error', 'issueFormMsg');
     return;
@@ -459,16 +509,14 @@ window.saveIssue = async function () {
     category,
     severity,
     status,
-    location_id: null,
     date_occurred: dateOccurred,
     source_type: sourceType,
     source_link: sourceLink,
     tags,
-    created_by: null
+    created_by: null,
   };
 
   let savedId = id;
-
   if (id) {
     const { data, error } = await client
       .from('issues')
@@ -476,83 +524,69 @@ window.saveIssue = async function () {
       .eq('id', id)
       .select('id')
       .single();
-
     if (error) {
-      showIssueMsg(`Gagal update isu: ${error.message}`, 'error', 'issueFormMsg');
+      showIssueMsg('Gagal update isu: ' + error.message, 'error', 'issueFormMsg');
       return;
     }
-
     savedId = data.id;
   } else {
-    const sourceHash = sourceLink || `${title}|${category}|${Date.now()}`;
-
+    const sourceHash = (sourceLink || '') + title + category + Date.now();
     const { data, error } = await client
       .from('issues')
-      .insert({
-        ...payload,
-        source_hash: sourceHash
-      })
+      .insert({ ...payload, source_hash: sourceHash })
       .select('id')
       .single();
-
     if (error) {
-      showIssueMsg(`Gagal simpan isu: ${error.message}`, 'error', 'issueFormMsg');
+      showIssueMsg('Gagal simpan isu: ' + error.message, 'error', 'issueFormMsg');
       return;
     }
-
     savedId = data.id;
   }
 
-  const { error: delRelErr } = await client
-    .from('issue_relations')
+  // Bersihkan relasi lama project & activity
+  await client.from('issue_relations')
     .delete()
     .eq('issue_id', savedId)
-    .eq('related_type', 'project');
+    .in('related_type', ['project', 'activity']);
 
-  if (delRelErr) {
-    showIssueMsg(`Isu tersimpan, tapi relasi proyek lama gagal dibersihkan: ${delRelErr.message}`, 'error', 'issueFormMsg');
-    await loadIssues();
-    return;
-  }
-
+  // Simpan relasi proyek (wajib)
   if (projectId) {
-    const { error: relErr } = await client
-      .from('issue_relations')
-      .insert({
-        issue_id: savedId,
-        related_type: 'project',
-        related_id: projectId
-      });
-
+    const { error: relErr } = await client.from('issue_relations').insert({
+      issue_id: savedId,
+      related_type: 'project',
+      related_id: projectId,
+    });
     if (relErr) {
-      showIssueMsg(`Isu tersimpan, tapi relasi proyek gagal disimpan: ${relErr.message}`, 'error', 'issueFormMsg');
-      await loadIssues();
-      return;
+      showIssueMsg('Isu tersimpan, tapi relasi proyek gagal: ' + relErr.message, 'error', 'issueFormMsg');
     }
   }
 
-  if (initialUpdate) {
-    const { error: updErr } = await client
-      .from('issue_updates')
-      .insert({
-        issue_id: savedId,
-        update_text: initialUpdate,
-        evidence_urls: []
-      });
-
-    if (updErr) {
-      showIssueMsg(`Isu tersimpan, tapi update awal gagal disimpan: ${updErr.message}`, 'error', 'issueFormMsg');
-      await loadIssues();
-      return;
+  // Simpan relasi aktivitas (opsional)
+  console.log('DEBUG activityId in saveIssue:', activityId);
+  if (activityId) {
+    const { error: actErr } = await client.from('issue_relations').insert({
+      issue_id: savedId,
+      related_type: 'activity',
+      related_id: activityId,
+    });
+    if (actErr) {
+      console.warn('Relasi aktivitas gagal disimpan:', actErr.message);
     }
+  }
+
+  // Simpan update awal jika ada
+  if (initialUpdate) {
+    const { error: updErr } = await client.from('issue_updates').insert({
+      issue_id: savedId,
+      update_text: initialUpdate,
+      evidence_urls: [],
+    });
+    if (updErr) console.warn('Update awal gagal:', updErr.message);
   }
 
   showIssueMsg('Data isu berhasil disimpan.', 'success', 'issueFormMsg');
   await loadIssues();
-
-  setTimeout(() => {
-    closeIssueModal();
-  }, 700);
+  setTimeout(closeIssueModal, 700);
 };
 
 window.deleteIssue = async function (id) {
