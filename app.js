@@ -17,6 +17,7 @@ let editingProjectOriginalName = null;
 let editingProjectId          = null;
 let originalIndicatorIds      = [];
 let savedFiles                = [];
+let projectReflections = [];
 const AUDIT_USER              = "Tim";
 const BUCKET        = "activity-files";
 
