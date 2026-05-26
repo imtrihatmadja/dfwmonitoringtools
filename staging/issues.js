@@ -562,6 +562,7 @@ window.saveIssue = async function () {
   }
 
   // Simpan relasi aktivitas (opsional)
+  console.log('DEBUG activityId in saveIssue:', activityId);
   if (activityId) {
     const { error: actErr } = await client.from('issue_relations').insert({
       issue_id: savedId,
