@@ -14,7 +14,7 @@ window.switchTab = function(tab) {
     }
 };
 
-// --- PATCH 3: Staff tab tama di sidebar ---
+// --- PATCH 3: Staff tab tampil di sidebar ---
 const staffNav = document.querySelector('[data-tab="staff"]');
 if (staffNav) {
     staffNav.addEventListener("click", function() {
@@ -55,3 +55,35 @@ async function loadStaffDropdown() {
 async function loadStaffDropdownForSubTask() {
     await _loadStaffToSelect("sub-task-pic");
 }
+
+// --- PATCH 5: Hook ke openActModal untuk load staff dropdown ---
+const _originalOpenActModal = window.openActModal;
+window.openActModal = async function(id) {
+    await _originalOpenActModal(id);
+    await loadStaffDropdown();
+    if (id) {
+        const act = allActivities.find(a => a.id === id);
+        if (act && act.pic) {
+            const selectEl = document.getElementById("act-pic");
+            if (selectEl) selectEl.value = act.pic;
+        }
+    }
+};
+
+// --- PATCH 6: Hook ke Sub-Aktivitas button untuk buka modal & load staff ---
+const subActBtn = document.getElementById("add-sub-activity-btn");
+if (subActBtn) {
+    subActBtn.addEventListener("click", async function(e) {
+        e.preventDefault();
+        await loadStaffDropdownForSubTask();
+        const modal = document.getElementById("subActivityModalOverlay");
+        if (modal) modal.classList.remove("hidden");
+    });
+}
+
+// --- PATCH 7: Tutup Sub-Aktivitas modal ---
+window.closeSubActivityModal = function() {
+    const modal = document.getElementById("subActivityModalOverlay");
+    if (modal) modal.classList.add("hidden");
+};
+console.log("Sprint 4 - Staff dropdown & Sub-Aktivitas hooks loaded.");
