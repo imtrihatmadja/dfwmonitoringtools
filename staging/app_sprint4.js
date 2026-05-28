@@ -98,5 +98,21 @@ if (subActBtn) {
 window.closeSubActivityModal = function() {
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.add("hidden");
+    
 };
 console.log("Sprint 4 - Staff dropdown & Sub-Aktivitas hooks loaded.");
+
+
+// --- PATCH 8: Fungsi openSubActivityModal ---
+window.openSubActivityModal = async function(actId) {
+    // Set the act-id in the hidden input
+    const subTaskIdEl = document.getElementById("sub-task-id");
+    if (subTaskIdEl) subTaskIdEl.value = actId || "";
+
+    // Load staff dropdown for sub-task PIC
+    await loadStaffDropdownForSubTask();
+
+    // Show the modal
+    const modal = document.getElementById("subActivityModalOverlay");
+    if (modal) modal.classList.remove("hidden");
+};
