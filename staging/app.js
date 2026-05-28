@@ -1561,6 +1561,7 @@ function renderActivityListDetail() {
               <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class='fa-solid fa-pen-to-square'></i></button>
               <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class='fa-solid fa-xmark'></i></button>
             </div>
+                        <button class="btn-sub-activity" onclick="openSubActivityModal('${act.id}');event.stopPropagation();"><i class="fa-solid fa-clone"></i> Sub-Aktivitas</button>
           </div>
           <div class="activity-card-body" id="actbody-${act.id}">
             ${act.description ? `<p style="font-size:12px;color:#475569;margin:10px 0 6px">${act.description}</p>` : ""}
