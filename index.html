@@ -40,7 +40,7 @@
       <li data-tab="issues"><span class="nav-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Isu</span></li>
       <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
-      ><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Staff & Beban Kerja</span></li>
+      ><li data-tab="staff" onclick="loadStaffWorkload();closeSidebar()"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Staff & Beban Kerja</span></li>
   </div>
   <div class="sidebar-footer">
     <div class="user-info">
@@ -623,8 +623,18 @@
         <select id="staffFilter" class="btn-secondary" style="font-size: 12px; padding: 5px 12px;" onchange="renderStaffTable()">
           <option value="all">Semua Status</option>
           <option value="active">Aktif</option>
-          <option value="inactive">Tidak Aktif</option>
-       
+          <option value="inactive">Tidak Aktif</option></select>
+                </div>
+                      <div class="table-wrap" style="overflow-x:auto;margin-top:12px;">
+                                <table class="data-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+                                            <thead><tr><th>Staff</th><th>Status</th><th>Total Aktivitas</th><th>Selesai</th><th>Sedang Berjalan</th><th>Tertunda</th><th>Belum Mulai</th><th>Avg. Progress</th><th>Tugas Pending</th><th>Aksi</th></tr></thead>
+                                                      <tbody id="staffTableBody"></tbody>
+                                                              </table>
+                                                                    </div>
+                                                                        </div>
+                                                                          </div>
+                                                                          </div>
+                                
 
 </div><!-- /main -->
 
