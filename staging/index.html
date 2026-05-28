@@ -40,7 +40,7 @@
       <li data-tab="issues"><span class="nav-icon"><i class="fa-solid fa-triangle-exclamation"></i></span><span>Isu</span></li>
       <li data-tab="archive" onclick="loadArchivedProjects()"><span class="nav-icon"><i class="fa-solid fa-box-archive"></i></span><span>Arsip Proyek</span></li>
       <li data-tab="input"><span class="nav-icon"><i class="fa-solid fa-circle-plus"></i></span><span>Tambah Proyek</span></li>
-      <a href="staff-workload.html" class="nav-item"><span>👤</span> Staff & Beban Kerja</a></ul>
+      ><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Staff & Beban Kerja</span></li>
   </div>
   <div class="sidebar-footer">
     <div class="user-info">
@@ -413,9 +413,6 @@
     </div>
   </div><!-- /tab-detail -->
 
-
-
-
 <!-- ===== TAB PENERIMA MANFAAT ===== -->
 <div class="tab-content" id="tab-beneficiary">
 
@@ -582,6 +579,81 @@
 </div>
 
 </div><!-- /main -->
+
+
+<!-- TAB: Staff & Beban Kerja -->
+<div id="tab-content-staff" class="tab-content">
+  <div class="topbar">
+    <div>
+      <div class="page-title">👤 Staff & Beban Kerja</div>
+      <div class="page-subtitle">Pantau beban tugas dan aktivitas per staff</div>
+    </div>
+    <div class="topbar-right">
+      <span id="staffLastSync" class="realtime-badge">Last sync: —</span>
+      <button class="btn-primary" onclick="loadStaffWorkload()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="tab-content-inner" style="padding: 24px 28px;">
+    <!-- Dashboard Cards -->
+    <div class="stat-grid" style="margin-bottom: 24px; grid-template-columns: repeat(4, 1fr);">
+      <div class="stat-card" style="border-left: 4px solid #2e7d32;">
+        <div class="stat-label">Staff Aktif</div>
+        <div class="stat-value" id="staffCount">—</div>
+        <div class="stat-desc">person</div>
+      </div>
+      <div class="stat-card" style="border-left: 4px solid #1565c0;">
+        <div class="stat-label">Total Aktivitas</div>
+        <div class="stat-value" id="activityCount">—</div>
+        <div class="stat-desc">aktivitas</div>
+      </div>
+      <div class="stat-card" style="border-left: 4px solid #e65100;">
+        <div class="stat-label">Rata-rata Progress</div>
+        <div class="stat-value" id="progressAvg">—</div>
+        <div class="stat-desc">aktivitas</div>
+      </div>
+      <div class="stat-card" style="border-left: 4px solid #c62828;">
+        <div class="stat-label">Tugas Pending</div>
+        <div class="stat-value" id="taskPending">—</div>
+        <div class="stat-desc">tugas</div>
+      </div>
+    </div>
+
+    <!-- Filter & Table -->
+    <div class="card" style="margin-top: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee;">
+        <h3 style="margin: 0; font-size: 15px; color: #f172a;">📊 Beban Kerja per Staff</h3>
+        <select id="staffFilter" class="btn-secondary" style="font-size: 12px; padding: 5px 12px;" onchange="renderStaffTable()">
+          <option value="all">Semua Status</option>
+          <option value="active">Aktif</option>
+          <option value="inactive">Tidak Aktif</option>
+        </select>
+      </div>
+      <div style="overflow-x: auto;">
+        <table id="staffWorkloadTable" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr style="background: #f5f7f9; text-align: left;">
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Nama Staff</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Role</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Proyek</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Aktivitas</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Tugas</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Selesai</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Pending</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Avg Progress</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Status</th>
+              <th style="padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #666;">Terakhir Update</th>
+            </tr>
+          </thead>
+          <tbody id="staffTableBody">
+            <tr><td colspan="10" style="padding: 24px; text-align: center; color: #888;">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+  
 
 <!-- MODAL AKTIVITAS -->
 <div id="actModalOverlay" class="modal-overlay hidden">
