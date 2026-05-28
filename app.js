@@ -2018,11 +2018,76 @@ window.auditRefleksiSchema = async function(){
   const { data, error } = await (window.client || client).rpc('sql', { query: "select column_name, is_nullable, data_type from information_schema.columns where table_name='refleksi' order by ordinal_position;" });
   return { data, error };
 };
-
-// ── Staff Workload Tab ──
+// ============================= STAFF WORKLOAD TAB =============================
 let staffWorkloadData = [];
 let staffDashboardMetrics = {};
 
 async function loadStaffWorkload() {
   try {
-    // Fetch workload per staff
+    const { data, error } = await client.from("view_staff_workload").select("*");
+    if (error) throw error;
+    staffWorkloadData = data || [];
+
+    const { data: metrics } = await client.from("view_workload_dashboard").select("metric,value");
+    if (metrics) {
+      staffDashboardMetrics = {};
+      metrics.forEach(m => { staffDashboardMetrics[m.metric] = m.value; });
+    }
+
+    const m = staffDashboardMetrics;
+    const el = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v || "0"; };
+    el("staffCount",    m?.TOTAL_STAFF_ACTIVE);
+    el("activityCount", m?.TOTAL_ACTIVITIES);
+    el("progressAvg",   (m?.AVG_ACTIVITY_PROGRESS || "0").replace("%", ""));
+    el("taskPending",   m?.TOTAL_TASKS_PENDING);
+
+    const sync = document.getElementById("staffLastSync");
+    if (sync) sync.textContent = "Last sync: " + new Date().toLocaleTimeString("id-ID");
+
+    renderStaffTable();
+  } catch (err) {
+    console.error("Staff load error:", err);
+    const body = document.getElementById("staffTableBody");
+    if (body) body.innerHTML = '<tr><td colspan="10" style="padding: 24px; text-align: center; color: #c62828;">Error: ' + err.message + '</td></tr>';
+  }
+}
+
+function renderStaffTable() {
+  const body = document.getElementById("staffTableBody");
+  if (!body) return;
+
+  const filter = (document.getElementById("staffFilter") || {}).value || "all";
+  const rows = staffWorkloadData.filter(r => {
+    if (filter === "active") return r.is_active === true;
+    if (filter === "inactive") return r.is_active === false;
+    return true;
+  });
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="10" style="padding: 24px; text-align: center; color: #888;">Tidak ada data staff.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(s => {
+    const prg = s.avg_activity_progress || 0;
+    const prgCol = prg >= 75 ? "color:#2e7d32" : prg >= 50 ? "color:#e65100" : "color:#c62828";
+    const status = s.is_active
+      ? '<span style="background:#e6f7e6;color:#2e7d32;padding:2px 8px;border-radius:4px;font-size:11px;">Aktif</span>'
+      : '<span style="background:#f5f5f5;color:#888;padding:2px 8px;border-radius:4px;font-size:11px;">Tidak Aktif</span>';
+    const lastUpd = s.latest_activity_update
+      ? new Date(s.latest_activity_update).toLocaleDateString("id-ID") : "—";
+
+    return '<tr>'+
+      '<td style="padding:10px 16px;font-weight:600">'+(s.staff_name||"—")+'</td>'+
+      '<td style="padding:10px 16px">'+(s.staff_role||"—")+'</td>'+
+      '<td style="padding:10px 16px">'+(s.project_count||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.activity_count||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.task_count||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.tasks_completed||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.tasks_pending||0)+'</td>'+
+      '<td style="padding:10px 16px;'+prgCol+'">'+prg+'%</td>'+
+      '<td style="padding:10px 16px">'+status+'</td>'+
+      '<td style="padding:10px 16px;color:#888">'+lastUpd+'</td>'+
+      '</tr>';
+  }).join("");
+}
