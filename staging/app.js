@@ -2018,3 +2018,11 @@ window.auditRefleksiSchema = async function(){
   const { data, error } = await (window.client || client).rpc('sql', { query: "select column_name, is_nullable, data_type from information_schema.columns where table_name='refleksi' order by ordinal_position;" });
   return { data, error };
 };
+
+// ── Staff Workload Tab ──
+let staffWorkloadData = [];
+let staffDashboardMetrics = {};
+
+async function loadStaffWorkload() {
+  try {
+    // Fetch workload per staff
