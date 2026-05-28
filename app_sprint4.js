@@ -262,3 +262,38 @@ window.loadSubActivities = async function(actId) {
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.remove("hidden");
 };
+
+// --- PATCH 11: Add Sub-Aktivitas button to activity cards ---
+// After renderActivityListDetail runs, append Sub-Aktivitas button to each card
+(function injectSubActivityButtons() {
+  try {
+    var origRender = window.renderActivityListDetail;
+    if (!origRender) {
+      console.warn("PATCH 11: renderActivityListDetail not found on window");
+      return;
+    }
+    window.renderActivityListDetail = function() {
+      origRender();
+      // Run after DOM is updated
+      setTimeout(function() {
+        document.querySelectorAll(".activity-actions").forEach(function(actionsDiv) {
+          // Check if Sub-Aktivitas button already exists
+          if (actionsDiv.querySelector(".btn-sub-activity")) return;
+          // Extract act-id from parent card
+          var actId = null;
+          var card = actionsDiv.closest(".activity-card");
+          if (card) actId = card.id.replace("act-", "");
+          if (!actId) return;
+          var btn = document.createElement("button");
+          btn.className = "btn-sm btn-sub-activity";
+          btn.textContent = "Sub-Aktivitas";
+          btn.onclick = function() { openSubActivityModal(actId); };
+          actionsDiv.appendChild(btn);
+        });
+      }, 10);
+    };
+    console.log("PATCH 11: Sub-Aktivitas button injected into renderActivityListDetail.");
+  } catch (e) {
+    console.error("PATCH 11: exception:", e);
+  }
+})();
