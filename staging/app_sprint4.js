@@ -26,25 +26,38 @@ console.log("Sprint 4 - Staff Workload bindings loaded.");
 // --- PATCH 4: Load Staff Dropdown di Modal Aktivitas ---
 async function _loadStaffToSelect(selectElId) {
     const selectEl = document.getElementById(selectElId);
-    if (!selectEl) return;
-    selectEl.innerHTML = '<option value="">-- Pilih Staff --</option>';
-    const { data, error } = await client.from("staff_roster")
-        .select("staff_name")
-        .eq("is_active", true)
-        .order("staff_name", { ascending: true });
-    if (!error && data) {
-        data.forEach(staff => {
+    if (!selectEl) {
+        console.log("_loadStaffToSelect: element not found:", selectElId);
+        return;
+    }
+    const placeholder = selectElId === "sub-task-pic" ? "-- Belum Ditentukan --" : "-- Pilih Staff --";
+    selectEl.innerHTML = '<option value="">' + placeholder + '</option>';
+    try {
+        const { data, error } = await client.from("staff_roster")
+            .select("staff_name")
+            .eq("is_active", true)
+            .order("staff_name", { ascending: true });
+        if (error) {
+            console.error("_loadStaffToSelect: query error:", error);
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "Error loading staff";
+            selectEl.appendChild(opt);
+            return;
+        }
+        if (!data || data.length === 0) {
+            console.log("_loadStaffToSelect: no staff data returned");
+            return;
+        }
+        console.log("_loadStaffToSelect: loaded", data.length, "staff");
+        data.forEach(function(staff) {
             const opt = document.createElement("option");
             opt.value = staff.staff_name;
             opt.textContent = staff.staff_name;
             selectEl.appendChild(opt);
         });
-    } else {
-        console.error("Error loading staff roster:", error);
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "Gagal memuat staff";
-        selectEl.appendChild(opt);
+    } catch (e) {
+        console.error("_loadStaffToSelect: exception:", e);
     }
 }
 
@@ -62,7 +75,7 @@ window.openActModal = async function(id) {
     await _originalOpenActModal(id);
     await loadStaffDropdown();
     if (id) {
-        const act = allActivities.find(a => a.id === id);
+        const act = allActivities.find(function(a) { return a.id === id; });
         if (act && act.pic) {
             const selectEl = document.getElementById("act-pic");
             if (selectEl) selectEl.value = act.pic;
