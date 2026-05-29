@@ -219,7 +219,7 @@ window.loadSubActivities = async function(actId) {
         console.warn("loadSubActivities: missing actId");
         return;
     }
-    const listEl = document.getElementById("subActivityList");
+    const listEl = document.getElementById('sub-activity-list');
     if (!listEl) {
         console.warn("loadSubActivities: subActivityList element not found");
         return;
