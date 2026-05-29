@@ -1,4 +1,4 @@
-// ===================== SPRINT 4 - STAFF WORKLOAD BINDINGS =====================
+// ==================== SPRINT 4 - STAFF WORKLOAD BINDINGS ====================
 // File ini berisi binding Sprint 4 yang menghubungkan fitur Staff & Beban Kerja
 // ke navigasi utama. Diload SETELAH app.js.
 
@@ -98,172 +98,9 @@ if (subActBtn) {
 window.closeSubActivityModal = function() {
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.add("hidden");
-    
 };
+
 console.log("Sprint 4 - Staff dropdown & Sub-Aktivitas hooks loaded.");
-
-
-// --- PATCH 8: Fungsi openSubActivityModal ---
-window.openSubActivityModal = async function(actId) {
-    // --- PATCH 9: Simpan Sub-Aktivitas ke Supabase ---
-window.saveSubActivity = async function() {
-    const actId = document.getElementById("sub-task-id");
-    const titleEl = document.getElementById("sub-task-title");
-    const descEl = document.getElementById("sub-task-desc");
-    const picEl = document.getElementById("sub-task-pic");
-    const statusEl = document.getElementById("sub-task-status");
-    const priorityEl = document.getElementById("sub-task-priority");
-    const dueEl = document.getElementById("sub-task-due");
-
-    if (!actId || !actId.value) {
-        console.error("saveSubActivity: missing activity_id");
-        alert("Error: activity_id tidak ditemukan");
-        return;
-    }
-    const payload = {
-        activity_id: actId.value,
-        title: (titleEl && titleEl.value) ? titleEl.value.trim() : "",
-        description: (descEl && descEl.value) ? descEl.value.trim() : null,
-        pic: (picEl && picEl.value) ? picEl.value : null,
-        status: (statusEl && statusEl.value) ? statusEl.value : "Belum Mulai",
-        priority: (priorityEl && priorityEl.value) ? priorityEl.value : "Low",
-        due_date: (dueEl && dueEl.value) ? dueEl.value : null
-    };
-
-    if (!payload.title) {
-        console.error("saveSubActivity: title is empty");
-        alert("Judul Sub-Aktivitas wajib diisi");
-        return;
-    }
-
-    console.log("saveSubActivity: inserting:", payload);
-    try {
-        const { data, error } = await client
-            .from("sub_activities")
-            .insert(payload)
-            .select()
-            .single();
-
-        if (error) {
-            console.error("saveSubActivity: insert error:", error);
-            alert("Gagal menyimpan sub-aktivitas: " + (error.message || "Unknown error"));
-            return;
-        }
-
-        console.log("saveSubActivity: saved, id:", data.id);
-        alert("Sub-Aktivitas berhasil disimpan");
-
-        // Clear form
-        if (titleEl) titleEl.value = "";
-        if (descEl) descEl.value = "";
-        if (picEl) picEl.value = "";
-        if (statusEl) statusEl.value = "Belum Mulai";
-        if (priorityEl) priorityEl.value = "Low";
-        if (dueEl) dueEl.value = "";
-
-        // Reload sub-activity list
-        await window.loadSubActivities(actId.value);
-
-        // Close modal
-        window.closeSubActivityModal();
-    } catch (e) {
-        console.error("saveSubActivity: exception:", e);
-        alert("Terjadi kesalahan saat menyimpan");
-    }
-};
-
-const saveBtn = document.getElementById("saveSubActivityBtn");
-if (saveBtn) {
-    saveBtn.addEventListener("click", window.saveSubActivity);
-}
-
-// --- PATCH 10: Load Daftar Sub-Aktivitas dari Supabase ---
-window.loadSubActivities = async function(actId) {
-    const listEl = document.getElementById("sub-activity-list");
-    if (!listEl) {
-        console.log("loadSubActivities: list element not found");
-        return;
-    }
-    if (!actId) {
-        actId = (document.getElementById("sub-task-id") || {}).value;
-    }
-    if (!actId) {
-        listEl.innerHTML = '<p style="color:#888;padding:10px">Tidak ada sub-aktivitas.</p>';
-        return;
-    }
-
-    listEl.innerHTML = '<p style="color:#888;padding:10px">Memuat sub-aktivitas...</p>';
-    try {
-        const { data, error } = await client
-            .from("sub_activities")
-            .select("*")
-            .eq("activity_id", actId)
-            .order("created_at", { ascending: false });
-
-        if (error) {
-            console.error("loadSubActivities: query error:", error);
-            listEl.innerHTML = '<p style="color:#d93025;padding:10px">Gagal memuat sub-aktivitas.</p>';
-            return;
-        }
-
-        if (!data || data.length === 0) {
-            listEl.innerHTML = '<p style="color:#888;padding:10px">Belum ada sub-aktivitas. Klik "+ Tambah Baru" untuk menambah.</p>';
-            return;
-        }
-
-        console.log("loadSubActivities: loaded", data.length, "sub-activities");
-
-        let html = '';
-        data.forEach(function(sa) {
-            var statusColor = "#888";
-            if (sa.status === "Sedang Berjalan") statusColor = "#f59e0b";
-            else if (sa.status === "Selesai") statusColor = "#10b981";
-            else if (sa.status === "Belum Mulai") statusColor = "#6b7280";
-
-            var priorityColor = "#6b7280";
-            if (sa.priority === "High") priorityColor = "#ef4444";
-            else if (sa.priority === "Medium") priorityColor = "#f59e0b";
-            else if (sa.priority === "Low") priorityColor = "#10b981";
-
-            html += '<div style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px;padding:12px;">';
-            html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">';
-            html += '<span style="font-weight:600;font-size:14px;">' + (sa.title || "Tanpa Judul") + '</span>';
-            html += '<span style="font-size:12px;color:' + statusColor + ';padding:2px 8px;border-radius:12px;background:' + statusColor + '22;">' + (sa.status || "Belum Mulai") + '</span>';
-            html += '</div>';
-            if (sa.description) {
-                html += '<p style="font-size:13px;color:#6b7280;margin:4px 0 8px 0;">' + sa.description + '</p>';
-            }
-            html += '<div style="display:flex;gap:12px;font-size:12px;">';
-            if (sa.pic) {
-                html += '<span style="color:#6b7280;">PIC: <strong>' + sa.pic + '</strong></span>';
-            }
-            html += '<span style="color:' + priorityColor + ';">Prioritas: ' + (sa.priority || "Low") + '</span>';
-            if (sa.due_date) {
-                html += '<span style="color:#6b7280;">Jatuh Tempo: ' + sa.due_date + '</span>';
-            }
-            html += '</div>';
-            html += '</div>';
-        });
-
-        listEl.innerHTML = html;
-    } catch (e) {
-        console.error("loadSubActivities: exception:", e);
-        listEl.innerHTML = '<p style="color:#d93025;padding:10px">Error: ' + e.message + '</p>';
-    }
-};
-    // Set the act-id in the hidden input
-    const subTaskIdEl = document.getElementById("sub-task-id");
-    if (subTaskIdEl) subTaskIdEl.value = actId || "";
-
-    // Load staff dropdown for sub-task PIC
-    await loadStaffDropdownForSubTask();
-
-    // Show the modal
-    const modal = document.getElementById("subActivityModalOverlay");
-    if (modal) modal.classList.remove("hidden");
-};
-
-
 
 // --- PATCH 8: Open Sub-Aktivitas Modal ---
 window.openSubActivityModal = async function(actId) {
@@ -314,6 +151,7 @@ window.openSubActivityModal = async function(actId) {
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.remove("hidden");
 };
+
 window.closeSubActivityModal = function() {
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.add("hidden");
@@ -333,7 +171,6 @@ window.saveSubActivity = async function() {
         alert("Parent activity ID missing. Please close and reopen the modal.");
         return;
     }
-
     if (!titleEl || !titleEl.value.trim()) {
         alert("Judul Sub-Aktivitas wajib diisi.");
         return;
@@ -341,12 +178,12 @@ window.saveSubActivity = async function() {
 
     const payload = {
         activity_id: parseInt(actIdEl.value, 10),
-        sub_title: titleEl.value.trim(),
-        sub_description: descEl ? (descEl.value || null) : null,
-        sub_pic: picEl ? (picEl.value || null) : null,
-        sub_status: statusEl ? statusEl.value : "Belum Mulai",
-        sub_priority: priorityEl ? priorityEl.value : "Low",
-        sub_due_date: dueEl ? (dueEl.value || null) : null
+        title: titleEl.value.trim(),
+        description: descEl ? (descEl.value || null) : null,
+        pic: picEl ? (picEl.value || null) : null,
+        status: statusEl ? statusEl.value : "Belum Mulai",
+        priority: priorityEl ? priorityEl.value : "Low",
+        due_date: dueEl ? (dueEl.value || null) : null
     };
 
     try {
@@ -369,8 +206,7 @@ window.saveSubActivity = async function() {
 
         // Reload list
         await window.loadSubActivities(actIdEl.value);
-
-        console.log("saveSubActivity: saved sub_title=", data.sub_title, "id=", data.id);
+        console.log("saveSubActivity: saved title=", data.title, "id=", data.id);
     } catch (e) {
         console.error("saveSubActivity: exception:", e);
         alert("Terjadi kesalahan saat menyimpan: " + e.message);
@@ -383,7 +219,6 @@ window.loadSubActivities = async function(actId) {
         console.warn("loadSubActivities: missing actId");
         return;
     }
-
     const listEl = document.getElementById("subActivityList");
     if (!listEl) {
         console.warn("loadSubActivities: subActivityList element not found");
@@ -399,7 +234,7 @@ window.loadSubActivities = async function(actId) {
 
         if (error) {
             console.error("loadSubActivities: query error:", error);
-            listEl.innerHTML = "<p style=\"color:red;\">Error loading sub-activities.</p>";
+            listEl.innerHTML = "<p>Error loading sub-activities.</p>";
             return;
         }
 
@@ -410,49 +245,51 @@ window.loadSubActivities = async function(actId) {
 
         let html = "";
         data.forEach(function(item) {
-            html += "<div class=\"sub-activity-item\" style=\"border-bottom:1px solid #e0e0e0;padding:10px 0;\">";
-            html += "  <strong>" + (item.sub_title || "Tanpa Judul") + "</strong><br>";
-            html += "  <small>Status: " + (item.sub_status || "-") + " | Penanggung Jawab: " + (item.sub_pic || "-") + " | Prioritas: " + (item.sub_priority || "-") + "</small>";
-            html += "</div>";
+            html += "<p>";
+            html += " <strong>" + (item.title || "Tanpa Judul") + "</strong> <br>";
+            html += " Status: " + (item.status || "-") + " | Penanggung Jawab: " + (item.pic || "-") + " | Prioritas: " + (item.priority || "-") + "";
+            html += "</p>";
         });
         listEl.innerHTML = html;
         console.log("loadSubActivities: loaded", data.length, "items for activity_id=", actId);
     } catch (e) {
         console.error("loadSubActivities: exception:", e);
-        if (listEl) listEl.innerHTML = "<p style=\"color:red;\">Error: " + e.message + "</p>";
+        if (listEl) listEl.innerHTML = "<p>Error: " + e.message + "</p>";
     }
 };
+
 // --- PATCH 11: Add Sub-Aktivitas button to activity cards ---
-// After renderActivityListDetail runs, append Sub-Aktivitas button to each card
 (function injectSubActivityButtons() {
-  try {
-    var origRender = window.renderActivityListDetail;
-    if (!origRender) {
-      console.warn("PATCH 11: renderActivityListDetail not found on window");
-      return;
+    try {
+        var origRender = window.renderActivityListDetail;
+        if (!origRender) {
+            console.warn("PATCH 11: renderActivityListDetail not found on window");
+            return;
+        }
+        window.renderActivityListDetail = function() {
+            origRender();
+            // Run after DOM is updated
+            setTimeout(function() {
+                document.querySelectorAll(".activity-actions").forEach(function(actionsDiv) {
+                    // Check if Sub-Aktivitas button already exists
+                    if (actionsDiv.querySelector(".btn-sub-activity")) return;
+
+                    // Extract act-id from parent card
+                    var actId = null;
+                    var card = actionsDiv.closest(".activity-card");
+                    if (card) actId = card.id.replace("actcard-", "");
+                    if (!actId) return;
+
+                    var btn = document.createElement("button");
+                    btn.className = "btn-sm btn-sub-activity";
+                    btn.textContent = "Sub-Aktivitas";
+                    btn.onclick = function() { openSubActivityModal(actId); };
+                    actionsDiv.appendChild(btn);
+                });
+            }, 10);
+        };
+        console.log("PATCH 11: Sub-Aktivitas button injected into renderActivityListDetail.");
+    } catch (e) {
+        console.error("PATCH 11: exception:", e);
     }
-    window.renderActivityListDetail = function() {
-      origRender();
-      // Run after DOM is updated
-      setTimeout(function() {
-        document.querySelectorAll(".activity-actions").forEach(function(actionsDiv) {
-          // Check if Sub-Aktivitas button already exists
-          if (actionsDiv.querySelector(".btn-sub-activity")) return;
-          // Extract act-id from parent card
-          var actId = null;
-          var card = actionsDiv.closest(".activity-card");
-          if (card) actId = card.id.replace("actcard-", "");
-          if (!actId) return;
-          var btn = document.createElement("button");
-          btn.className = "btn-sm btn-sub-activity";
-          btn.textContent = "Sub-Aktivitas";
-          btn.onclick = function() { openSubActivityModal(actId); };
-          actionsDiv.appendChild(btn);
-        });
-      }, 10);
-    };
-    console.log("PATCH 11: Sub-Aktivitas button injected into renderActivityListDetail.");
-  } catch (e) {
-    console.error("PATCH 11: exception:", e);
-  }
 })();
