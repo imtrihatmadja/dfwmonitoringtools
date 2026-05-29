@@ -258,6 +258,14 @@ window.loadSubActivities = async function(actId) {
     }
 };
 
+// --- PATCH 11: DISABLED ---
+// Tombol Sub-Aktivitas sudah dirender langsung oleh app.js.
+// Jadi injector lama dinonaktifkan agar tidak membuat tombol ganda.
+(function disableLegacySubActivityInjector() {
+  console.log("PATCH 11 disabled: using native Sub-Aktivitas button from app.js only.");
+})();
+
+
 // ==================== PATCH FINAL SUB-AKTIVITAS INLINE ====================
 (function () {
   function escHtml(v) {
@@ -605,4 +613,58 @@ window.loadSubActivities = async function(actId) {
   setTimeout(function () {
     cleanupDuplicateSubActivityButtons();
   }, 300);
+})();
+
+// ==================== FINAL FIX: SINGLE SUB-ACTIVITY BUTTON ====================
+(function () {
+  function keepOnlyNativeSubActivityButton() {
+    const root = document.getElementById("activityListDetail");
+    if (!root) return;
+
+    root.querySelectorAll(".activity-card").forEach(function (card) {
+      const buttons = Array.from(card.querySelectorAll(".btn-sub-activity"));
+      if (buttons.length <= 1) return;
+
+      const nativeBtn =
+        buttons.find(function (btn) {
+          return !!btn.getAttribute("onclick");
+        }) || buttons[0];
+
+      buttons.forEach(function (btn) {
+        if (btn !== nativeBtn) btn.remove();
+      });
+    });
+  }
+
+  function bindObserver() {
+    const root = document.getElementById("activityListDetail");
+    if (!root) {
+      setTimeout(bindObserver, 300);
+      return;
+    }
+
+    keepOnlyNativeSubActivityButton();
+
+    if (window.__subActivityButtonObserver) {
+      window.__subActivityButtonObserver.disconnect();
+    }
+
+    window.__subActivityButtonObserver = new MutationObserver(function () {
+      keepOnlyNativeSubActivityButton();
+    });
+
+    window.__subActivityButtonObserver.observe(root, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindObserver);
+  } else {
+    bindObserver();
+  }
+
+  setTimeout(bindObserver, 500);
+  setTimeout(keepOnlyNativeSubActivityButton, 1000);
 })();
