@@ -668,3 +668,422 @@ window.loadSubActivities = async function(actId) {
   setTimeout(bindObserver, 500);
   setTimeout(keepOnlyNativeSubActivityButton, 1000);
 })();
+
+// ==================== FINAL V2: SUB-AKTIVITAS INLINE + EDIT + HAPUS ====================
+(function () {
+  const SUB_ACTIVITY_MODAL_LIST_ID = "sub-activity-list";
+  const SUB_ACTIVITY_SAVE_BTN_ID = "saveSubActivityBtn";
+
+  function escHtml(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function getSubActivityFormEls() {
+    return {
+      actIdEl: document.getElementById("sub-task-id"),
+      titleEl: document.getElementById("sub-task-title"),
+      descEl: document.getElementById("sub-task-desc"),
+      picEl: document.getElementById("sub-task-pic"),
+      statusEl: document.getElementById("sub-task-status"),
+      priorityEl: document.getElementById("sub-task-priority"),
+      dueEl: document.getElementById("sub-task-due"),
+      saveBtnEl: document.getElementById(SUB_ACTIVITY_SAVE_BTN_ID)
+    };
+  }
+
+  function resetSubActivityForm(actId) {
+    const { actIdEl, titleEl, descEl, picEl, statusEl, priorityEl, dueEl, saveBtnEl } = getSubActivityFormEls();
+
+    if (actIdEl) actIdEl.value = actId || "";
+    if (titleEl) titleEl.value = "";
+    if (descEl) descEl.value = "";
+    if (picEl) picEl.value = "";
+    if (statusEl) statusEl.value = "Belum Mulai";
+    if (priorityEl) priorityEl.value = "Low";
+    if (dueEl) dueEl.value = "";
+
+    window.currentEditingSubActivityId = null;
+
+    if (saveBtnEl) {
+      saveBtnEl.textContent = "Tambah Sub-Aktivitas";
+    }
+  }
+
+  async function loadStaffOptionsForSubActivity(selectedValue) {
+    const selectEl = document.getElementById("sub-task-pic");
+    if (!selectEl) return;
+
+    selectEl.innerHTML = '<option value="">-- Belum Ditentukan --</option>';
+
+    try {
+      const { data, error } = await client
+        .from("staff_roster")
+        .select("staff_name")
+        .eq("is_active", true)
+        .order("staff_name", { ascending: true });
+
+      if (error) throw error;
+
+      (data || []).forEach(function (staff) {
+        const opt = document.createElement("option");
+        opt.value = staff.staff_name;
+        opt.textContent = staff.staff_name;
+        selectEl.appendChild(opt);
+      });
+
+      if (selectedValue) {
+        selectEl.value = selectedValue;
+      }
+    } catch (e) {
+      console.error("loadStaffOptionsForSubActivity error:", e);
+    }
+  }
+
+  async function fetchSubActivities(actId) {
+    const { data, error } = await client
+      .from("sub_activities")
+      .select("*")
+      .eq("activity_id", actId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function fetchSingleSubActivity(subActivityId) {
+    const { data, error } = await client
+      .from("sub_activities")
+      .select("*")
+      .eq("id", subActivityId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  function getStatusColor(status) {
+    if (status === "Selesai") return "#16a34a";
+    if (status === "Sedang Dikerjakan") return "#2563eb";
+    return "#f59e0b";
+  }
+
+  function getPriorityColor(priority) {
+    if (priority === "High") return "#dc2626";
+    if (priority === "Normal") return "#d97706";
+    return "#64748b";
+  }
+
+  function renderSubActivityItems(items, actId) {
+    if (!items || !items.length) {
+      return `
+        <div class="history-empty" style="font-size:12px;color:#94a3b8;">
+          Belum ada sub-aktivitas.
+        </div>
+      `;
+    }
+
+    return items.map(function (item) {
+      const statusColor = getStatusColor(item.status || "");
+      const priorityColor = getPriorityColor(item.priority || "");
+
+      return `
+        <div style="border:1px solid #e2e8f0;background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+            <div style="font-size:13px;font-weight:700;color:#0f172a;">
+              ${escHtml(item.title || "Tanpa Judul")}
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:${statusColor}18;color:${statusColor};font-weight:700;">
+                ${escHtml(item.status || "-")}
+              </span>
+              <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:${priorityColor}18;color:${priorityColor};font-weight:700;">
+                ${escHtml(item.priority || "-")}
+              </span>
+            </div>
+          </div>
+
+          ${
+            item.description
+              ? `
+            <div style="font-size:12px;color:#475569;line-height:1.5;margin-top:6px;">
+              ${escHtml(item.description)}
+            </div>
+          `
+              : ""
+          }
+
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:#64748b;">
+            <span><strong>PIC:</strong> ${escHtml(item.pic || "-")}</span>
+            <span><strong>Deadline:</strong> ${escHtml(item.due_date || "-")}</span>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              style="font-size:11px;padding:4px 8px;"
+              onclick="editSubActivity('${String(item.id).replace(/'/g, "\\'")}', '${String(actId).replace(/'/g, "\\'")}'); event.stopPropagation();">
+              <i class="fa-solid fa-pen-to-square"></i> Edit
+            </button>
+
+            <button
+              type="button"
+              class="btn-danger btn-sm"
+              style="font-size:11px;padding:4px 8px;"
+              onclick="deleteSubActivity('${String(item.id).replace(/'/g, "\\'")}', '${String(actId).replace(/'/g, "\\'")}'); event.stopPropagation();">
+              <i class="fa-solid fa-trash"></i> Hapus
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function ensureInlineContainer(actId) {
+    const bodyEl = document.getElementById(`actbody-${actId}`);
+    if (!bodyEl) return;
+
+    if (document.getElementById(`sub-inline-wrap-${actId}`)) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = `sub-inline-wrap-${actId}`;
+    wrap.style.marginTop = "12px";
+    wrap.innerHTML = `
+      <div class="act-note-title" style="margin-bottom:8px;">Sub-Aktivitas</div>
+      <div id="sub-inline-${actId}" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;">
+        <div class="history-empty" style="font-size:12px;color:#94a3b8;">
+          Memuat sub-aktivitas...
+        </div>
+      </div>
+    `;
+
+    bodyEl.appendChild(wrap);
+  }
+
+  function ensureAllInlineContainers() {
+    if (!Array.isArray(window.allActivities) || !window.allActivities.length) return;
+    window.allActivities.forEach(function (act) {
+      ensureInlineContainer(act.id);
+    });
+  }
+
+  window.closeSubActivityModal = function () {
+    const modal = document.getElementById("subActivityModalOverlay");
+    if (modal) modal.classList.add("hidden");
+  };
+
+  window.openSubActivityModal = async function (actId) {
+    resetSubActivityForm(actId);
+    await loadStaffOptionsForSubActivity("");
+    await window.loadSubActivities(actId);
+
+    const modal = document.getElementById("subActivityModalOverlay");
+    if (modal) modal.classList.remove("hidden");
+  };
+
+  window.loadSubActivities = async function (actId) {
+    const listEl = document.getElementById(SUB_ACTIVITY_MODAL_LIST_ID);
+    if (!actId || !listEl) return;
+
+    listEl.innerHTML = `
+      <div class="history-empty" style="font-size:12px;color:#94a3b8;">
+        Memuat sub-aktivitas...
+      </div>
+    `;
+
+    try {
+      const items = await fetchSubActivities(actId);
+      listEl.innerHTML = renderSubActivityItems(items, actId);
+    } catch (e) {
+      console.error("loadSubActivities error:", e);
+      listEl.innerHTML = `
+        <div class="history-empty" style="font-size:12px;color:#dc2626;">
+          Gagal memuat sub-aktivitas.
+        </div>
+      `;
+    }
+  };
+
+  window.renderSubActivitiesInline = async function (actId) {
+    const listEl = document.getElementById(`sub-inline-${actId}`);
+    if (!actId || !listEl) return;
+
+    listEl.innerHTML = `
+      <div class="history-empty" style="font-size:12px;color:#94a3b8;">
+        Memuat sub-aktivitas...
+      </div>
+    `;
+
+    try {
+      const items = await fetchSubActivities(actId);
+      listEl.innerHTML = renderSubActivityItems(items, actId);
+    } catch (e) {
+      console.error("renderSubActivitiesInline error:", e);
+      listEl.innerHTML = `
+        <div class="history-empty" style="font-size:12px;color:#dc2626;">
+          Gagal memuat sub-aktivitas.
+        </div>
+      `;
+    }
+  };
+
+  window.refreshAllSubActivitiesInline = async function () {
+    if (!Array.isArray(window.allActivities) || !window.allActivities.length) return;
+
+    for (const act of window.allActivities) {
+      await window.renderSubActivitiesInline(act.id);
+    }
+  };
+
+  window.editSubActivity = async function (subActivityId, actId) {
+    try {
+      const item = await fetchSingleSubActivity(subActivityId);
+      if (!item) {
+        alert("Data sub-aktivitas tidak ditemukan.");
+        return;
+      }
+
+      window.currentEditingSubActivityId = item.id;
+
+      const { actIdEl, titleEl, descEl, picEl, statusEl, priorityEl, dueEl, saveBtnEl } = getSubActivityFormEls();
+
+      if (actIdEl) actIdEl.value = actId || item.activity_id || "";
+      if (titleEl) titleEl.value = item.title || "";
+      if (descEl) descEl.value = item.description || "";
+      if (statusEl) statusEl.value = item.status || "Belum Mulai";
+      if (priorityEl) priorityEl.value = item.priority || "Low";
+      if (dueEl) dueEl.value = item.due_date || "";
+
+      await loadStaffOptionsForSubActivity(item.pic || "");
+      if (picEl) picEl.value = item.pic || "";
+
+      if (saveBtnEl) {
+        saveBtnEl.textContent = "Update Sub-Aktivitas";
+      }
+
+      const modal = document.getElementById("subActivityModalOverlay");
+      if (modal) modal.classList.remove("hidden");
+      await window.loadSubActivities(actId || item.activity_id);
+    } catch (e) {
+      console.error("editSubActivity error:", e);
+      alert("Gagal memuat data sub-aktivitas: " + (e.message || "unknown error"));
+    }
+  };
+
+  window.deleteSubActivity = async function (subActivityId, actId) {
+    if (!confirm("Hapus sub-aktivitas ini?")) return;
+
+    try {
+      const { error } = await client
+        .from("sub_activities")
+        .delete()
+        .eq("id", subActivityId);
+
+      if (error) {
+        console.error("deleteSubActivity error:", error);
+        alert("Gagal menghapus sub-aktivitas: " + (error.message || "unknown error"));
+        return;
+      }
+
+      if (window.currentEditingSubActivityId === subActivityId) {
+        resetSubActivityForm(actId);
+      }
+
+      await window.loadSubActivities(actId);
+      await window.renderSubActivitiesInline(actId);
+    } catch (e) {
+      console.error("deleteSubActivity exception:", e);
+      alert("Terjadi kesalahan saat menghapus: " + e.message);
+    }
+  };
+
+  window.saveSubActivity = async function () {
+    const { actIdEl, titleEl, descEl, picEl, statusEl, priorityEl, dueEl, saveBtnEl } = getSubActivityFormEls();
+
+    if (!actIdEl || !actIdEl.value) {
+      alert("ID aktivitas utama tidak ditemukan. Tutup modal lalu buka lagi.");
+      return;
+    }
+
+    if (!titleEl || !titleEl.value.trim()) {
+      alert("Judul Sub-Aktivitas wajib diisi.");
+      return;
+    }
+
+    const payload = {
+      activity_id: actIdEl.value,
+      title: titleEl.value.trim(),
+      description: descEl ? (descEl.value.trim() || null) : null,
+      pic: picEl ? (picEl.value || null) : null,
+      status: statusEl ? statusEl.value : "Belum Mulai",
+      priority: priorityEl ? priorityEl.value : "Low",
+      due_date: dueEl ? (dueEl.value || null) : null
+    };
+
+    try {
+      if (saveBtnEl) {
+        saveBtnEl.disabled = true;
+      }
+
+      if (window.currentEditingSubActivityId) {
+        const { error } = await client
+          .from("sub_activities")
+          .update(payload)
+          .eq("id", window.currentEditingSubActivityId);
+
+        if (error) {
+          console.error("update sub activity error:", error);
+          alert("Gagal mengupdate sub-aktivitas: " + (error.message || "unknown error"));
+          return;
+        }
+      } else {
+        const { error } = await client
+          .from("sub_activities")
+          .insert(payload);
+
+        if (error) {
+          console.error("insert sub activity error:", error);
+          alert("Gagal menyimpan sub-aktivitas: " + (error.message || "unknown error"));
+          return;
+        }
+      }
+
+      const parentActId = actIdEl.value;
+      resetSubActivityForm(parentActId);
+
+      await window.loadSubActivities(parentActId);
+      await window.renderSubActivitiesInline(parentActId);
+    } catch (e) {
+      console.error("saveSubActivity exception:", e);
+      alert("Terjadi kesalahan saat menyimpan: " + e.message);
+    } finally {
+      if (saveBtnEl) {
+        saveBtnEl.disabled = false;
+      }
+    }
+  };
+
+  const originalRenderActivityListDetail = window.renderActivityListDetail;
+  if (typeof originalRenderActivityListDetail === "function" && !window.__subActivityInlineWrapped) {
+    window.__subActivityInlineWrapped = true;
+
+    window.renderActivityListDetail = function (...args) {
+      originalRenderActivityListDetail.apply(this, args);
+
+      setTimeout(async function () {
+        ensureAllInlineContainers();
+        await window.refreshAllSubActivitiesInline();
+      }, 80);
+    };
+  }
+
+  setTimeout(async function () {
+    ensureAllInlineContainers();
+    await window.refreshAllSubActivitiesInline();
+  }, 300);
+})();
