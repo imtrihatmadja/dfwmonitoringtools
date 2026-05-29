@@ -576,3 +576,33 @@ window.loadSubActivities = async function(actId) {
     await window.refreshAllSubActivitiesInline();
   }, 300);
 })();
+
+// ==================== FIX DUPLIKAT TOMBOL SUB-AKTIVITAS ====================
+(function () {
+  function cleanupDuplicateSubActivityButtons() {
+    document.querySelectorAll('.activity-card').forEach(function (card) {
+      const buttons = card.querySelectorAll('.btn-sub-activity');
+      if (!buttons || buttons.length <= 1) return;
+
+      buttons.forEach(function (btn, idx) {
+        if (idx > 0) btn.remove();
+      });
+    });
+  }
+
+  const originalRenderActivityListDetailForCleanup = window.renderActivityListDetail;
+
+  if (typeof originalRenderActivityListDetailForCleanup === 'function') {
+    window.renderActivityListDetail = function (...args) {
+      originalRenderActivityListDetailForCleanup.apply(this, args);
+
+      setTimeout(function () {
+        cleanupDuplicateSubActivityButtons();
+      }, 50);
+    };
+  }
+
+  setTimeout(function () {
+    cleanupDuplicateSubActivityButtons();
+  }, 300);
+})();
