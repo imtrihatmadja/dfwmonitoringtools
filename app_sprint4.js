@@ -177,7 +177,7 @@ window.saveSubActivity = async function() {
     }
 
     const payload = {
-        activity_id: parseInt(actIdEl.value, 10),
+                activity_id: actIdEl.value,
         title: titleEl.value.trim(),
         description: descEl ? (descEl.value || null) : null,
         pic: picEl ? (picEl.value || null) : null,
