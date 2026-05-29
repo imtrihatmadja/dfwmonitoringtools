@@ -1233,3 +1233,254 @@ console.log("Sprint 4 - Staff dropdown & Sub-Aktivitas hooks loaded.");
     await window.refreshAllSubActivitiesInline();
   }, 300);
 })();
+
+// ==================== FINAL STAFF WORKLOAD V3 ====================
+(function () {
+  function escHtml(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function escJs(v) {
+    return String(v ?? "")
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'");
+  }
+
+  function staffBadge(isActive) {
+    return isActive
+      ? '<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">Aktif</span>'
+      : '<span style="background:#e5e7eb;color:#6b7280;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;">Tidak Aktif</span>';
+  }
+
+  function assignmentTypeBadge(type) {
+    return type === "sub_activity"
+      ? '<span style="background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;">Sub-Aktivitas</span>'
+      : '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;">Aktivitas</span>';
+  }
+
+  function statusChip(rawStatus, statusGroup) {
+    const color =
+      statusGroup === "selesai" ? "#16a34a" :
+      statusGroup === "sedang_berjalan" ? "#2563eb" :
+      statusGroup === "tertunda" ? "#dc2626" :
+      "#64748b";
+
+    return `<span style="background:${color}15;color:${color};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;">${escHtml(rawStatus || "-")}</span>`;
+  }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  window.loadStaffWorkload = async function () {
+    try {
+      const { data: rows, error } = await client
+        .from("view_staff_workload")
+        .select("*")
+        .order("staff_name", { ascending: true });
+
+      if (error) throw error;
+
+      const { data: metrics, error: metricsError } = await client
+        .from("view_workload_dashboard")
+        .select("metric, value");
+
+      if (metricsError) throw metricsError;
+
+      window.staffWorkloadRows = rows || [];
+
+      const metricMap = {};
+      (metrics || []).forEach(function (m) {
+        metricMap[m.metric] = m.value;
+      });
+
+      setText("staffCount", metricMap.TOTAL_STAFF_ACTIVE || "0");
+      setText("activityCount", metricMap.TOTAL_ACTIVITIES || "0");
+      setText("progressAvg", (metricMap.AVG_ACTIVITY_PROGRESS || "0") + "%");
+      setText("taskPending", metricMap.TOTAL_TASKS_PENDING || "0");
+
+      const syncEl = document.getElementById("staffLastSync");
+      if (syncEl) {
+        syncEl.textContent = "Last sync: " + new Date().toLocaleTimeString("id-ID");
+      }
+
+      window.renderStaffTable();
+    } catch (e) {
+      console.error("loadStaffWorkload error:", e);
+      const body = document.getElementById("staffTableBody");
+      if (body) {
+        body.innerHTML = `
+          <tr>
+            <td colspan="10" style="padding:24px;text-align:center;color:#dc2626;">
+              Gagal memuat dashboard staff: ${escHtml(e.message || "unknown error")}
+            </td>
+          </tr>
+        `;
+      }
+    }
+  };
+
+  window.renderStaffTable = function () {
+    const body = document.getElementById("staffTableBody");
+    const filterEl = document.getElementById("staffFilter");
+    if (!body) return;
+
+    const filter = filterEl ? filterEl.value : "all";
+    let rows = Array.isArray(window.staffWorkloadRows) ? [...window.staffWorkloadRows] : [];
+
+    if (filter === "active") {
+      rows = rows.filter(r => r.is_active === true);
+    } else if (filter === "inactive") {
+      rows = rows.filter(r => r.is_active === false);
+    }
+
+    if (!rows.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="10" style="padding:24px;text-align:center;color:#94a3b8;">
+            Tidak ada data staff.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    body.innerHTML = rows.map(function (row) {
+      const avg = Number(row.avg_activity_progress || 0);
+      const avgColor = avg >= 75 ? "#16a34a" : avg >= 50 ? "#ea580c" : "#dc2626";
+
+      return `
+        <tr>
+          <td style="padding:12px 14px;">
+            <button
+              type="button"
+              onclick="openStaffTaskDetail('${escJs(row.staff_name)}')"
+              style="border:none;background:none;padding:0;color:#1d4ed8;font-weight:700;cursor:pointer;text-align:left;">
+              ${escHtml(row.staff_name || "-")}
+            </button>
+            <div style="font-size:11px;color:#64748b;margin-top:3px;">
+              ${escHtml(row.staff_role || "-")}
+            </div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">
+              ${Number(row.total_activities || 0)} aktivitas • ${Number(row.total_sub_activities || 0)} sub-aktivitas
+            </div>
+          </td>
+          <td style="padding:12px 14px;">${staffBadge(row.is_active)}</td>
+          <td style="padding:12px 14px;font-weight:700;">${Number(row.total_assignments || 0)}</td>
+          <td style="padding:12px 14px;color:#16a34a;font-weight:700;">${Number(row.tasks_completed || 0)}</td>
+          <td style="padding:12px 14px;color:#2563eb;font-weight:700;">${Number(row.tasks_in_progress || 0)}</td>
+          <td style="padding:12px 14px;color:#dc2626;font-weight:700;">${Number(row.tasks_blocked || 0)}</td>
+          <td style="padding:12px 14px;color:#64748b;font-weight:700;">${Number(row.tasks_not_started || 0)}</td>
+          <td style="padding:12px 14px;color:${avgColor};font-weight:700;">${avg}%</td>
+          <td style="padding:12px 14px;font-weight:700;">${Number(row.tasks_pending || 0)}</td>
+          <td style="padding:12px 14px;">
+            <button class="btn-secondary btn-sm" onclick="openStaffTaskDetail('${escJs(row.staff_name)}')">
+              Lihat Tugas
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  };
+
+  window.openStaffTaskDetail = async function (staffName) {
+    const overlay = document.getElementById("staffTaskDetailOverlay");
+    const titleEl = document.getElementById("staffTaskDetailTitle");
+    const metaEl = document.getElementById("staffTaskDetailMeta");
+    const listEl = document.getElementById("staffTaskDetailList");
+
+    if (!overlay || !titleEl || !metaEl || !listEl) return;
+
+    titleEl.textContent = "Daftar Tugas: " + staffName;
+    metaEl.textContent = "Memuat penugasan...";
+    listEl.innerHTML = `
+      <div class="empty-state" style="padding:18px;text-align:center;color:#94a3b8;">
+        Memuat aktivitas dan sub-aktivitas...
+      </div>
+    `;
+    overlay.classList.remove("hidden");
+
+    try {
+      const { data, error } = await client
+        .from("view_staff_assignments")
+        .select("*")
+        .eq("staff_name", staffName)
+        .order("status_group", { ascending: true })
+        .order("due_date", { ascending: true });
+
+      if (error) throw error;
+
+      const items = data || [];
+      const completed = items.filter(x => x.status_group === "selesai").length;
+      const pending = items.filter(x => x.status_group !== "selesai").length;
+
+      metaEl.innerHTML = `
+        <span style="font-weight:700;">${items.length}</span> penugasan •
+        <span style="color:#16a34a;font-weight:700;">${completed} selesai</span> •
+        <span style="color:#dc2626;font-weight:700;">${pending} belum selesai</span>
+      `;
+
+      if (!items.length) {
+        listEl.innerHTML = `
+          <div class="empty-state" style="padding:18px;text-align:center;color:#94a3b8;">
+            Belum ada aktivitas atau sub-aktivitas untuk staff ini.
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = items.map(function (item) {
+        return `
+          <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#fff;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+              <div>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                  ${assignmentTypeBadge(item.assignment_type)}
+                  ${statusChip(item.raw_status, item.status_group)}
+                </div>
+                <div style="font-size:14px;font-weight:700;color:#0f172a;">
+                  ${escHtml(item.assignment_title || "Tanpa Judul")}
+                </div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px;">
+                  Proyek: ${escHtml(item.project_name || "-")}
+                </div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">
+                  Deadline: ${escHtml(item.due_date || "-")}
+                </div>
+              </div>
+              <div style="font-size:13px;font-weight:800;color:#1d4ed8;">
+                ${Number(item.progress || 0)}%
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    } catch (e) {
+      console.error("openStaffTaskDetail error:", e);
+      metaEl.textContent = "Gagal memuat detail tugas.";
+      listEl.innerHTML = `
+        <div class="empty-state" style="padding:18px;text-align:center;color:#dc2626;">
+          ${escHtml(e.message || "unknown error")}
+        </div>
+      `;
+    }
+  };
+
+  window.closeStaffTaskDetail = function () {
+    const overlay = document.getElementById("staffTaskDetailOverlay");
+    if (overlay) overlay.classList.add("hidden");
+  };
+
+  window.refreshStaffWorkloadIfVisible = async function () {
+    const staffTab = document.getElementById("tab-staff");
+    if (staffTab && staffTab.classList.contains("active")) {
+      await window.loadStaffWorkload();
+    }
+  };
+})();
