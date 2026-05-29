@@ -1159,3 +1159,78 @@ table { min-width: 520px; }
   color: #94a3b8;
   cursor: not-allowed;
 }
+
+/* ── Workload Dashboard Cards ── */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.dashboard-cards .card {
+  padding: 1.25rem;
+  text-align: center;
+  border-radius: 12px;
+}
+
+.dashboard-cards .card-green { background: #e6f7e6; }
+.dashboard-cards .card-blue  { background: #e6f0ff; }
+.dashboard-cards .card-orange{ background: #fff4e6; }
+.dashboard-cards .card-red   { background: #ffe6e6; }
+
+.dashboard-cards .card-label {
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.dashboard-cards .card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+
+.dashboard-cards .card-green .card-value { color: #2e7d32; }
+.dashboard-cards .card-blue  .card-value { color: #1565c0; }
+.dashboard-cards .card-orange .card-value{ color: #e65100; }
+.dashboard-cards .card-red   .card-value { color: #c62828; }
+
+.dashboard-cards .card-detail {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+/* ── Table ── */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.data-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.data-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.data-table .text-center { text-align: center; }
+.data-table .text-green   { color: #2e7d32; }
+.data-table .text-orange  { color: #e65100; }
+.data-table .text-red     { color: #c62828; }
