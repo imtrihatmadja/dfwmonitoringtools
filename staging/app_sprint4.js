@@ -441,7 +441,7 @@ window.loadSubActivities = async function(actId) {
           // Extract act-id from parent card
           var actId = null;
           var card = actionsDiv.closest(".activity-card");
-          if (card) actId = card.id.replace("act-", "");
+          if (card) actId = card.id.replace("actcard-", "");
           if (!actId) return;
           var btn = document.createElement("button");
           btn.className = "btn-sm btn-sub-activity";
