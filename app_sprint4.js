@@ -102,161 +102,307 @@ window.closeSubActivityModal = function() {
 
 console.log("Sprint 4 - Staff dropdown & Sub-Aktivitas hooks loaded.");
 
-// --- PATCH 8: Open Sub-Aktivitas Modal ---
-window.openSubActivityModal = async function(actId) {
-    // Reset form fields
-    const idEl = document.getElementById("sub-task-id");
-    const titleEl = document.getElementById("sub-task-title");
-    const descEl = document.getElementById("sub-task-desc");
-    const picEl = document.getElementById("sub-task-pic");
-    const statusEl = document.getElementById("sub-task-status");
-    const priorityEl = document.getElementById("sub-task-priority");
-    const dueEl = document.getElementById("sub-task-due");
+// ==================== FINAL FIX: SUB-AKTIVITAS EDIT + DELETE WORKING ====================
+(function () {
+  function escHtml(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
-    if (idEl) idEl.value = actId || "";
+  function getSubEls() {
+    return {
+      parentIdEl: document.getElementById("sub-task-id"),
+      editIdEl: document.getElementById("sub-task-edit-id"),
+      titleEl: document.getElementById("sub-task-title"),
+      descEl: document.getElementById("sub-task-desc"),
+      picEl: document.getElementById("sub-task-pic"),
+      statusEl: document.getElementById("sub-task-status"),
+      priorityEl: document.getElementById("sub-task-priority"),
+      dueEl: document.getElementById("sub-task-due"),
+      saveBtnEl: document.getElementById("saveSubActivityBtn"),
+      listEl: document.getElementById("sub-activity-list")
+    };
+  }
+
+  async function loadStaffOptions(selectedValue) {
+    const { picEl } = getSubEls();
+    if (!picEl) return;
+
+    picEl.innerHTML = '<option value="">-- Belum Ditentukan --</option>';
+
+    const { data, error } = await client
+      .from("staff_roster")
+      .select("staff_name")
+      .eq("is_active", true)
+      .order("staff_name", { ascending: true });
+
+    if (error) {
+      console.error("loadStaffOptions error:", error);
+      return;
+    }
+
+    (data || []).forEach(function (staff) {
+      const opt = document.createElement("option");
+      opt.value = staff.staff_name;
+      opt.textContent = staff.staff_name;
+      picEl.appendChild(opt);
+    });
+
+    if (selectedValue) picEl.value = selectedValue;
+  }
+
+  function resetSubForm(parentActivityId) {
+    const {
+      parentIdEl, editIdEl, titleEl, descEl, picEl,
+      statusEl, priorityEl, dueEl, saveBtnEl
+    } = getSubEls();
+
+    if (parentIdEl) parentIdEl.value = parentActivityId || "";
+    if (editIdEl) editIdEl.value = "";
     if (titleEl) titleEl.value = "";
     if (descEl) descEl.value = "";
     if (picEl) picEl.value = "";
     if (statusEl) statusEl.value = "Belum Mulai";
     if (priorityEl) priorityEl.value = "Low";
     if (dueEl) dueEl.value = "";
+    if (saveBtnEl) saveBtnEl.textContent = "Tambah Sub-Aktivitas";
+  }
 
-    // Load staff dropdown for sub-task PIC
-    const staffSelect = document.getElementById("sub-task-pic");
-    if (staffSelect) {
-        staffSelect.innerHTML = "<option value=\"\">-- Belum Ditentukan --</option>";
-        try {
-            const { data, error } = await client
-                .from("staff_roster")
-                .select("staff_name")
-                .eq("is_active", true)
-                .order("staff_name", { ascending: true });
-            if (!error && data) {
-                data.forEach(function(staff) {
-                    const opt = document.createElement("option");
-                    opt.value = staff.staff_name;
-                    opt.textContent = staff.staff_name;
-                    staffSelect.appendChild(opt);
-                });
-            }
-        } catch (e) {
-            console.error("openSubActivityModal: failed to load staff:", e);
-        }
+  function renderSubList(items, actId) {
+    if (!items || !items.length) {
+      return `
+        <div class="history-empty" style="font-size:12px;color:#94a3b8;">
+          Belum ada sub-aktivitas.
+        </div>
+      `;
     }
 
-    // Load existing sub-activities list
+    return items.map(function (item) {
+      return `
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#fff;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#0f172a;">
+                ${escHtml(item.title || "Tanpa Judul")}
+              </div>
+              ${item.description ? `
+                <div style="font-size:12px;color:#475569;line-height:1.5;margin-top:4px;">
+                  ${escHtml(item.description)}
+                </div>
+              ` : ""}
+              <div style="font-size:11px;color:#64748b;margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;">
+                <span><strong>PIC:</strong> ${escHtml(item.pic || "-")}</span>
+                <span><strong>Status:</strong> ${escHtml(item.status || "-")}</span>
+                <span><strong>Prioritas:</strong> ${escHtml(item.priority || "-")}</span>
+                <span><strong>Jatuh Tempo:</strong> ${escHtml(item.due_date || "-")}</span>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="event.stopPropagation(); editSubActivity('${item.id}', '${actId}')">
+                <i class="fa-solid fa-pen-to-square"></i> Edit
+              </button>
+              <button
+                type="button"
+                class="btn-danger btn-sm"
+                onclick="event.stopPropagation(); deleteSubActivity('${item.id}', '${actId}')">
+                <i class="fa-solid fa-trash"></i> Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  window.loadSubActivities = async function (actId) {
+    const { listEl } = getSubEls();
+    if (!actId || !listEl) return;
+
+    listEl.innerHTML = `
+      <div class="history-empty" style="font-size:12px;color:#94a3b8;">
+        Memuat sub-aktivitas...
+      </div>
+    `;
+
+    try {
+      const { data, error } = await client
+        .from("sub_activities")
+        .select("*")
+        .eq("activity_id", actId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      listEl.innerHTML = renderSubList(data || [], actId);
+    } catch (e) {
+      console.error("loadSubActivities error:", e);
+      listEl.innerHTML = `
+        <div class="history-empty" style="font-size:12px;color:#dc2626;">
+          Gagal memuat sub-aktivitas: ${escHtml(e.message || "unknown error")}
+        </div>
+      `;
+    }
+  };
+
+  window.openSubActivityModal = async function (actId) {
+    resetSubForm(actId);
+    await loadStaffOptions("");
     await window.loadSubActivities(actId);
 
-    // Show the modal
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.remove("hidden");
-};
+  };
 
-window.closeSubActivityModal = function() {
+  window.closeSubActivityModal = function () {
     const modal = document.getElementById("subActivityModalOverlay");
     if (modal) modal.classList.add("hidden");
-};
+  };
 
-// --- PATCH 9: Save Sub-Aktivitas ---
-window.saveSubActivity = async function() {
-    const actIdEl = document.getElementById("sub-task-id");
-    const titleEl = document.getElementById("sub-task-title");
-    const descEl = document.getElementById("sub-task-desc");
-    const picEl = document.getElementById("sub-task-pic");
-    const statusEl = document.getElementById("sub-task-status");
-    const priorityEl = document.getElementById("sub-task-priority");
-    const dueEl = document.getElementById("sub-task-due");
+  window.editSubActivity = async function (subId, actId) {
+    try {
+      const { data, error } = await client
+        .from("sub_activities")
+        .select("*")
+        .eq("id", subId)
+        .single();
 
-    if (!actIdEl || !actIdEl.value) {
-        alert("Parent activity ID missing. Please close and reopen the modal.");
+      if (error) throw error;
+      if (!data) {
+        alert("Data sub-aktivitas tidak ditemukan.");
         return;
+      }
+
+      const {
+        parentIdEl, editIdEl, titleEl, descEl, picEl,
+        statusEl, priorityEl, dueEl, saveBtnEl
+      } = getSubEls();
+
+      if (parentIdEl) parentIdEl.value = actId || data.activity_id || "";
+      if (editIdEl) editIdEl.value = data.id || "";
+      if (titleEl) titleEl.value = data.title || "";
+      if (descEl) descEl.value = data.description || "";
+      if (statusEl) statusEl.value = data.status || "Belum Mulai";
+      if (priorityEl) priorityEl.value = data.priority || "Low";
+      if (dueEl) dueEl.value = data.due_date || "";
+
+      await loadStaffOptions(data.pic || "");
+      if (picEl) picEl.value = data.pic || "";
+
+      if (saveBtnEl) saveBtnEl.textContent = "Update Sub-Aktivitas";
+
+      const modal = document.getElementById("subActivityModalOverlay");
+      if (modal) modal.classList.remove("hidden");
+    } catch (e) {
+      console.error("editSubActivity error:", e);
+      alert("Gagal memuat data edit: " + (e.message || "unknown error"));
     }
-    if (!titleEl || !titleEl.value.trim()) {
-        alert("Judul Sub-Aktivitas wajib diisi.");
-        return;
+  };
+
+  window.saveSubActivity = async function () {
+    const {
+      parentIdEl, editIdEl, titleEl, descEl, picEl,
+      statusEl, priorityEl, dueEl, saveBtnEl
+    } = getSubEls();
+
+    const activityId = parentIdEl?.value || "";
+    const editId = editIdEl?.value || "";
+    const title = titleEl?.value?.trim() || "";
+
+    if (!activityId) {
+      alert("Parent activity ID tidak ditemukan.");
+      return;
+    }
+
+    if (!title) {
+      alert("Judul Sub-Aktivitas wajib diisi.");
+      return;
     }
 
     const payload = {
-                activity_id: actIdEl.value,
-        title: titleEl.value.trim(),
-        description: descEl ? (descEl.value || null) : null,
-        pic: picEl ? (picEl.value || null) : null,
-        status: statusEl ? statusEl.value : "Belum Mulai",
-        priority: priorityEl ? priorityEl.value : "Low",
-        due_date: dueEl ? (dueEl.value || null) : null
+      activity_id: activityId,
+      title: title,
+      description: descEl?.value?.trim() || null,
+      pic: picEl?.value || null,
+      status: statusEl?.value || "Belum Mulai",
+      priority: priorityEl?.value || "Low",
+      due_date: dueEl?.value || null
     };
 
     try {
-        const { data, error } = await client
-            .from("sub_activities")
-            .insert(payload)
-            .select()
-            .single();
+      if (saveBtnEl) {
+        saveBtnEl.disabled = true;
+        saveBtnEl.textContent = editId ? "Mengupdate..." : "Menyimpan...";
+      }
 
-        if (error) {
-            console.error("saveSubActivity: insert error:", error);
-            alert("Gagal menyimpan sub-aktivitas: " + (error.message || "unknown"));
-            return;
-        }
+      let error = null;
 
-        // Clear form
-        if (titleEl) titleEl.value = "";
-        if (descEl) descEl.value = "";
-        if (picEl) picEl.value = "";
+      if (editId) {
+        ({ error } = await client
+          .from("sub_activities")
+          .update(payload)
+          .eq("id", editId));
+      } else {
+        ({ error } = await client
+          .from("sub_activities")
+          .insert(payload));
+      }
 
-        // Reload list
-        await window.loadSubActivities(actIdEl.value);
-        console.log("saveSubActivity: saved title=", data.title, "id=", data.id);
+      if (error) throw error;
+
+      resetSubForm(activityId);
+      await loadStaffOptions("");
+      await window.loadSubActivities(activityId);
+
+      if (typeof window.renderSubActivitiesInline === "function") {
+        await window.renderSubActivitiesInline(activityId);
+      }
     } catch (e) {
-        console.error("saveSubActivity: exception:", e);
-        alert("Terjadi kesalahan saat menyimpan: " + e.message);
+      console.error("saveSubActivity error:", e);
+      alert("Gagal menyimpan sub-aktivitas: " + (e.message || "unknown error"));
+    } finally {
+      if (saveBtnEl) {
+        saveBtnEl.disabled = false;
+        saveBtnEl.textContent = editId ? "Update Sub-Aktivitas" : "Tambah Sub-Aktivitas";
+      }
     }
-};
+  };
 
-// --- PATCH 10: Load Sub-Aktivitas List ---
-window.loadSubActivities = async function(actId) {
-    if (!actId) {
-        console.warn("loadSubActivities: missing actId");
-        return;
-    }
-    const listEl = document.getElementById('sub-activity-list');
-    if (!listEl) {
-        console.warn("loadSubActivities: subActivityList element not found");
-        return;
-    }
+  window.deleteSubActivity = async function (subId, actId) {
+    if (!confirm("Hapus sub-aktivitas ini?")) return;
 
     try {
-        const { data, error } = await client
-            .from("sub_activities")
-            .select("*")
-            .eq("activity_id", actId)
-            .order("created_at", { ascending: false });
+      const { error } = await client
+        .from("sub_activities")
+        .delete()
+        .eq("id", subId);
 
-        if (error) {
-            console.error("loadSubActivities: query error:", error);
-            listEl.innerHTML = "<p>Error loading sub-activities.</p>";
-            return;
-        }
+      if (error) throw error;
 
-        if (!data || data.length === 0) {
-            listEl.innerHTML = "<p>Belum ada sub-aktivitas. Klik \"Tambah Baru\" untuk menambah.</p>";
-            return;
-        }
+      const { editIdEl } = getSubEls();
+      if (editIdEl && editIdEl.value === String(subId)) {
+        resetSubForm(actId);
+        await loadStaffOptions("");
+      }
 
-        let html = "";
-        data.forEach(function(item) {
-            html += "<p>";
-            html += " <strong>" + (item.title || "Tanpa Judul") + "</strong> <br>";
-            html += " Status: " + (item.status || "-") + " | Penanggung Jawab: " + (item.pic || "-") + " | Prioritas: " + (item.priority || "-") + "";
-            html += "</p>";
-        });
-        listEl.innerHTML = html;
-        console.log("loadSubActivities: loaded", data.length, "items for activity_id=", actId);
+      await window.loadSubActivities(actId);
+
+      if (typeof window.renderSubActivitiesInline === "function") {
+        await window.renderSubActivitiesInline(actId);
+      }
     } catch (e) {
-        console.error("loadSubActivities: exception:", e);
-        if (listEl) listEl.innerHTML = "<p>Error: " + e.message + "</p>";
+      console.error("deleteSubActivity error:", e);
+      alert("Gagal menghapus sub-aktivitas: " + (e.message || "unknown error"));
     }
-};
+  };
+})();
 
 // --- PATCH 11: DISABLED ---
 // Tombol Sub-Aktivitas sudah dirender langsung oleh app.js.
