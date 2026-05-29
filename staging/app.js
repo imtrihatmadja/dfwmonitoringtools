@@ -535,14 +535,9 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
       }
     }
 
-    // Hanya hapus indikator yang benar-benar dihapus manual dari form
-if (keptIndicatorIds.length > 0 && originalIndicatorIds.length > 0) {
-  const removedIds = originalIndicatorIds
-    .filter(id => !keptIndicatorIds.includes(id));
-  if (removedIds.length) {
-    await client.from("project_indicators").delete().in("id", removedIds);
-  }
-}
+    const removedIds = (originalIndicatorIds || []).filter(id => !keptIndicatorIds.includes(id));
+    if (removedIds.length) {
+      await client.from("project_indicators").delete().in("id", removedIds);
     }
 
     // Rename propagasi otomatis via DB trigger: sync_project_name_on_rename
@@ -1355,71 +1350,48 @@ document.getElementById("editProjectBtn").addEventListener("click", () => {
 });
 
 // ===================== FILL FORM EDIT =====================
-window.fillFormEdit = async function (idx) {
+window.fillFormEdit = function (idx) {
   const item = window.allProjects[idx];
   editingProjectOriginalName = item.name;
-  editingProjectId = item.id || null;
-
-  // Ambil indikator langsung dari DB agar selalu fresh
-  const { data: freshInds } = await client
-    .from("project_indicators")
-    .select("*, indicator_updates(*), indicator_evidence(*)")
-    .eq("project_name", item.name)
-    .order("created_at", { ascending: true });
-
-  const indsFromDB = freshInds || item.project_indicators || [];
-
-  // Simpan semua ID indikator yang sudah ada di DB
-  originalIndicatorIds = indsFromDB.map(ind => ind.id).filter(Boolean);
-
-  // Isi field form Step 1
-  document.getElementById("f-name").value = item.name;
-  document.getElementById("f-location").value = item.location;
-  document.getElementById("f-owner").value = item.owner;
-  document.getElementById("f-donor").value = item.donor || "";
-  document.getElementById("f-start-date").value = item.start_date || "";
-  document.getElementById("f-deadline").value = item.deadline || "";
-  document.getElementById("f-status").value = item.status;
-  document.getElementById("f-desc").value = item.description || "";
-  document.getElementById("f-note").value = item.note || "";
+  editingProjectId          = item.id || null;
+  originalIndicatorIds = (item.project_indicators || []).map(ind => ind.id).filter(Boolean);
+  document.getElementById("f-name").value       = item.name;
+  document.getElementById("f-location").value   = item.location;
+  document.getElementById("f-owner").value      = item.owner;
+  document.getElementById("f-donor").value      = item.donor       || "";
+  document.getElementById("f-start-date").value = item.start_date  || "";
+  document.getElementById("f-deadline").value   = item.deadline    || "";
+  document.getElementById("f-status").value     = item.status;
+  document.getElementById("f-desc").value            = item.description    || "";
+  document.getElementById("f-note").value            = item.note           || "";
   document.getElementById("f-budget-approved").value = item.budget_approved || "";
-  document.getElementById("f-budget-actual").value = item.budget_actual || "";
+  document.getElementById("f-budget-actual").value   = item.budget_actual   || "";
   document.getElementById("f-goal").value = item.goal || "";
-
-  // Isi outcomes
   outcomes = (item.project_outcomes || []).map(o => ({ text: o.outcome_text }));
   renderOutcomeList();
-
-  // Isi indikator dari data DB yang fresh
-  indicators = indsFromDB.map(ind => {
-    const latestActual = getLatestActual({
-      ...ind,
-      indicator_updates: ind.indicator_updates || []
-    });
+  indicators = item.project_indicators.map(ind => {
+    const latestActual = getLatestActual(ind);
     return {
-      id: ind.id,
-      name: ind.indicator_name,
-      type: ind.type,
-      target: ind.target,
-      unit: ind.unit,
-      actual: latestActual,
-      previous_actual: latestActual,
-      update_note: "",
-      history: ind.indicator_updates || [],
-      evidence: ind.indicator_evidence || []
+      id              : ind.id,
+      name            : ind.indicator_name,
+      type            : ind.type,
+      target          : ind.target,
+      unit            : ind.unit,
+      actual          : latestActual,
+      previous_actual : latestActual,
+      update_note     : "",
+      history         : ind.indicator_updates  || [],
+      evidence        : ind.indicator_evidence || [],
     };
   });
-
   renderIndicatorList();
-
-  // Navigasi ke tab input
-  document.getElementById("pageTitle").textContent = "Edit Proyek";
+  document.getElementById("pageTitle").textContent    = "Edit Proyek";
   document.getElementById("pageSubtitle").textContent = item.name;
   document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
   document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
-  document.querySelector('[data-tab="input"]').classList.add("active");
+  document.querySelector("[data-tab='input']").classList.add("active");
   document.getElementById("tab-input").classList.add("active");
-  setStep1();
+  setStep(1);
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
