@@ -531,15 +531,21 @@ for (let i = 0; i < indicators.length; i++) {
   }
 
   // Indikator baru: tetap boleh ditambahkan
-  const payload = {
-    project_name: p.name,
-    project_id: savedProjectRef,
-    indicator_name: ind.name.trim(),
-    type: ind.type,
-    target: Number(ind.target) || 0,
-    unit: ind.unit || null,
-    actual: Number(ind.actual) || 0,
-  };
+  const { count: existingCount } = await client
+  .from("project_indicators")
+  .select("id", { count: "exact", head: true })
+  .eq("project_name", p.name);
+
+const payload = {
+  project_name: p.name,
+  project_id: savedProjectRef,
+  indicator_name: ind.name.trim(),
+  type: ind.type,
+  target: Number(ind.target) || 0,
+  unit: ind.unit || null,
+  actual: Number(ind.actual) || 0,
+  sort_order: (existingCount || 0) + i,
+};
 
   const { data: indData, error: indErr } = await client
     .from("project_indicators")
@@ -640,7 +646,10 @@ async function loadProjects() {
   }
   const msg = document.getElementById("projectLoadError");
   if (msg) msg.style.display = "none";
-  const { data: inds  } = await client.from("project_indicators").select();
+  const { data: inds } = await client
+  .from("project_indicators")
+  .select()
+  .order("created_at", { ascending: true });
   const { data: upds  } = await client.from("indicator_updates").select().order("created_at", { ascending: true });
   const { data: evids } = await client.from("indicator_evidence").select();
   const { data: actsData } = await client.from("project_activities").select("project_name,progress,status");
@@ -651,11 +660,18 @@ async function loadProjects() {
   const activeProjects = (projects || []).filter(proj => !proj.archived);
   const items = activeProjects.map(proj => ({
     ...proj,
-    project_indicators: (inds || []).filter(ind => ind.project_name === proj.name).map(ind => ({
-      ...ind,
-      indicator_updates : (upds  || []).filter(u => u.indicator_id === ind.id),
-      indicator_evidence: (evids || []).filter(e => e.indicator_id === ind.id),
-    })),
+    project_indicators: (inds || [])
+  .filter(ind => ind.project_name === proj.name)
+  .sort((a, b) => {
+    // Urutkan berdasarkan sort_order jika ada, fallback ke created_at
+    if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
+    return new Date(a.created_at) - new Date(b.created_at);
+  })
+  .map(ind => ({
+    ...ind,
+    indicator_updates : (upds || []).filter(u => u.indicator_id === ind.id),
+    indicator_evidence: (evids || []).filter(e => e.indicator_id === ind.id),
+  })),
     activities_summary: (actsData || []).filter(a => a.project_name === proj.name),
     activityCount: (actsData || []).filter(a => a.project_name === proj.name).length,
     budget_updates: (budgetHist || []).filter(b => b.project_name === proj.name),
