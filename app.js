@@ -468,77 +468,133 @@ document.getElementById("submitAllBtn").addEventListener("click", async () => {
 
     const keptIndicatorIds = [];
 
-    for (let i = 0; i < indicators.length; i++) {
-      const ind = indicators[i];
-      if (!ind.name || !ind.name.trim()) continue;
+for (let i = 0; i < indicators.length; i++) {
+  const ind = indicators[i];
+  if (!ind.name || !ind.name.trim()) continue;
 
-      const payload = {
-        project_name   : p.name,
-        project_id     : savedProjectId || editingProjectId || null,
-        indicator_name : ind.name.trim(),
-        type           : ind.type,
-        target         : Number(ind.target) || 0,
-        unit           : ind.unit || null,
-        actual         : Number(ind.actual) || 0,
-      };
+  const savedProjectRef = savedProjectId || editingProjectId || null;
 
-      if (ind.id) {
-        const { error: updErr } = await client
-          .from("project_indicators")
-          .update(payload)
-          .eq("id", ind.id);
-        if (updErr) { console.warn(updErr.message); continue; }
-        keptIndicatorIds.push(ind.id);
+  if (ind.id) {
+    // Indikator lama: jangan overwrite nilai/status/histori
+    const { data: existingInd, error: existingErr } = await client
+      .from("project_indicators")
+      .select("*")
+      .eq("id", ind.id)
+      .single();
 
-        const prevActual = Number(ind.previous_actual ?? 0);
-        const nextActual = Number(ind.actual ?? 0);
-        const nextNote   = ind.update_note ? ind.update_note.trim() : "";
-        const shouldAddHistory = nextNote || nextActual !== prevActual;
+    if (existingErr) {
+      console.warn("Gagal mengambil indikator existing:", existingErr.message);
+      continue;
+    }
 
-        if (shouldAddHistory) {
-          const { data: histSaved } = await client.from("indicator_updates").insert({
-            indicator_id   : ind.id,
-            project_id     : savedProjectId || editingProjectId || null,
-            project_name   : p.name,
-            indicator_name : ind.name.trim(),
-            actual_value   : nextActual,
-            note           : nextNote || null,
-            updated_by     : AUDIT_USER,
-          }).select().single();
-          indicators[i].history = [...(indicators[i].history||[]), histSaved||{indicator_id:ind.id,actual_value:nextActual,note:nextNote||null,updated_by:AUDIT_USER,created_at:new Date().toISOString()}];
-          indicators[i].previous_actual = nextActual;
-          indicators[i].update_note = "";
-        }
-      } else {
-        const { data: indData, error: indErr } = await client
-          .from("project_indicators")
-          .insert(payload)
-          .select().single();
-        if (indErr) { console.warn(indErr.message); continue; }
-        indicators[i].id = indData.id;
-        indicators[i].previous_actual = Number(ind.actual) || 0;
-        keptIndicatorIds.push(indData.id);
+    // Hanya sinkronkan referensi project jika nama proyek / id proyek berubah
+    const safeUpdatePayload = {};
+    const currentProjectName = existingInd.project_name || null;
+    const currentProjectId = existingInd.project_id || null;
 
-        if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
-          const { data: newHistSaved } = await client.from("indicator_updates").insert({
-            indicator_id   : indData.id,
-            project_id     : savedProjectId || editingProjectId || null,
-            project_name   : p.name,
-            indicator_name : ind.name.trim(),
-            actual_value   : Number(ind.actual) || 0,
-            note           : ind.update_note ? ind.update_note.trim() : null,
-            updated_by     : AUDIT_USER,
-          }).select().single();
-          indicators[i].history = [...(indicators[i].history||[]), newHistSaved||{indicator_id:indData.id,actual_value:Number(ind.actual)||0,updated_by:AUDIT_USER,created_at:new Date().toISOString()}];
-          indicators[i].update_note = "";
-        }
+    if (currentProjectName !== p.name) {
+      safeUpdatePayload.project_name = p.name;
+    }
+    if (currentProjectId !== savedProjectRef) {
+      safeUpdatePayload.project_id = savedProjectRef;
+    }
+
+    if (Object.keys(safeUpdatePayload).length) {
+      const { error: updErr } = await client
+        .from("project_indicators")
+        .update(safeUpdatePayload)
+        .eq("id", ind.id);
+
+      if (updErr) {
+        console.warn("Gagal sinkron referensi indikator:", updErr.message);
+        continue;
       }
     }
 
-    const removedIds = (originalIndicatorIds || []).filter(id => !keptIndicatorIds.includes(id));
-    if (removedIds.length) {
-      await client.from("project_indicators").delete().in("id", removedIds);
-    }
+    // Kembalikan state lokal ke data DB agar form edit tidak menimpa indikator lama
+    indicators[i] = {
+      ...indicators[i],
+      id: existingInd.id,
+      name: existingInd.indicator_name,
+      type: existingInd.type,
+      target: existingInd.target,
+      unit: existingInd.unit,
+      actual: Number(existingInd.actual) || 0,
+      previous_actual: Number(existingInd.actual) || 0,
+      update_note: "",
+      history: indicators[i].history || [],
+      evidence: indicators[i].evidence || []
+    };
+
+    keptIndicatorIds.push(ind.id);
+    continue;
+  }
+
+  // Indikator baru: tetap boleh ditambahkan
+  const { count: existingCount } = await client
+  .from("project_indicators")
+  .select("id", { count: "exact", head: true })
+  .eq("project_name", p.name);
+
+const payload = {
+  project_name: p.name,
+  project_id: savedProjectRef,
+  indicator_name: ind.name.trim(),
+  type: ind.type,
+  target: Number(ind.target) || 0,
+  unit: ind.unit || null,
+  actual: Number(ind.actual) || 0,
+  sort_order: (existingCount || 0) + i,
+};
+
+  const { data: indData, error: indErr } = await client
+    .from("project_indicators")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (indErr) {
+    console.warn("Gagal simpan indikator baru:", indErr.message);
+    continue;
+  }
+
+  indicators[i].id = indData.id;
+  indicators[i].previous_actual = Number(ind.actual) || 0;
+  keptIndicatorIds.push(indData.id);
+
+  if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
+    const { data: newHistSaved } = await client
+      .from("indicator_updates")
+      .insert({
+        indicator_id: indData.id,
+        project_id: savedProjectRef,
+        project_name: p.name,
+        indicator_name: ind.name.trim(),
+        actual_value: Number(ind.actual) || 0,
+        note: ind.update_note ? ind.update_note.trim() : null,
+        updated_by: AUDIT_USER,
+      })
+      .select()
+      .single();
+
+    indicators[i].history = [
+      ...(indicators[i].history || []),
+      newHistSaved || {
+        indicator_id: indData.id,
+        actual_value: Number(ind.actual) || 0,
+        updated_by: AUDIT_USER,
+        created_at: new Date().toISOString()
+      }
+    ];
+    indicators[i].update_note = "";
+  }
+}
+
+// Jangan hapus indikator lama yang tidak ada lagi di form edit
+const removedIds = (originalIndicatorIds || []).filter(id => !keptIndicatorIds.includes(id));
+if (removedIds.length) {
+  console.info("Indikator lama dipertahankan, tidak dihapus:", removedIds);
+}
 
     // Rename propagasi otomatis via DB trigger: sync_project_name_on_rename
 
@@ -590,7 +646,10 @@ async function loadProjects() {
   }
   const msg = document.getElementById("projectLoadError");
   if (msg) msg.style.display = "none";
-  const { data: inds  } = await client.from("project_indicators").select();
+  const { data: inds } = await client
+  .from("project_indicators")
+  .select()
+  .order("created_at", { ascending: true });
   const { data: upds  } = await client.from("indicator_updates").select().order("created_at", { ascending: true });
   const { data: evids } = await client.from("indicator_evidence").select();
   const { data: actsData } = await client.from("project_activities").select("project_name,progress,status");
@@ -601,11 +660,18 @@ async function loadProjects() {
   const activeProjects = (projects || []).filter(proj => !proj.archived);
   const items = activeProjects.map(proj => ({
     ...proj,
-    project_indicators: (inds || []).filter(ind => ind.project_name === proj.name).map(ind => ({
-      ...ind,
-      indicator_updates : (upds  || []).filter(u => u.indicator_id === ind.id),
-      indicator_evidence: (evids || []).filter(e => e.indicator_id === ind.id),
-    })),
+    project_indicators: (inds || [])
+  .filter(ind => ind.project_name === proj.name)
+  .sort((a, b) => {
+    // Urutkan berdasarkan sort_order jika ada, fallback ke created_at
+    if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
+    return new Date(a.created_at) - new Date(b.created_at);
+  })
+  .map(ind => ({
+    ...ind,
+    indicator_updates : (upds || []).filter(u => u.indicator_id === ind.id),
+    indicator_evidence: (evids || []).filter(e => e.indicator_id === ind.id),
+  })),
     activities_summary: (actsData || []).filter(a => a.project_name === proj.name),
     activityCount: (actsData || []).filter(a => a.project_name === proj.name).length,
     budget_updates: (budgetHist || []).filter(b => b.project_name === proj.name),
