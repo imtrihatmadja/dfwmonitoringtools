@@ -70,12 +70,35 @@ function applyAuthUI(user) {
 
       loginBtn.style.display = "none";
       logoutBtn.style.display = "inline-flex";
+
+      // Tampilkan profile dropdown, sembunyikan login button
+const profileWrap = document.getElementById('profileDropdownWrap');
+if (profileWrap) profileWrap.style.display = 'block';
+const logoutInDd = document.getElementById('auth-logout-btn');
+if (logoutInDd) logoutInDd.style.display = 'flex';
+
+const name = user.user_metadata?.full_name || user.email || 'User';
+const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,3);
+['profileAvatar','profileAvatarDd'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = initials;
+});
+['profileName','profileNameDd'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = name;
+});
+const emailEl = document.getElementById('profileEmailDd');
+if (emailEl) emailEl.textContent = user.email || '—';
+      
     } else {
       userBadge.textContent = "";
       userBadge.style.display = "none";
 
       loginBtn.style.display = "inline-flex";
       logoutBtn.style.display = "none";
+
+      const profileWrap = document.getElementById('profileDropdownWrap');
+if (profileWrap) profileWrap.style.display = 'none';
     }
   }
 
