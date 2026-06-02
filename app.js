@@ -2256,3 +2256,47 @@ function renderStaffTable() {
       '</tr>';
   }).join("");
 }
+
+/* ===== PROFILE DROPDOWN ===== */
+function toggleProfileDropdown() {
+  const wrap = document.getElementById('profileDropdownWrap');
+  if (wrap) wrap.classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('profileDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+});
+
+/* ===== KPI TOPBAR SYNC ===== */
+function syncTopbarKpi() {
+  const map = {
+    kpiTotal:  'totalProjects',
+    kpiActive: 'activeProjects',
+    kpiLate:   'lateProjects',
+    kpiAvg:    'avgProgress'
+  };
+  Object.entries(map).forEach(([kpiId, srcId]) => {
+    const src = document.getElementById(srcId);
+    const dst = document.getElementById(kpiId);
+    if (!src || !dst) return;
+    dst.textContent = src.textContent || '—';
+    new MutationObserver(() => {
+      dst.textContent = src.textContent || '—';
+    }).observe(src, { childList: true, subtree: true, characterData: true });
+  });
+}
+
+/* ===== BACK BUTTON ===== */
+function updateBackBtn() {
+  const btn = document.getElementById('topbarBackBtn');
+  if (!btn) return;
+  const activeTab = document.querySelector('.tab-content.active');
+  const isDashboard = activeTab && activeTab.id === 'tab-dashboard';
+  btn.classList.toggle('hidden', !!isDashboard);
+}
+
+/* ===== INIT ===== */
+document.addEventListener('DOMContentLoaded', function() {
+  syncTopbarKpi();
+  updateBackBtn();
+});
