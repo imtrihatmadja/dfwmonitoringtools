@@ -1150,148 +1150,143 @@ try {
 };
 
 function renderDetailHeader(proj) {
-  const inds    = proj.project_indicators;
+  const safeProj = proj || {};
+  const inds = Array.isArray(safeProj.project_indicators) ? safeProj.project_indicators : [];
+  const outcomes = Array.isArray(safeProj.project_outcomes) ? safeProj.project_outcomes : [];
+  const budgetUpdates = Array.isArray(safeProj.budget_updates) ? safeProj.budget_updates : [];
+
   const indDone = inds.filter(ind => {
-    const actual = getLatestActual(ind);
-    const pct    = ind.target > 0 ? Math.round(actual / ind.target * 100) : 0;
+    const actual = getLatestActual(ind || {});
+    const target = Number(ind?.target) || 0;
+    const pct = target > 0 ? Math.round(actual / target * 100) : 0;
     return pct >= 100;
   }).length;
-  const cls    = proj.status.toLowerCase().replace(/\s+/g, "-");
+
+  const cls = (safeProj.status || 'aktif').toLowerCase().replace(/\s+/g, '-');
   const avgInd = inds.length
     ? Math.round(
         inds.reduce((a, ind) => {
-          const actual = getLatestActual(ind);
-          const pct    = ind.target > 0 ? Math.round(actual / ind.target * 100) : 0;
+          const actual = getLatestActual(ind || {});
+          const target = Number(ind?.target) || 0;
+          const pct = target > 0 ? Math.round(actual / target * 100) : 0;
           return a + Math.min(pct, 100);
         }, 0) / inds.length
       )
     : 0;
-  const overall   = calcOverallProgress(proj);
-  const ovColor   = progressColor(overall);
-  const ovLabel   = progressLabel(overall);
-  const avgActPct = calcAvgAktivitas(proj);
-  const avgIndPct = calcAvgIndikator(proj);
 
+  const overall = calcOverallProgress(safeProj || {});
+  const ovColor = progressColor(overall || 0);
+  const ovLabel = progressLabel(overall || 0);
+  const avgActPct = calcAvgAktivitas(safeProj);
+  const avgIndPct = calcAvgIndikator(safeProj);
+  const updatedAtLabel = safeProj.updated_at
+    ? new Date(safeProj.updated_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' })
+    : '-';
 
+  const detailHeaderEl = document.getElementById('detailHeader');
+  if (!detailHeaderEl) return;
 
-
-
-  
-  document.getElementById("detailHeader").innerHTML = `
-    <!-- Tombol Kembali + badge status -->
+  detailHeaderEl.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
-      <span class="badge badge-${cls}">${proj.status}</span>
+      <span class="badge badge-${cls}">${safeProj.status || 'Aktif'}</span>
       <button class="btn-secondary btn-sm" onclick="openEditProjectModal()" style="margin-left:auto">✏️ Edit Proyek</button>
-      <button class="btn-danger btn-sm" onclick="deleteProject('${proj.id}','${proj.name.replace(/'/g,"\\'")}')">🗑️ Arsipkan</button>
+      <button class="btn-remove" onclick="deleteProject('${safeProj.id || ''}','${String(safeProj.name || '').replace(/'/g, "\'")}')" title="Arsipkan proyek">🗑</button>
     </div>
 
-    <!-- 2-card layout -->
     <div class="detail-header-grid">
-
-      <!-- ── KIRI: Identitas + Goal + Outcomes ── -->
       <div class="detail-card detail-card-left">
-        <div class="detail-project-name">${proj.name}</div>
+        <div class="detail-project-name">${safeProj.name || '-'}</div>
         <div class="detail-meta" style="margin-top:6px;margin-bottom:10px">
-          <span>📍 ${proj.location}</span>
-          <span>👤 ${proj.owner}</span>
-          ${proj.donor    ? `<span>🏦 ${proj.donor}</span>`              : ""}
-          ${proj.deadline ? `<span>📅 Deadline: ${proj.deadline}</span>` : ""}
+          <span>📍 ${safeProj.location || '-'}</span>
+          <span>👤 ${safeProj.owner || '-'}</span>
+          ${safeProj.donor ? `<span>🏦 ${safeProj.donor}</span>` : ''}
+          ${safeProj.deadline ? `<span>📅 Deadline: ${safeProj.deadline}</span>` : ''}
         </div>
-        ${proj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${proj.description}</p>` : ""}
 
-        ${proj.goal ? `
-          <div class="dh-goal-box">
-            <div class="dh-section-label dh-label-blue">🎯 GOAL</div>
-            <div style="font-size:13px;color:#1e3a5f;line-height:1.6">Goal: ${proj.goal}</div>
-          </div>
-        ` : ""}
+        ${safeProj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${safeProj.description}</p>` : ''}
 
-        ${proj.project_outcomes && proj.project_outcomes.length ? `
-          <div class="dh-outcomes-box" style="margin-top:10px">
-            <div class="dh-section-label dh-label-purple">🏆 OUTCOMES</div>
+        <div class="dh-goal-box">
+          <div class="dh-section-label dh-label-blue">🎯 Goal</div>
+          <div style="font-size:13px;color:#1e3a5f;line-height:1.6">${safeProj.goal || 'Belum ada goal proyek.'}</div>
+        </div>
+
+        <div class="dh-outcomes-box">
+          <div class="dh-section-label dh-label-purple">🏆 Outcomes</div>
+          ${outcomes.length ? `
             <ol style="margin:6px 0 0;padding-left:18px">
-              ${proj.project_outcomes.map(o => `
+              ${outcomes.map(o => `
                 <li style="font-size:13px;color:#3b0764;line-height:1.5;margin-bottom:5px">
-                  <span style="color:#64748b;font-size:11px;display:block;margin-bottom:1px">Component / Outcome:</span>
-                  ${o.outcome_text}
+                  ${o.outcome_text || o.text || '-'}
                 </li>
-              `).join("")}
+              `).join('')}
             </ol>
-          </div>
-        ` : ""}
+          ` : `<div style="font-size:13px;color:#64748b;line-height:1.6">Belum ada outcome proyek.</div>`}
+        </div>
       </div>
 
-      <!-- ── KANAN: Progress + Stats + Anggaran ── -->
       <div class="detail-card detail-card-right">
-
-        <!-- Progress Keseluruhan -->
         <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08;margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
             <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
             <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
           </div>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px">
-            <span style="font-size:36px;font-weight:800;color:${ovColor};line-height:1">${overall}%</span>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:36px;font-weight:800;color:${ovColor};line-height:1">${overall || 0}%</span>
             <span style="font-size:11px;color:#94a3b8">rata-rata aktivitas &amp; indikator</span>
           </div>
           <div class="overall-progress-bar">
-            <div class="overall-progress-fill" style="width:${overall}%;background:${ovColor}"></div>
+            <div class="overall-progress-fill" style="width:${overall || 0}%;background:${ovColor}"></div>
           </div>
           <div class="overall-breakdown" style="margin-top:8px">
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#6366f1"></span>
               <span>Aktivitas</span>
-              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + "%" : "—"}</span>
+              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + '%' : '—'}</span>
             </div>
             <div class="overall-breakdown-sep">+</div>
             <div class="overall-breakdown-item">
               <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
               <span>Indikator</span>
-              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + "%" : "—"}</span>
+              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + '%' : '—'}</span>
             </div>
-            <div class="overall-breakdown-sep">÷ 2</div>
           </div>
         </div>
 
-        <!-- Stat cards -->
         <div class="detail-stats" style="margin-bottom:12px">
           <div class="detail-stat"><div class="detail-stat-label">Total Indikator</div><div class="detail-stat-value">${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
           <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
-          <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${new Date(proj.updated_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${updatedAtLabel}</div></div>
         </div>
 
-        <!-- Anggaran -->
-        ${(proj.budget_approved > 0 || proj.budget_actual > 0) ? `
-        <div class="detail-budget-box">
-          <div class="detail-budget-title">💰 Anggaran Proyek</div>
-          <div class="detail-budget-row">
-            <span>Disetujui</span>
-            <strong>${formatRupiah(proj.budget_approved)}</strong>
-          </div>
-          <div class="detail-budget-row">
-            <span>Realisasi</span>
-            <strong style="color:#f59e0b">${formatRupiah(proj.budget_actual)}
-              ${proj.budget_approved > 0 ? `<span class="budget-pct">${pctBudget(proj.budget_approved, proj.budget_actual)}%</span>` : ""}
-            </strong>
-          </div>
-          <div class="progress-bar" style="height:6px;margin:6px 0 4px">
-            <div class="progress-fill" style="width:${Math.min(pctBudget(proj.budget_approved, proj.budget_actual),100)}%;background:#f59e0b"></div>
-          </div>
-          ${proj.budget_updates && proj.budget_updates.length ? `
-          <div class="detail-budget-history">
-            <div class="detail-budget-history-title">Riwayat Update Realisasi</div>
-            ${[...proj.budget_updates].reverse().slice(0,5).map(b => `
-              <div class="mini-history-item">
-                <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
-                <span class="mini-history-note">${b.note || ""}</span>
-                <span class="mini-history-date">${new Date(b.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
-              </div>`).join("")}
-            ${proj.budget_updates.length > 5 ? `<div class="mini-history-more">${proj.budget_updates.length - 5} update lainnya</div>` : ""}
-          </div>` : ""}
-        </div>` : ""}
-
+        ${(Number(safeProj.budget_approved) > 0 || Number(safeProj.budget_actual) > 0) ? `
+          <div class="detail-budget-box">
+            <div class="detail-budget-title">💰 Anggaran Proyek</div>
+            <div class="detail-budget-row">
+              <span>Disetujui</span>
+              <strong>${formatRupiah(Number(safeProj.budget_approved) || 0)}</strong>
+            </div>
+            <div class="detail-budget-row">
+              <span>Realisasi</span>
+              <strong style="color:#f59e0b">${formatRupiah(Number(safeProj.budget_actual) || 0)}
+                ${Number(safeProj.budget_approved) > 0 ? `<span class="budget-pct">${pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0)}%</span>` : ''}
+              </strong>
+            </div>
+            <div class="progress-bar" style="height:6px;margin:6px 0 4px">
+              <div class="progress-fill" style="width:${Math.min(pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0),100)}%;background:#f59e0b"></div>
+            </div>
+            ${budgetUpdates.length ? `
+              <div class="detail-budget-history">
+                <div class="detail-budget-history-title">Riwayat Update Realisasi</div>
+                ${[...budgetUpdates].reverse().slice(0,5).map(b => `
+                  <div class="mini-history-item">
+                    <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
+                    <span class="mini-history-note">${b.note || ''}</span>
+                    <span class="mini-history-date">${b.created_at ? new Date(b.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</span>
+                  </div>`).join('')}
+              </div>` : ''}
+          </div>` : ''}
       </div>
     </div>`;
 }
