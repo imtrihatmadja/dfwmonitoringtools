@@ -988,10 +988,7 @@
     </div>
   </div>
 </div>
-
-
-
-
+  
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
   <script src="app_sprint4.js?v100"></script>
@@ -1002,6 +999,7 @@
   <script src="documents.js"></script>
   <script src="impact.js"></script>
   <script src="print-report.js"></script>
+  
 <script>
 function toggleSidebar(){
   const s=document.getElementById('mainSidebar');
@@ -1015,6 +1013,96 @@ function closeSidebar(){
   if(s) s.classList.remove('open');
   if(o) o.classList.remove('open');
 }
+
+/* ===== PROFILE DROPDOWN ===== */
+function toggleProfileDropdown() {
+  const wrap = document.getElementById('profileDropdownWrap');
+  if (!wrap) return;
+  wrap.classList.toggle('open');
+}
+
+// Tutup dropdown kalau klik di luar
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('profileDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    wrap.classList.remove('open');
+  }
+});
+
+/* ===== SYNC KPI TOPBAR dari stat cards ===== */
+function syncTopbarKpi() {
+  const map = {
+    kpiTotal:  'totalProjects',
+    kpiActive: 'activeProjects',
+    kpiLate:   'lateProjects',
+    kpiAvg:    'avgProgress'
+  };
+  Object.entries(map).forEach(([kpiId, srcId]) => {
+    const src = document.getElementById(srcId);
+    const dst = document.getElementById(kpiId);
+    if (src && dst) {
+      dst.textContent = src.textContent || '—';
+      // Observe perubahan
+      new MutationObserver(() => {
+        dst.textContent = src.textContent || '—';
+      }).observe(src, { childList: true, subtree: true, characterData: true });
+    }
+  });
+}
+
+/* ===== SHOW/HIDE BACK BUTTON ===== */
+function updateBackBtn() {
+  const btn = document.getElementById('topbarBackBtn');
+  if (!btn) return;
+  // Tampilkan back button saat bukan di tab dashboard
+  const activeTab = document.querySelector('.tab-content.active');
+  const isDashboard = activeTab && activeTab.id === 'tab-dashboard';
+  btn.classList.toggle('hidden', isDashboard || history.length <= 1);
+}
+
+// Apply auth UI — update profile dropdown juga
+function applyAuthUI(user) {
+  const loginBtn   = document.getElementById('auth-login-btn');
+  const profileWrap = document.getElementById('profileDropdownWrap');
+  const logoutBtn  = document.getElementById('auth-logout-btn');
+
+  if (user) {
+    if (loginBtn)    loginBtn.style.display = 'none';
+    if (profileWrap) profileWrap.style.display = 'block';
+    if (logoutBtn)   logoutBtn.style.display = 'flex';
+
+    const name  = user.user_metadata?.full_name || user.email || 'User';
+    const email = user.email || '';
+    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3);
+
+    ['profileAvatar','profileAvatarDd'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = initials;
+    });
+    ['profileName','profileNameDd'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = name;
+    });
+    const emailEl = document.getElementById('profileEmailDd');
+    if (emailEl) emailEl.textContent = email;
+
+    const roleEl = document.getElementById('profileRole');
+    if (roleEl) roleEl.textContent = 'Program Director';
+
+  } else {
+    if (loginBtn)    loginBtn.style.display = 'inline-flex';
+    if (profileWrap) profileWrap.style.display = 'none';
+    if (logoutBtn)   logoutBtn.style.display = 'none';
+  }
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', function() {
+  syncTopbarKpi();
+  updateBackBtn();
+});
+
+
 </script>
 
   <!-- PRINT LANGUAGE MODAL -->
