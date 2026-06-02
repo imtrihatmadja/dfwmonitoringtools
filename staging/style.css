@@ -811,9 +811,16 @@ table { min-width: 520px; }
   .stat-card { padding: 14px 12px; }
   .stat-value { font-size: 26px; }
 
-  /* Project cards grid: 1 column */
-  .proj-card-grid { grid-template-columns: 1fr !important; gap: 12px; }
-  .proj-card { padding: 14px; }
+  /* Project cards grid: responsive columns */
+.proj-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.proj-card {
+  padding: 14px;
+}
 
   /* Detail header: stack vertically */
   .detail-header > div:first-child {
