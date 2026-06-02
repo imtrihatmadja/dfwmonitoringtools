@@ -332,6 +332,8 @@ document.querySelectorAll(".nav-links li").forEach(li => {
 });
 window.switchTab = switchTab;
 
+
+
 // ===================== STEP WIZARD (2 LANGKAH) =====================
 function setStep(n) {
   [1, 2].forEach(i => {
@@ -1024,6 +1026,129 @@ window.renderProjectReflectionsPanel = function () {
 };
 
 
+window.saveProjectReflection = async function () {
+const client = window.client || client;
+if (!currentProject || !client || typeof client.from !== "function") return;
+
+const projId = currentProject.id;
+const dateEl   = document.getElementById('pr-reflection-date');
+const typeEl   = document.getElementById('pr-reflection-type');
+const titleEl  = document.getElementById('pr-reflection-title');
+const whatEl   = document.getElementById('pr-what-happened');
+const workEl   = document.getElementById('pr-what-worked');
+const didntEl  = document.getElementById('pr-what-didnt');
+const lessonEl = document.getElementById('pr-lesson');
+const nextEl   = document.getElementById('pr-next-steps');
+const msgEl    = document.getElementById('pr-reflection-msg');
+
+const reflection_date = dateEl?.value || new Date().toISOString().slice(0,10);
+const type            = typeEl?.value || 'lesson';
+const title           = (titleEl?.value || '').trim();
+const what_happened   = (whatEl?.value || '').trim();
+const what_worked     = (workEl?.value || '').trim();
+const what_didnt      = (didntEl?.value || '').trim();
+const lesson_learned  = (lessonEl?.value || '').trim();
+const next_steps      = (nextEl?.value || '').trim();
+
+if (!lesson_learned && !what_happened) {
+  if (msgEl) {
+  msgEl.textContent = 'Isi minimal \"Apa yang terjadi\" atau \"Pelajaran utama\".';
+  msgEl.className = 'form-msg error';
+  }
+  return;
+}
+
+if (msgEl) {
+  msgEl.textContent = '';
+  msgEl.className = 'form-msg hidden';
+}
+
+try {
+  const payload = {
+  project_id: projId,
+  reflection_date,
+  type,
+  title: title || null,
+  what_happened: what_happened || null,
+  what_worked: what_worked || null,
+  what_didnt: what_didnt || null,
+  lesson_learned: lesson_learned || null,
+  next_steps: next_steps || null,
+  tags: null,
+  created_by: AUDIT_USER || null
+  };
+
+  const { error } = await client
+  .from('project_reflections')
+  .insert(payload);
+
+  if (error) {
+  console.error('saveProjectReflection error:', error.message);
+  if (msgEl) {
+    msgEl.textContent = 'Gagal menyimpan refleksi: ' + error.message;
+    msgEl.className = 'form-msg error';
+  }
+  return;
+  }
+
+  // kosongkan form
+  if (titleEl)  titleEl.value  = '';
+  if (whatEl)   whatEl.value   = '';
+  if (workEl)   workEl.value   = '';
+  if (didntEl)  didntEl.value  = '';
+  if (lessonEl) lessonEl.value = '';
+  if (nextEl)   nextEl.value   = '';
+
+  if (msgEl) {
+  msgEl.textContent = 'Refleksi tersimpan.';
+  msgEl.className = 'form-msg success';
+  setTimeout(() => {
+    msgEl.className = 'form-msg hidden';
+  }, 1200);
+  }
+
+  await loadProjectReflections(projId);
+} catch (e) {
+  console.error('saveProjectReflection exception:', e);
+  if (msgEl) {
+  msgEl.textContent = 'Terjadi error tak terduga.';
+  msgEl.className = 'form-msg error';
+  }
+}
+};
+
+window.deleteProjectReflection = async function (id) {
+if (!id) return;
+if (!currentProject || !currentProject.id) return;
+if (!confirm('Hapus catatan refleksi ini?')) return;
+
+const c = window.client || client;
+if (!c || typeof c.from !== "function") return;
+
+try {
+  const { error } = await c
+  .from("project_reflections")
+  .delete()
+  .eq("id", id)
+  .eq("project_id", currentProject.id);
+
+  if (error) {
+  console.error("deleteProjectReflection error:", error.message);
+  alert("Gagal menghapus: " + error.message);
+  return;
+  }
+
+  projectReflections = projectReflections.filter(r => r.id !== id);
+  if (typeof window.renderProjectReflectionsPanel === "function") {
+  window.renderProjectReflectionsPanel();
+  }
+  await loadProjects();
+} catch (e) {
+  console.error("deleteProjectReflection exception:", e);
+  alert("Terjadi error saat menghapus refleksi.");
+}
+};
+
 function renderDetailHeader(proj) {
   const inds    = proj.project_indicators;
   const indDone = inds.filter(ind => {
@@ -1047,6 +1172,11 @@ function renderDetailHeader(proj) {
   const avgActPct = calcAvgAktivitas(proj);
   const avgIndPct = calcAvgIndikator(proj);
 
+
+
+
+
+  
   document.getElementById("detailHeader").innerHTML = `
     <!-- Tombol Kembali + badge status -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
@@ -1165,133 +1295,6 @@ function renderDetailHeader(proj) {
       </div>
     </div>`;
 }
-
-window.saveProjectReflection = async function () {
-  const client = window.client || client;
-  if (!currentProject || !client || typeof client.from !== "function") return;
-
-  const projId = currentProject.id;
-  const dateEl   = document.getElementById('pr-reflection-date');
-  const typeEl   = document.getElementById('pr-reflection-type');
-  const titleEl  = document.getElementById('pr-reflection-title');
-  const whatEl   = document.getElementById('pr-what-happened');
-  const workEl   = document.getElementById('pr-what-worked');
-  const didntEl  = document.getElementById('pr-what-didnt');
-  const lessonEl = document.getElementById('pr-lesson');
-  const nextEl   = document.getElementById('pr-next-steps');
-  const msgEl    = document.getElementById('pr-reflection-msg');
-
-  const reflection_date = dateEl?.value || new Date().toISOString().slice(0,10);
-  const type            = typeEl?.value || 'lesson';
-  const title           = (titleEl?.value || '').trim();
-  const what_happened   = (whatEl?.value || '').trim();
-  const what_worked     = (workEl?.value || '').trim();
-  const what_didnt      = (didntEl?.value || '').trim();
-  const lesson_learned  = (lessonEl?.value || '').trim();
-  const next_steps      = (nextEl?.value || '').trim();
-
-  if (!lesson_learned && !what_happened) {
-    if (msgEl) {
-      msgEl.textContent = 'Isi minimal \"Apa yang terjadi\" atau \"Pelajaran utama\".';
-      msgEl.className = 'form-msg error';
-    }
-    return;
-  }
-
-  if (msgEl) {
-    msgEl.textContent = '';
-    msgEl.className = 'form-msg hidden';
-  }
-
-  try {
-    const payload = {
-      project_id: projId,
-      reflection_date,
-      type,
-      title: title || null,
-      what_happened: what_happened || null,
-      what_worked: what_worked || null,
-      what_didnt: what_didnt || null,
-      lesson_learned: lesson_learned || null,
-      next_steps: next_steps || null,
-      tags: null,
-      created_by: AUDIT_USER || null
-    };
-
-    const { error } = await client
-      .from('project_reflections')
-      .insert(payload);
-
-    if (error) {
-      console.error('saveProjectReflection error:', error.message);
-      if (msgEl) {
-        msgEl.textContent = 'Gagal menyimpan refleksi: ' + error.message;
-        msgEl.className = 'form-msg error';
-      }
-      return;
-    }
-
-    // kosongkan form
-    if (titleEl)  titleEl.value  = '';
-    if (whatEl)   whatEl.value   = '';
-    if (workEl)   workEl.value   = '';
-    if (didntEl)  didntEl.value  = '';
-    if (lessonEl) lessonEl.value = '';
-    if (nextEl)   nextEl.value   = '';
-
-    if (msgEl) {
-      msgEl.textContent = 'Refleksi tersimpan.';
-      msgEl.className = 'form-msg success';
-      setTimeout(() => {
-        msgEl.className = 'form-msg hidden';
-      }, 1200);
-    }
-
-    await loadProjectReflections(projId);
-  } catch (e) {
-    console.error('saveProjectReflection exception:', e);
-    if (msgEl) {
-      msgEl.textContent = 'Terjadi error tak terduga.';
-      msgEl.className = 'form-msg error';
-    }
-  }
-};
-
-window.deleteProjectReflection = async function (id) {
-  if (!id) return;
-  if (!currentProject || !currentProject.id) return;
-  if (!confirm('Hapus catatan refleksi ini?')) return;
-
-  const c = window.client || client;
-  if (!c || typeof c.from !== "function") return;
-
-  try {
-    const { error } = await c
-      .from("project_reflections")
-      .delete()
-      .eq("id", id)
-      .eq("project_id", currentProject.id);
-
-    if (error) {
-      console.error("deleteProjectReflection error:", error.message);
-      alert("Gagal menghapus: " + error.message);
-      return;
-    }
-
-    projectReflections = projectReflections.filter(r => r.id !== id);
-    if (typeof window.renderProjectReflectionsPanel === "function") {
-      window.renderProjectReflectionsPanel();
-    }
-    await loadProjects();
-  } catch (e) {
-    console.error("deleteProjectReflection exception:", e);
-    alert("Terjadi error saat menghapus refleksi.");
-  }
-};
-
-
-
-
 
 // ===================== INDICATOR UPDATE PANEL =====================
 function renderIndicatorUpdatePanel(proj) {
