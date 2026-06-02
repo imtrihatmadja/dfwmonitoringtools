@@ -70,35 +70,12 @@ function applyAuthUI(user) {
 
       loginBtn.style.display = "none";
       logoutBtn.style.display = "inline-flex";
-
-      // Tampilkan profile dropdown, sembunyikan login button
-const profileWrap = document.getElementById('profileDropdownWrap');
-if (profileWrap) profileWrap.style.display = 'block';
-const logoutInDd = document.getElementById('auth-logout-btn');
-if (logoutInDd) logoutInDd.style.display = 'flex';
-
-const name = user.user_metadata?.full_name || user.email || 'User';
-const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,3);
-['profileAvatar','profileAvatarDd'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.textContent = initials;
-});
-['profileName','profileNameDd'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.textContent = name;
-});
-const emailEl = document.getElementById('profileEmailDd');
-if (emailEl) emailEl.textContent = user.email || '—';
-      
     } else {
       userBadge.textContent = "";
       userBadge.style.display = "none";
 
       loginBtn.style.display = "inline-flex";
       logoutBtn.style.display = "none";
-
-      const profileWrap = document.getElementById('profileDropdownWrap');
-if (profileWrap) profileWrap.style.display = 'none';
     }
   }
 
@@ -963,7 +940,7 @@ window.openProjectDetail = async function (proj) {
 // ===================== PROJECT REFLECTIONS (SPRINT 3) =====================
 
 async function loadProjectReflections(projectId) {
-  const client = window.client || client;
+  const c = window.client || client;
   projectReflections = [];
   if (!projectId || !client || typeof client.from !== "function") return [];
 
@@ -1050,8 +1027,8 @@ window.renderProjectReflectionsPanel = function () {
 
 
 window.saveProjectReflection = async function () {
-const client = window.client || client;
-if (!currentProject || !client || typeof client.from !== "function") return;
+const c = window.client || client;
+if (!currentProject || !c || typeof c.from !== "function") return;
 
 const projId = currentProject.id;
 const dateEl   = document.getElementById('pr-reflection-date');
@@ -2279,47 +2256,3 @@ function renderStaffTable() {
       '</tr>';
   }).join("");
 }
-
-/* ===== PROFILE DROPDOWN ===== */
-function toggleProfileDropdown() {
-  const wrap = document.getElementById('profileDropdownWrap');
-  if (wrap) wrap.classList.toggle('open');
-}
-document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('profileDropdownWrap');
-  if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
-});
-
-/* ===== KPI TOPBAR SYNC ===== */
-function syncTopbarKpi() {
-  const map = {
-    kpiTotal:  'totalProjects',
-    kpiActive: 'activeProjects',
-    kpiLate:   'lateProjects',
-    kpiAvg:    'avgProgress'
-  };
-  Object.entries(map).forEach(([kpiId, srcId]) => {
-    const src = document.getElementById(srcId);
-    const dst = document.getElementById(kpiId);
-    if (!src || !dst) return;
-    dst.textContent = src.textContent || '—';
-    new MutationObserver(() => {
-      dst.textContent = src.textContent || '—';
-    }).observe(src, { childList: true, subtree: true, characterData: true });
-  });
-}
-
-/* ===== BACK BUTTON ===== */
-function updateBackBtn() {
-  const btn = document.getElementById('topbarBackBtn');
-  if (!btn) return;
-  const activeTab = document.querySelector('.tab-content.active');
-  const isDashboard = activeTab && activeTab.id === 'tab-dashboard';
-  btn.classList.toggle('hidden', !!isDashboard);
-}
-
-/* ===== INIT ===== */
-document.addEventListener('DOMContentLoaded', function() {
-  syncTopbarKpi();
-  updateBackBtn();
-});
