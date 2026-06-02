@@ -31,6 +31,7 @@ textarea{resize:vertical}
 .page-subtitle{font-size:12px;color:#94a3b8;margin-top:2px}
 .topbar-right{display:flex;align-items:center;gap:10px}
 .realtime-badge{font-size:11px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:20px;padding:4px 10px;font-weight:600}
+.auth-controls {display: flex;align-items: center;gap: 8px;}
 
 /* ===================== TAB CONTENT ===================== */
 .tab-content{display:none;padding:24px 28px;flex:1}
