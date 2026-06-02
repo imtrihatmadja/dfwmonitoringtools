@@ -58,118 +58,42 @@
 <div class="main">
 
   <!-- TOPBAR -->
-<div class="topbar">
-
-  <!-- KIRI: Toggle + Back + Title -->
-  <div class="topbar-left">
-    <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-
-    <!-- Back Button (hidden by default, shown via JS) -->
-    <button class="topbar-back-btn hidden" id="topbarBackBtn" onclick="history.back()" title="Kembali">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-    </button>
-
-    <div class="topbar-page-info">
-      <div class="page-title" id="pageTitle">Dashboard</div>
-      <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
-    </div>
-  </div>
-
-  <!-- TENGAH: KPI Quick View -->
-  <div class="topbar-kpi" id="topbarKpi">
-    <div class="kpi-pill">
-      <span class="kpi-icon">📁</span>
-      <span class="kpi-label">Total</span>
-      <span class="kpi-value" id="kpiTotal">—</span>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-pill">
-      <span class="kpi-icon kpi-dot green"></span>
-      <span class="kpi-label">Aktif</span>
-      <span class="kpi-value kpi-green" id="kpiActive">—</span>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-pill">
-      <span class="kpi-icon kpi-dot red"></span>
-      <span class="kpi-label">Terlambat</span>
-      <span class="kpi-value kpi-red" id="kpiLate">—</span>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-pill">
-      <span class="kpi-icon">📈</span>
-      <span class="kpi-label">Avg.</span>
-      <span class="kpi-value kpi-blue" id="kpiAvg">—</span>
-    </div>
-  </div>
-
-  <!-- KANAN: Status + Actions + Profile -->
-  <div class="topbar-right">
-
-    <!-- Realtime Pulse Badge -->
-    <span class="realtime-badge" id="realtimeBadge">
-      <span class="pulse-dot"></span>
-      Realtime ON
-    </span>
-
-    <!-- Refresh Button -->
-    <button class="topbar-icon-btn" id="refreshBtn" title="Refresh data"
-      onclick="if(typeof loadProjects==='function')loadProjects(); if(typeof loadIssues==='function')loadIssues();">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-    </button>
-
-    <!-- Print (hidden by default) -->
-    <button class="topbar-icon-btn" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan" style="display:none">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-    </button>
-
-    <!-- AUTH CONTROLS -->
-    <div class="auth-controls">
-      <!-- Login Google Button -->
-      <button id="auth-login-btn" type="button" class="btn-google" onclick="signInWithGoogle()">
-        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-        Login Google
-      </button>
-
-      <!-- User badge (shown when logged in) -->
-      <span id="auth-user-badge" style="display:none;"></span>
-
-      <!-- Profile Dropdown (shown when logged in) -->
-      <div class="profile-dropdown-wrap" id="profileDropdownWrap" style="display:none;">
-        <button class="profile-btn" onclick="toggleProfileDropdown()" id="profileBtn">
-          <div class="profile-avatar" id="profileAvatar">DFW</div>
-          <div class="profile-info">
-            <div class="profile-name" id="profileName">DFW Indonesia</div>
-            <div class="profile-role" id="profileRole">Program Director</div>
-          </div>
-          <svg class="profile-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="profile-dropdown" id="profileDropdown">
-          <div class="profile-dropdown-header">
-            <div class="profile-avatar lg" id="profileAvatarDd">DFW</div>
-            <div>
-              <div class="profile-dropdown-name" id="profileNameDd">DFW Indonesia</div>
-              <div class="profile-dropdown-email" id="profileEmailDd">program@dfw.id</div>
-            </div>
-          </div>
-          <div class="profile-dropdown-divider"></div>
-          <button class="profile-dropdown-item" onclick="openSettingsModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Pengaturan
-          </button>
-          <div class="profile-dropdown-divider"></div>
-          <button class="profile-dropdown-item danger" id="auth-logout-btn" onclick="signOutGoogle()" style="display:none;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Logout
-          </button>
-        </div>
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+      <div class="topbar-page-info">
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
       </div>
     </div>
-  </div>
+        <div class="topbar-right">
+      <span class="realtime-badge">🟢 Realtime ON</span>
+      <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
+      <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
 
-</div>
-<!-- END TOPBAR -->
+      <!-- AUTH CONTROLS -->
+      <div class="auth-controls">
+        <button id="auth-login-btn"
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="signInWithGoogle()">
+          Login Google
+        </button>
+
+        <span id="auth-user-badge"
+              style="display:none; padding:2px 8px; border-radius:999px; background:#e5e7eb; font-size:0.85rem;">
+          <!-- diisi oleh applyAuthUI -->
+        </span>
+
+        <button id="auth-logout-btn"
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="signOutGoogle()"
+                style="display:none;">
+          Logout
+        </button>
+      </div>
+    </div>
 
   <!-- TAB DASHBOARD -->
   <div id="tab-dashboard" class="tab-content active">
@@ -988,473 +912,905 @@
     </div>
   </div>
 </div>
-  
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js"></script>
-  <script src="app_sprint4.js?v100"></script>
-  <script src="issues.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="import.js"></script>
-  <script src="beneficiary.js"></script>
-  <script src="documents.js"></script>
-  <script src="impact.js"></script>
-  <script src="print-report.js"></script>
-  
-<script>
-function toggleSidebar(){
-  const s=document.getElementById('mainSidebar');
-  const o=document.getElementById('sidebarOverlay');
-  if(s) s.classList.toggle('open');
-  if(o) o.classList.toggle('open');
-}
-function closeSidebar(){
-  const s=document.getElementById('mainSidebar');
-  const o=document.getElementById('sidebarOverlay');
-  if(s) s.classList.remove('open');
-  if(o) o.classList.remove('open');
-}
-
-/* ===== PROFILE DROPDOWN ===== */
-function toggleProfileDropdown() {
-  const wrap = document.getElementById('profileDropdownWrap');
-  if (!wrap) return;
-  wrap.classList.toggle('open');
-}
-
-// Tutup dropdown kalau klik di luar
-document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('profileDropdownWrap');
-  if (wrap && !wrap.contains(e.target)) {
-    wrap.classList.remove('open');
-  }
-});
-
-/* ===== SYNC KPI TOPBAR dari stat cards ===== */
-function syncTopbarKpi() {
-  const map = {
-    kpiTotal:  'totalProjects',
-    kpiActive: 'activeProjects',
-    kpiLate:   'lateProjects',
-    kpiAvg:    'avgProgress'
-  };
-  Object.entries(map).forEach(([kpiId, srcId]) => {
-    const src = document.getElementById(srcId);
-    const dst = document.getElementById(kpiId);
-    if (src && dst) {
-      dst.textContent = src.textContent || '—';
-      // Observe perubahan
-      new MutationObserver(() => {
-        dst.textContent = src.textContent || '—';
-      }).observe(src, { childList: true, subtree: true, characterData: true });
-    }
-  });
-}
-
-/* ===== SHOW/HIDE BACK BUTTON ===== */
-function updateBackBtn() {
-  const btn = document.getElementById('topbarBackBtn');
-  if (!btn) return;
-  // Tampilkan back button saat bukan di tab dashboard
-  const activeTab = document.querySelector('.tab-content.active');
-  const isDashboard = activeTab && activeTab.id === 'tab-dashboard';
-  btn.classList.toggle('hidden', isDashboard || history.length <= 1);
-}
-
-// Apply auth UI — update profile dropdown juga
-function applyAuthUI(user) {
-  const loginBtn   = document.getElementById('auth-login-btn');
-  const profileWrap = document.getElementById('profileDropdownWrap');
-  const logoutBtn  = document.getElementById('auth-logout-btn');
-
-  if (user) {
-    if (loginBtn)    loginBtn.style.display = 'none';
-    if (profileWrap) profileWrap.style.display = 'block';
-    if (logoutBtn)   logoutBtn.style.display = 'flex';
-
-    const name  = user.user_metadata?.full_name || user.email || 'User';
-    const email = user.email || '';
-    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3);
-
-    ['profileAvatar','profileAvatarDd'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = initials;
-    });
-    ['profileName','profileNameDd'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = name;
-    });
-    const emailEl = document.getElementById('profileEmailDd');
-    if (emailEl) emailEl.textContent = email;
-
-    const roleEl = document.getElementById('profileRole');
-    if (roleEl) roleEl.textContent = 'Program Director';
-
-  } else {
-    if (loginBtn)    loginBtn.style.display = 'inline-flex';
-    if (profileWrap) profileWrap.style.display = 'none';
-    if (logoutBtn)   logoutBtn.style.display = 'none';
-  }
-}
-
-// Init on load
-document.addEventListener('DOMContentLoaded', function() {
-  syncTopbarKpi();
-  updateBackBtn();
-});
 
 
-</script>
 
-  <!-- PRINT LANGUAGE MODAL -->
-  <div id="printLangModal" class="modal-overlay hidden">
-    <div class="modal-box" style="max-width:480px">
-      <div class="modal-header">
-        <span style="font-size:15px;font-weight:700">🖨️ Generate Laporan Proyek</span>
-        <button class="modal-close" onclick="closePrintModal()">✕</button>
+
+  <!-- MAIN -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+      <div class="topbar-page-info">
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
       </div>
-      <div class="modal-body" style="padding:20px 24px">
+    </div>
+        <div class="topbar-right">
+      <span class="realtime-badge">🟢 Realtime ON</span>
+      <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
+      <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
 
-        <!-- Preset periode -->
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;letter-spacing:.3px">📅 PERIODE LAPORAN</div>
-          <div class="print-preset-grid" id="printPresetGrid">
-            <button class="print-preset-btn" onclick="setPrintPreset('week',this)">Minggu Ini</button>
-            <button class="print-preset-btn" onclick="setPrintPreset('2week',this)">2 Minggu</button>
-            <button class="print-preset-btn active" onclick="setPrintPreset('month',this)">Bulan Ini</button>
-            <button class="print-preset-btn" onclick="setPrintPreset('quarter',this)">3 Bulan</button>
-            <button class="print-preset-btn" onclick="setPrintPreset('half',this)">6 Bulan</button>
-            <button class="print-preset-btn" onclick="setPrintPreset('custom',this)">Custom</button>
-          </div>
-        </div>
+      <!-- AUTH CONTROLS -->
+      <div class="auth-controls">
+        <button id="auth-login-btn"
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="signInWithGoogle()">
+          Login Google
+        </button>
 
-        <!-- Date range -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px">Dari Tanggal</label>
-            <input type="date" id="printDateFrom" class="form-control"
-              style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px"
-              onchange="clearPresetActive()" />
-          </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px">Sampai Tanggal</label>
-            <input type="date" id="printDateTo" class="form-control"
-              style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px"
-              onchange="clearPresetActive()" />
-          </div>
-        </div>
+        <span id="auth-user-badge"
+              style="display:none; padding:2px 8px; border-radius:999px; background:#e5e7eb; font-size:0.85rem;">
+          <!-- diisi oleh applyAuthUI -->
+        </span>
 
-        <!-- Info periode -->
-        <div id="printPeriodInfo" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#0369a1">
-          ℹ️ Laporan akan merangkum semua update data (indikator, aktivitas, anggaran, hambatan) yang tercatat pada periode yang dipilih.
-        </div>
-
-        <!-- Pilih bahasa -->
-        <div style="margin-bottom:4px">
-          <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;letter-spacing:.3px">🌐 BAHASA LAPORAN</div>
-          <div style="display:flex;gap:10px">
-            <button class="btn-primary" style="flex:1;padding:11px;font-size:13px"
-              onclick="generateAndPrint('id')">🇮🇩 Bahasa Indonesia</button>
-            <button class="btn-secondary" style="flex:1;padding:11px;font-size:13px"
-              onclick="generateAndPrint('en')">🇬🇧 English</button>
-          </div>
-        </div>
-
+        <button id="auth-logout-btn"
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="signOutGoogle()"
+                style="display:none;">
+          Logout
+        </button>
       </div>
-      <div style="padding:10px 24px 16px;display:flex;justify-content:flex-end">
-        <button class="btn-secondary btn-sm" onclick="closePrintModal()">Batal</button>
-      </div>
+    </div>
+
+  <!-- TAB DASHBOARD -->
+  <div id="tab-dashboard" class="tab-content active">
+    <div class="stat-grid">
+      <div class="stat-card blue"><div class="stat-label">Total Proyek</div><div class="stat-value" id="totalProjects"></div></div>
+      <div class="stat-card green"><div class="stat-label">Aktif</div><div class="stat-value" id="activeProjects"></div></div>
+      <div class="stat-card red"><div class="stat-label">Terlambat</div><div class="stat-value" id="lateProjects"></div></div>
+      <div class="stat-card orange"><div class="stat-label">Avg. Progress</div><div class="stat-value" id="avgProgress"></div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="section-title" style="margin:0">Proyek <span id="projectCount" style="font-size:12px;color:#94a3b8;font-weight:500"></span></div>
+      <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ Tambah Proyek</button>
+    </div>
+    <div id="projectLoadError" style="display:none;background:#fee2e2;color:#991b1b;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;font-weight:600;border:1px solid #fca5a5"></div>
+    <div class="proj-card-grid" id="projectCards"></div>
+  </div>
+
+  <!-- TAB DAFTAR PROYEK -->
+  <div id="tab-projects" class="tab-content">
+    <div class="table-toolbar">
+      <input type="text" class="search-input" id="searchInput" placeholder="🔍 Cari nama proyek, lokasi, PIC…">
+      <button class="btn-secondary btn-sm" onclick="openImportModal()">
+        <i class="fa-solid fa-file-import"></i> Import Excel/CSV
+      </button>
+      <button class="btn-primary btn-sm" onclick="switchTab('input')">＋ Tambah Proyek</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Nama Proyek</th><th>Lokasi</th><th>Penanggung Jawab</th><th>Status</th><th>Progress</th><th>Deadline</th><th>Update</th><th>Aksi</th></tr></thead>
+        <tbody id="projectTable"></tbody>
+      </table>
     </div>
   </div>
 
-<!-- ===== MODAL IMPORT EXCEL/CSV ===== -->
-<div id="importModalOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:780px;width:95vw">
-    <div class="modal-header">
-      <span><i class="fa-solid fa-file-import" style="color:#2563eb;margin-right:8px"></i>Import Data dari Excel / CSV</span>
-      <button class="modal-close" onclick="closeImportModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <div style="font-size:12px;color:#1d4ed8;line-height:1.6">
-          <strong>📥 Format yang didukung:</strong> .xlsx, .xls, .csv<br>
-          File Excel harus memiliki 2 sheet: <strong>Proyek</strong> dan <strong>Indikator</strong>
-        </div>
-        <button class="btn-secondary btn-sm" onclick="downloadImportTemplate()">
-          <i class="fa-solid fa-download"></i> Download Template
-        </button>
-      </div>
-      <div id="importDropzone" class="file-dropzone"
-           onclick="document.getElementById('importFileInput').click()"
-           style="margin-bottom:16px;cursor:pointer">
-        <div class="file-dropzone-icon">📊</div>
-        <div class="file-dropzone-text">Drag &amp; drop file Excel/CSV di sini, atau <strong>klik untuk pilih</strong></div>
-        <div class="file-dropzone-hint">.xlsx, .xls, atau .csv — maks 5 MB</div>
-        <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
-      </div>
-      <div id="importStatusMsg" class="form-msg hidden"></div>
-      <div id="importPreviewArea"></div>
-      <div class="form-actions" style="margin-top:16px">
-        <button class="btn-secondary" onclick="closeImportModal()">Batal</button>
-        <button class="btn-primary hidden" id="importConfirmBtn" onclick="runImport()">
-          <i class="fa-solid fa-upload"></i> Import Sekarang
-        </button>
+  <!-- TAB ISU -->
+<div id="tab-issues" class="tab-content">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+    <div>
+      <div class="section-title" style="margin-bottom:4px;">Manajemen Isu</div>
+      <div style="font-size:12px;color:#94a3b8;">
+        Pantau kasus IUU Fishing, HAM, lingkungan, TPPO, dan isu lain
       </div>
     </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-secondary btn-sm" onclick="loadIssues()">
+        <i class="fa-solid fa-rotate-right"></i> Refresh
+      </button>
+      <button class="btn-primary btn-sm" onclick="openIssueModal()">
+        <i class="fa-solid fa-plus"></i> Tambah Isu
+      </button>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card blue">
+      <div class="stat-label">Total Isu</div>
+      <div class="stat-value" id="issueStatTotal">0</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Kritis</div>
+      <div class="stat-value" id="issueStatCritical">0</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Resolved</div>
+      <div class="stat-value" id="issueStatResolved">0</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-label">Total Update</div>
+      <div class="stat-value" id="issueStatUpdates">0</div>
+    </div>
+  </div>
+
+  <div class="table-toolbar" style="flex-wrap:wrap;gap:8px;">
+    <input
+      type="text"
+      class="search-input"
+      id="issueSearchInput"
+      placeholder="Cari judul, kategori, deskripsi, tag"
+      style="max-width:none;"
+    />
+
+    <select id="issueStatusFilter" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+      <option value="">Semua Status</option>
+      <option value="pending_review">Pending Review</option>
+      <option value="active">Active</option>
+      <option value="monitoring">Monitoring</option>
+      <option value="resolved">Resolved</option>
+      <option value="rejected">Rejected</option>
+    </select>
+
+    <select id="issueCategoryFilter" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+      <option value="">Semua Kategori</option>
+    </select>
+  </div>
+
+  <div id="issueMsg" class="form-msg hidden"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Judul</th>
+          <th>Kategori</th>
+          <th>Severity</th>
+          <th>Status</th>
+          <th>Tanggal</th>
+          <th>Sumber</th>
+          <th>Update</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="issueTableBody">
+        <tr>
+          <td colspan="9" style="text-align:center;padding:28px;color:#94a3b8;">
+            Tab isu siap. Data akan muncul setelah file issues.js ditambahkan.
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
+  <!-- TAB DOKUMEN -->
+  <div id="tab-documents" class="tab-content">
+  </div>
 
-<!-- ===== MODAL: FORM TAMBAH/EDIT PENERIMA MANFAAT ===== -->
-<div id="benFormOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:540px">
-    <div class="modal-header">
-      <span id="benFormTitle">Tambah Penerima Manfaat</span>
-      <button class="modal-close" onclick="closeBenModal()">✕</button>
+  <!-- TAB INPUT / EDIT PROYEK -->
+  <div id="tab-input" class="tab-content">
+
+    <!-- Step indicator (2 langkah) -->
+    <div class="step-indicator">
+      <div class="step-dot active" id="step-dot-1"><span>1</span><label>Info Proyek</label></div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="step-dot-2"><span>2</span><label>Indikator &amp; Capaian</label></div>
     </div>
-    <div class="modal-body">
-      <input type="hidden" id="benFormId">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Nama Lengkap <span class="required">*</span></label>
-          <input type="text" id="benF-name" placeholder="Nama lengkap penerima manfaat">
-        </div>
-        <div class="form-group">
-          <label>No HP / Telepon</label>
-          <input type="text" id="benF-phone" placeholder="08xxxxxxxxxx">
-        </div>
-        <div class="form-group">
-          <label>Jenis Kelamin</label>
-          <select id="benF-gender">
-            <option value="">-- Pilih --</option>
-            <option value="Laki-laki">Laki-laki</option>
-            <option value="Perempuan">Perempuan</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Tahun Lahir</label>
-          <input type="number" id="benF-birthyear" placeholder="Contoh: 1985" min="1940" max="2010">
-        </div>
-        <div class="form-group">
-          <label>Lokasi / Desa</label>
-          <input type="text" id="benF-location" placeholder="Desa / Kecamatan / Kota">
-        </div>
-        <div class="form-group">
-          <label>Pekerjaan</label>
-          <input type="text" id="benF-occupation" placeholder="Nelayan, Pengolah Ikan, dll">
-        </div>
-        <div class="form-group full">
-          <label>Email</label>
-          <input type="email" id="benF-email" placeholder="email@contoh.com">
-        </div>
-        <div class="form-group full">
-          <label>Catatan</label>
-          <textarea id="benF-note" rows="2" placeholder="Keterangan tambahan…"></textarea>
-        </div>
-      </div>
-      <!-- Pilihan Proyek & Aktivitas (opsional) -->
-      <div id="benFormProjectSection" style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
-        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:10px">
-          📋 Daftarkan ke Kegiatan <span style="font-weight:400;color:#94a3b8">(opsional)</span>
-        </div>
+
+    <!-- Step 1: Informasi Proyek -->
+    <div id="form-step-1" class="active">
+      <div class="form-card">
+        <div class="form-card-title">📋 Informasi Proyek</div>
         <div class="form-grid">
           <div class="form-group full">
-            <label>Proyek</label>
-            <select id="benF-project" onchange="loadActivitiesForBenForm()">
-              <option value="">-- Pilih Proyek --</option>
+            <label>Nama Proyek <span class="required">*</span></label>
+            <input type="text" id="f-name" placeholder="Nama lengkap proyek">
+          </div>
+          <div class="form-group">
+            <label>Lokasi <span class="required">*</span></label>
+            <input type="text" id="f-location" placeholder="Provinsi / Kota">
+          </div>
+          <div class="form-group">
+            <label>Penanggung Jawab <span class="required">*</span></label>
+            <input type="text" id="f-owner" placeholder="Nama PIC">
+          </div>
+          <div class="form-group">
+            <label>Donor / Mitra</label>
+            <input type="text" id="f-donor" placeholder="Nama lembaga donor">
+          </div>
+          <div class="form-group">
+            <label>Status <span class="required">*</span></label>
+            <select id="f-status">
+              <option>Aktif</option><option>On Track</option>
+              <option>Terlambat</option><option>Selesai</option><option>Ditangguhkan</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label>Tanggal Mulai</label>
+            <input type="date" id="f-start-date">
+          </div>
+          <div class="form-group">
+            <label>Deadline</label>
+            <input type="date" id="f-deadline">
+          </div>
+          <div class="form-group">
+          <label>Progress Proyek</label>
+          <input type="text" id="f-progress" value="Dihitung otomatis dari aktivitas &amp; indikator"
+            readonly style="background:#f1f5f9;color:#64748b;cursor:default;font-style:italic;">
+        </div>
+          <div class="form-group">
+            <label>Anggaran Disetujui (Rp)</label>
+            <input type="number" id="f-budget-approved" placeholder="Contoh: 500000000" min="0">
+          </div>
+          <div class="form-group">
+            <label>Realisasi Anggaran (Rp) <span style="font-weight:400;color:#94a3b8;font-size:11px">— bisa diperbarui</span></label>
+            <input type="number" id="f-budget-actual" placeholder="Contoh: 125000000" min="0">
           </div>
           <div class="form-group full">
-            <label>Kegiatan / Aktivitas</label>
-            <select id="benF-activity" disabled>
-              <option value="">-- Pilih Kegiatan --</option>
-            </select>
+            <label>Deskripsi Proyek</label>
+            <textarea id="f-desc" rows="3" placeholder="Gambaran singkat tujuan dan cakupan proyek"></textarea>
           </div>
-          <div class="form-group">
-            <label>Tanggal Hadir</label>
-            <input type="date" id="benF-attended-date">
+          <div class="form-group full">
+            <label>Catatan Tambahan</label>
+            <textarea id="f-note" rows="2" placeholder="Kendala, rekomendasi, dll."></textarea>
           </div>
-          <div class="form-group">
-            <label>Catatan Kehadiran</label>
-            <input type="text" id="benF-attend-note" placeholder="Opsional">
+          <div class="form-group full">
+            <label>Goal Proyek</label>
+            <textarea id="f-goal" rows="2" placeholder="Tujuan utama yang ingin dicapai dari proyek ini..."></textarea>
+          </div>
+          <div class="form-group full">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <label style="margin:0">Outcomes Proyek <span style="font-weight:400;color:#94a3b8;font-size:11px">(opsional)</span></label>
+              <button type="button" class="btn-secondary btn-sm" id="addOutcomeBtn">+ Tambah Outcome</button>
+            </div>
+            <div id="outcomeList"></div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" id="toStep2Btn">Lanjut → Indikator</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Indikator Kinerja + Capaian Awal -->
+    <div id="form-step-2" class="hidden">
+      <div class="form-card">
+        <div class="form-card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>📊 Indikator Kinerja &amp; Capaian Awal</span>
+          <button class="btn-secondary btn-sm" id="addIndicatorBtn">＋ Tambah Indikator</button>
+        </div>
+        <div id="indicatorList"></div>
+        <div id="formMsg" class="form-msg hidden"></div>
+        <div class="form-actions">
+          <button class="btn-secondary" id="backStep1Btn">← Kembali</button>
+          <button class="btn-primary" id="submitAllBtn">💾 Simpan Proyek</button>
+        </div>
+      </div>
+    </div>
+    
+  </div><!-- /tab-input -->
+
+  <!-- TAB DETAIL PROYEK -->
+  <div id="tab-detail" class="tab-content">
+    <div class="detail-header" id="detailHeader"></div>
+    <div class="detail-split">
+
+      <!-- PANEL KIRI: Aktivitas -->
+      <div class="detail-panel">
+        <div class="panel-titlebar">
+          <span class="panel-title">📋 Aktivitas Pelaksanaan</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="panel-count" id="activityCount">0 aktivitas</span>
+            <button class="btn-primary btn-sm" id="addActivityBtnDetail">＋ Tambah</button>
+          </div>
+        </div>
+        <div class="panel-scroll-wrap" id="actScrollWrap">
+          <div class="panel-scroll" id="actScrollArea">
+            <div class="activity-list" id="activityListDetail"></div>
           </div>
         </div>
       </div>
-      <div id="benFormMsg" class="form-msg hidden"></div>
-      <div class="form-actions">
-        <button class="btn-secondary" onclick="closeBenModal()">Batal</button>
-        <button class="btn-primary" onclick="saveBeneficiary()">Simpan</button>
-      </div>
-    </div>
-  </div>
-</div>
 
-<!-- ===== MODAL: DETAIL RIWAYAT KEGIATAN ===== -->
-<div id="benDetailOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:600px">
-    <div class="modal-header">
-      <div>
-        <div id="benDetailName" style="font-weight:700;font-size:16px;color:#0f172a"></div>
-        <div id="benDetailMeta" style="font-size:12px;color:#94a3b8;margin-top:2px"></div>
-      </div>
-      <button class="modal-close" onclick="closeBenDetail()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="benDetailStats" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"></div>
-      <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:10px">📋 Riwayat Kegiatan</div>
-      <div id="benDetailHistory" style="max-height:360px;overflow-y:auto"></div>
-      <div class="form-actions" style="margin-top:16px">
-        <button class="btn-secondary" onclick="closeBenDetail()">Tutup</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== MODAL: IMPORT EXCEL PENERIMA MANFAAT ===== -->
-<div id="benImportOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:700px">
-    <div class="modal-header">
-      <span><i class="fa-solid fa-file-import" style="color:#2563eb;margin-right:8px"></i>Import Penerima Manfaat dari Excel</span>
-      <button class="modal-close" onclick="closeBenImport()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-          <div style="font-size:12px;color:#1d4ed8;line-height:1.9">
-            <strong>📋 Format kolom:</strong>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Project</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Aktivitas</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Nama*</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Jenis Kelamin</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Asal</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Handphone</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Pekerjaan</code>
-            <code style="background:#dbeafe;border-radius:4px;padding:1px 5px;font-size:11px">Catatan</code><br>
-            <span style="color:#6b7280">Satu baris = satu orang di satu kegiatan. Orang yang sama di banyak kegiatan akan dihitung <strong>1x</strong> sebagai penerima manfaat unik.</span>
+      <!-- PANEL KANAN: Update Indikator -->
+      <div class="detail-panel">
+        <div class="panel-titlebar">
+          <span class="panel-title">📊 Update Capaian Indikator</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="panel-count" id="indCount">0 indikator</span>
+            <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit Proyek</button>
           </div>
-          <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()" style="white-space:nowrap">
-            <i class="fa-solid fa-download"></i> Download Template
+        </div>
+        <div class="panel-scroll-wrap" id="indScrollWrap">
+          <div class="panel-scroll" id="indScrollArea">
+            <div class="indicator-update-list" id="indicatorUpdateList"></div>
+          </div>
+        </div>
+        <div style="padding:12px 14px;border-top:1px solid #f1f5f9;flex-shrink:0">
+          <div id="indUpdateMsg" class="form-msg hidden"></div>
+          <div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0;line-height:1.5">
+            💡 Gunakan tombol <strong style="color:#2563eb">💾 Simpan Update</strong><br>
+            pada masing-masing indikator di atas
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL: Refleksi & Pembelajaran Proyek (Sprint 3) -->
+<div class="detail-panel" id="projectReflectionPanel">
+  <div class="panel-titlebar">
+    <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
+    <div class="panel-count" id="pr-reflection-count">0 catatan</div>
+  </div>
+  <div class="panel-scroll-wrap">
+    <div class="panel-scroll">
+      <!-- List refleksi -->
+      <div id="pr-reflection-list" class="activity-list">
+        <div class="empty-state" style="padding:18px 12px">
+          Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
+        </div>
+      </div>
+
+      <!-- Form tambah refleksi -->
+      <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:10px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <input type="date" id="pr-reflection-date"
+            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+          <select id="pr-reflection-type"
+            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+            <option value="lesson">Lesson Learned</option>
+            <option value="success">Success</option>
+            <option value="challenge">Challenge</option>
+            <option value="recommendation">Rekomendasi</option>
+          </select>
+          <input type="text" id="pr-reflection-title" placeholder="Judul singkat (opsional)"
+            style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+        </div>
+
+        <textarea id="pr-what-happened" rows="2"
+          placeholder="Apa yang terjadi? (konteks singkat)"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <textarea id="pr-what-worked" rows="2"
+            placeholder="Apa yang berjalan baik?"
+            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+          <textarea id="pr-what-didnt" rows="2"
+            placeholder="Apa yang tidak berjalan?"
+            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+        </div>
+
+        <textarea id="pr-lesson" rows="2"
+          placeholder="Pelajaran utama / insight kunci"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <textarea id="pr-next-steps" rows="2"
+          placeholder="Apa yang akan dilakukan berbeda ke depan?"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <div id="pr-reflection-msg" class="form-msg hidden" style="margin-bottom:6px"></div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn-primary btn-sm" onclick="saveProjectReflection()">
+            Simpan Refleksi
           </button>
         </div>
       </div>
-      <label style="display:block;padding:20px;border:2px dashed #e2e8f0;border-radius:8px;text-align:center;cursor:pointer;color:#64748b;font-size:13px">
-        📊 Klik untuk pilih file Excel (.xlsx / .csv)
-        <input type="file" id="benImportFileInput" accept=".xlsx,.xls,.csv"
-               style="display:none" onchange="handleBenImportFile(this)">
-      </label>
-      <div id="benImportMsg" class="form-msg hidden" style="margin-top:10px"></div>
-      <div id="benImportPreview" style="margin-top:12px"></div>
-      <div class="form-actions" style="margin-top:14px">
-        <button class="btn-secondary" onclick="closeBenImport()">Batal</button>
-        <button class="btn-primary hidden" id="benImportConfirmBtn" onclick="checkBenDuplicates()">
-          <i class="fa-solid fa-upload"></i> Import Sekarang
-        </button>
-      </div>
     </div>
   </div>
 </div>
 
-<!-- ===== MODAL: PILIH PESERTA (dari halaman aktivitas) ===== -->
-<div id="benPickerOverlay" class="modal-overlay hidden" data-act-id="" data-act-name="" data-proj-name="">
-  <div class="modal-box" style="max-width:500px">
-    <div class="modal-header">
-      <span id="benPickerTitle">Tambah Peserta</span>
-      <button class="modal-close" onclick="closeBenPicker()">✕</button>
     </div>
-    <div class="modal-body">
-      <input type="text" class="search-input" id="benPickerSearch"
-             placeholder="🔍 Cari nama atau no HP…"
-             oninput="renderBenPicker(this.value)"
-             style="width:100%;margin-bottom:8px">
-      <div id="benPickerMsg" class="form-msg hidden"></div>
-      <div id="benPickerList" style="max-height:300px;overflow-y:auto"></div>
-      <div class="form-actions" style="margin-top:12px;justify-content:space-between">
-        <button class="btn-secondary" onclick="closeBenPicker()">Tutup</button>
-        <div id="benPickerCountBadge" style="font-size:12px;color:#64748b;align-self:center"></div>
+  </div><!-- /tab-detail -->
+
+<!-- ===== TAB PENERIMA MANFAAT ===== -->
+<div class="tab-content" id="tab-beneficiary">
+
+  <!-- Project Selector Bar -->
+  <div id="benProjectSelectorBar" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px">
+      <i class="fa-solid fa-folder-open" style="color:#2563eb;font-size:16px"></i>
+      <div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Tampilkan Data</div>
+        <div id="benActiveProjectLabel" style="font-size:14px;font-weight:700;color:#0f172a">Semua Proyek</div>
       </div>
     </div>
+    <select id="benProjectSelector"
+      style="padding:9px 14px;border:2px solid #2563eb;border-radius:8px;font-size:13px;font-weight:600;color:#1d4ed8;background:#eff6ff;cursor:pointer;min-width:200px"
+      onchange="onBenProjectSelectorChange(this.value)">
+      <option value="">📊 Semua Proyek</option>
+    </select>
+    <div id="benSelectorStats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stat-grid" style="margin-bottom:20px">
+    <div class="stat-card blue">
+      <div class="stat-label" id="benStatUniqueLabel">Total Unik</div>
+      <div class="stat-value" id="benStatUnique">–</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Laki-laki</div>
+      <div class="stat-value" id="benStatMale">–</div>
+    </div>
+    <div class="stat-card purple" style="background:linear-gradient(135deg,#fdf4ff,#f3e8ff);border-color:#e9d5ff">
+      <div class="stat-label" style="color:#7e22ce">Perempuan</div>
+      <div class="stat-value" style="color:#7e22ce" id="benStatFemale">–</div>
+    </div>
+    <div class="stat-card yellow" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a">
+      <div class="stat-label" style="color:#92400e">Total Partisipasi</div>
+      <div class="stat-value" style="color:#92400e" id="benStatParticip">–</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="table-toolbar" style="flex-wrap:wrap;gap:8px">
+    <input type="text" class="search-input" id="benSearchInput"
+           placeholder="🔍 Cari nama, no HP, lokasi…"
+           oninput="filterBeneficiaries()">
+    <select id="benFilterGender" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff" onchange="filterBeneficiaries()">
+      <option value="">Semua Gender</option>
+      <option value="Laki-laki">Laki-laki</option>
+      <option value="Perempuan">Perempuan</option>
+    </select>
+    <select id="benFilterProject" style="padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:#fff;max-width:220px" onchange="filterBeneficiaries()">
+      <option value="">Semua Proyek</option>
+    </select>
+    <button class="btn-secondary btn-sm" onclick="openBenImport()">
+      <i class="fa-solid fa-file-import"></i> Import Excel
+    </button>
+    <button id="benExportBtn" class="btn-secondary btn-sm" onclick="exportBenToExcel()">
+      <i class="fa-solid fa-file-export"></i> Export Excel
+    </button>
+    <button class="btn-secondary btn-sm" onclick="downloadBenTemplate()">
+      <i class="fa-solid fa-download"></i> Template
+    </button>
+    <button class="btn-primary btn-sm" onclick="openAddBenModal()">
+      <i class="fa-solid fa-user-plus"></i> Tambah Manual
+    </button>
+  </div>
+
+  <!-- Count Label -->
+  <div id="benCountLabel" style="font-size:12px;color:#94a3b8;margin-bottom:8px"></div>
+
+  <!-- Chart Dashboard -->
+  <div id="benChartSection" style="margin-bottom:20px">
+    <!-- Toggle show/hide charts -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:6px">
+        <i class="fa-solid fa-chart-pie" style="color:#2563eb"></i> Analisis Penerima Manfaat
+        <span id="benChartProjectBadge" style="font-size:11px;font-weight:600;background:#eff6ff;color:#2563eb;border-radius:20px;padding:2px 10px;display:none"></span>
+      </div>
+      <button id="benChartToggleBtn" onclick="toggleBenCharts()"
+        style="font-size:12px;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:4px 12px;cursor:pointer">
+        <i class="fa-solid fa-chevron-up" id="benChartToggleIcon"></i> Sembunyikan
+      </button>
+    </div>
+    <div id="benChartsContainer" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <!-- Chart 1: Donut pekerjaan -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          🍩 Distribusi Pekerjaan
+        </div>
+        <div style="position:relative;height:220px;display:flex;align-items:center;justify-content:center">
+          <canvas id="benChartOccupation"></canvas>
+        </div>
+      </div>
+      <!-- Chart 2: Bar horizontal pekerjaan -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          📊 Jumlah per Pekerjaan
+        </div>
+        <div style="position:relative;height:220px">
+          <canvas id="benChartOccupationBar"></canvas>
+        </div>
+      </div>
+      <!-- Chart 3: Stacked bar gender per pekerjaan (full width) -->
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04);grid-column:1/-1">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:12px">
+          👥 Gender per Pekerjaan
+        </div>
+        <div style="position:relative;height:180px">
+          <canvas id="benChartGenderOccupation"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabel -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama / No HP</th>
+          <th>Gender</th>
+          <th>Usia</th>
+          <th>Lokasi</th>
+          <th>Pekerjaan</th>
+          <th>Kegiatan</th>
+          <th>Proyek</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="benTableBody"></tbody>
+    </table>
+  </div>
+  <div id="benPagination"></div>
+</div>
+
+<!-- ===== TAB ARSIP PROYEK ===== -->
+<div class="tab-content" id="tab-archive">
+  <div class="table-toolbar">
+    <input type="text" class="search-input" id="archiveSearchInput"
+           placeholder="🔍 Cari nama proyek, PIC…"
+           oninput="filterArchivedProjects(this.value)">
+    <button class="btn-secondary btn-sm" onclick="loadArchivedProjects()">
+      <i class="fa-solid fa-rotate-right"></i> Refresh
+    </button>
+  </div>
+  <div class="table-wrap">
+    <table id="archiveTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama Proyek</th>
+          <th>Lokasi / PIC</th>
+          <th>Donor</th>
+          <th>Status</th>
+          <th>Diarsipkan</th>
+          <th>Oleh</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="archivedProjectList"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== TAB: Staff & Beban Kerja ===== -->
+<div id="tab-staff" class="tab-content">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+  <div>
+    <div class="section-title" style="margin-bottom:4px;">Staff & Beban Kerja</div>
+    <div style="font-size:12px;color:#94a3b8;">Pantau beban tugas dan aktivitas per staff</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span id="staffLastSync" class="realtime-badge">Last sync: —</span>
+    <button class="btn-secondary btn-sm" onclick="loadStaffWorkload()">Refresh</button>
   </div>
 </div>
   
-    <!-- === MODAL: SUB-AKTIVITAS === -->
-    <div id="subActivityModalOverlay" class="modal-overlay hidden">
-      <div class="modal-box" style="max-width:700px">
-        <div class="modal-header">
-          <span>Sub-Aktivitas</span>
-          <button class="modal-close" onclick="closeSubActivityModal()">✕</button>
+    <div class="tab-content-inner" style="padding: 24px 28px;">
+    <!-- Dashboard Cards -->
+    <div class="stat-grid" style="margin-bottom: 24px; grid-template-columns: repeat(4, 1fr);">
+      <div class="stat-card" style="border-left: 4px solid #2e7d32;">
+        <div class="stat-label">Staff Aktif</div>
+        <div class="stat-value" id="staffCount">—</div>
+        <div class="stat-desc">person</div>
+      </div>
+      <div class="stat-card" style="border-left: 4px solid #1565c0;">
+        <div class="stat-label">Total Aktivitas</div>
+        <div class="stat-value" id="activityCount">—</div>
+        <div class="stat-desc">aktivitas</div>
+      </div>
+      <div class="stat-card" style="border-left: 4px solid #e65100;">
+        <div class="stat-label">Rata-rata Progress</div>
+        <div class="stat-value" id="progressAvg">—</div>
+        <div class="stat-desc">aktivitas</div>
+      </div>
+      <div class="stat-card" style="border-left: 4px solid #c62828;">
+        <div class="stat-label">Tugas Pending</div>
+        <div class="stat-value" id="taskPending">—</div>
+        <div class="stat-desc">tugas</div>
+      </div>
+    </div>
+    <!-- Table -->
+    <div class="card" style="margin-top: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee;">
+        <h3 style="margin: 0; font-size: 15px; color: #f172a;">📊 Beban Kerja per Staff</h3>
+        <select id="staffFilter" class="btn-secondary" style="font-size: 12px; padding: 5px 12px;" onchange="renderStaffTable()">
+          <option value="all">Semua Status</option>
+          <option value="active">Aktif</option>
+          <option value="inactive">Tidak Aktif</option></select>
+                </div>
+                      <div class="table-wrap" style="overflow-x:auto;margin-top:12px;">
+                                <table class="data-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+                                            <thead><tr><th>Staff</th><th>Status</th><th>Total Aktivitas</th><th>Selesai</th><th>Sedang Berjalan</th><th>Tertunda</th><th>Belum Mulai</th><th>Avg. Progress</th><th>Tugas Pending</th><th>Aksi</th></tr></thead>
+                                                      <tbody id="staffTableBody"></tbody>
+                                                              </table>
+                                                                    </div>
+                                                                        </div>
+                                                                          </div>
+                                                                          </div>
+                                
+
+</div><!-- /main -->
+
+
+<!-- MODAL AKTIVITAS -->
+<div id="actModalOverlay" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="actModalTitle">Tambah Aktivitas</span>
+      <button class="modal-close" id="actModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="act-id">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Judul Aktivitas <span class="required">*</span></label>
+          <input type="text" id="act-title" placeholder="Nama kegiatan">
         </div>
-        <div class="modal-body">
-          <!-- Form Tambah/Edit Sub-Aktivitas -->
-          <div class="form-grid" style="margin-bottom:16px">
-            <input type="hidden" id="sub-task-id">
-            <input type="hidden" id="sub-task-edit-id">
-            <div class="form-group full">
-              <label>Judul Sub-Aktivitas <span class="required">*</span></label>
-              <input type="text" id="sub-task-title" placeholder="Nama sub-aktivitas">
-            </div>
-            <div class="form-group full">
-              <label>Deskripsi</label>
-              <textarea id="sub-task-desc" rows="2" placeholder="Deskripsi sub-aktivitas"></textarea>
-            </div>
-            <div class="form-group">
-              <label>Penanggung Jawab</label>
-              <select id="sub-task-pic"><option value="">-- Belum Ditentukan --</option></select>
-            </div>
-            <div class="form-group">
-              <label>Status</label>
-              <select id="sub-task-status">
-                <option value="Belum Mulai">Belum Mulai</option>
-                <option value="Sedang Dikerjakan">Sedang Dikerjakan</option>
-                <option value="Tertunda">Tertunda</option>
-                <option value="Selesai">Selesai</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Prioritas</label>
-              <select id="sub-task-priority">
-                <option value="Low">Low</option>
-                <option value="Normal">Normal</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Jatuh Tempo</label>
-              <input type="date" id="sub-task-due">
-            </div>
-          </div>
-          <div class="form-actions" style="margin-bottom:16px">
-            <button class="btn-primary" id="saveSubActivityBtn" onclick="saveSubActivity()">Tambah Sub-Aktivitas</button>
-            <button class="btn-secondary" onclick="closeSubActivityModal()">Tutup</button>
-          </div>
-          <!-- Daftar Sub-Aktivitas -->
-          <div id="sub-activity-list" style="background:#f8fafc;border-radius:6px;padding:12px;min-height:100px"></div>
-          <div class="form-actions" style="margin-top:12px">
-            <button class="btn-secondary" id="add-sub-activity-btn">+ Tambah Baru</button>
+        <div class="form-group full">
+          <label>Deskripsi</label>
+          <textarea id="act-desc" rows="2" placeholder="Keterangan singkat aktivitas"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Penanggung Jawab</label>
+                  <select id="act-pic"><option value="">-- Pilih Staff --</option></select>
+                
+          <label>Status</label>
+          <select id="act-status">
+            <option>Belum Mulai</option><option>Sedang Berjalan</option>
+            <option>Selesai</option><option>Tertunda</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tanggal Mulai</label>
+          <input type="date" id="act-start">
+        </div>
+        <div class="form-group">
+          <label>Deadline</label>
+          <input type="date" id="act-due">
+        </div>
+        <div class="form-group full">
+          <label>Progress <span id="act-progress-val" style="color:#2563eb;font-weight:700">0</span>%</label>
+          <input type="range" id="act-progress-range" min="0" max="100" value="0"
+            oninput="document.getElementById('act-progress').value=this.value;document.getElementById('act-progress-val').textContent=this.value"
+            style="width:100%;accent-color:#2563eb">
+          <input type="number" id="act-progress" min="0" max="100" value="0"
+            oninput="document.getElementById('act-progress-range').value=this.value;document.getElementById('act-progress-val').textContent=this.value"
+            style="width:90px;margin-top:6px">
+        </div>
+      </div>
+
+      <!-- Catatan -->
+      <div style="margin-top:16px">
+        <div class="act-note-title">⚠️ Tantangan &amp; Hambatan</div>
+        <div class="act-note-list" id="actNoteList" style="margin-bottom:10px;max-height:120px;overflow-y:auto"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <textarea id="act-new-note" rows="2" placeholder="Tulis catatan baru…"
+            style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;resize:vertical"></textarea>
+          <button class="btn-upload" id="saveNoteBtn">Tambah</button>
+        </div>
+      </div>
+
+      <!-- Upload File -->
+      <div class="act-files-section">
+        <div class="act-note-title">File Pendukung</div>
+        <div class="file-dropzone" id="actDropzone" onclick="document.getElementById('actFileInput').click()">
+          <div class="file-dropzone-icon"></div>
+          <div class="file-dropzone-text">Drag &amp; drop file di sini, atau <strong>klik untuk pilih</strong></div>
+          <div class="file-dropzone-hint">PDF, Word, Excel, Gambar — maks 10 MB per file</div>
+          <input type="file" id="actFileInput" multiple style="display:none">
+        </div>
+        <div class="file-staging-list" id="actFileStagingList"></div>
+        <div id="actUploadAllRow" class="hidden" style="display:flex;align-items:center;gap:10px;margin-top:8px">
+          <button class="btn-primary btn-sm" id="actUploadAllBtn">Upload Semua</button>
+          <span id="actUploadProgress" style="font-size:12px;color:#64748b"></span>
+        </div>
+        <div id="savedFilesTitle" class="act-note-title" style="margin-top:14px;display:none">File Tersimpan</div>
+        <div class="file-saved-list" id="actSavedFilesList"></div>
+      </div>
+                    <!-- Sprint 2: Panel Isu Terkait -->
+      <div id="actIssuesPanelWrap" style="margin-top:16px;border-top:1px solid #f1f5f9;padding-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="act-note-title" style="margin:0">⚠️ Isu Terkait Aktivitas Ini</div>
+          <button class="btn-primary btn-sm" style="font-size:11px" onclick="openIssueModal()">+ Tambah Isu</button>
+        </div>
+        <div id="actIssuesPanel" style="max-height:220px;overflow-y:auto">
+          <div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">
+            Simpan aktivitas terlebih dahulu untuk melihat isu terkait.
           </div>
         </div>
       </div>
-    </div>
 
-  <div id="staffTaskDetailOverlay" class="modal-overlay hidden">
-  <div class="modal-box" style="max-width:820px;">
-    <div class="modal-header">
-      <span id="staffTaskDetailTitle">Detail Penugasan Staff</span>
-      <button class="modal-close" onclick="closeStaffTaskDetail()">×</button>
-    </div>
-    <div class="modal-body">
-      <div id="staffTaskDetailMeta" style="font-size:12px;color:#64748b;margin-bottom:12px;"></div>
-      <div id="staffTaskDetailList"></div>
-      <div class="form-actions" style="margin-top:14px;">
-        <button class="btn-secondary" onclick="closeStaffTaskDetail()">Tutup</button>
+
+      <div id="actFormMsg" class="form-msg hidden" style="margin-top:12px"></div>
+      <div class="form-actions" style="margin-top:16px">
+        <button class="btn-secondary" id="actModalClose2">Batal</button>
+        <button class="btn-primary" id="saveActivityBtn">Simpan Aktivitas</button>
+                  <button type="button" class="btn-secondary" style="background:#1d4ed8;color:white" onclick="openSubActivityModal(document.getElementById('act-id').value)">Sub-Aktivitas</button>
       </div>
     </div>
   </div>
 </div>
-    
-    <!-- === MAIN APP === -->
-    <script src="app.js?v=99"></script>
-    <script src="app_sprint4.js?v=99"></script>
 
 
-</div><!-- end .main -->
+<!-- MODAL FORM ISU -->
+<div id="issueFormOverlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:760px;">
+    <div class="modal-header">
+      <span id="issueFormTitle">Tambah Isu</span>
+      <button class="modal-close" onclick="closeIssueModal()">×</button>
+    </div>
+
+    <div class="modal-body">
+      <input type="hidden" id="issueF-id" />
+
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Judul Isu <span class="required">*</span></label>
+          <input type="text" id="issueF-title" placeholder="Contoh: Dugaan IUU Fishing di perairan ..." />
+        </div>
+
+        <div class="form-group full">
+          <label>Deskripsi</label>
+          <textarea id="issueF-description" rows="3" placeholder="Ringkasan awal temuan lapangan"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Kategori <span class="required">*</span></label>
+          <input type="text" id="issueF-category" placeholder="IUU Fishing / HAM / Lingkungan / TPPO" />
+        </div>
+
+       <div class="form-group">
+          <label>Proyek Terkait</label>
+          <select id="issueF-project-id" onchange="onIssueProjectChange()">
+          <option value="">-- Pilih Proyek --</option>
+          </select>
+        </div>
+
+<div class="form-group">
+  <label>Aktivitas Terkait
+    <span style="font-weight:400;color:#94a3b8;font-size:11px">opsional</span>
+  </label>
+  <select id="issueF-activity-id" disabled>
+    <option value="">-- Pilih Aktivitas (opsional) --</option>
+  </select>
+  <span style="font-size:11px;color:#64748b;display:block;margin-top:4px">
+    Pilih proyek terlebih dahulu.
+  </span>
+</div>
+
+        <div class="form-group">
+          <label>Severity</label>
+          <select id="issueF-severity">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Status</label>
+          <select id="issueF-status">
+            <option value="pending_review">Pending Review</option>
+            <option value="active" selected>Active</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="resolved">Resolved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Tanggal Kejadian</label>
+          <input type="date" id="issueF-date-occurred" />
+        </div>
+
+        <div class="form-group">
+          <label>Sumber</label>
+          <select id="issueF-source-type">
+            <option value="MANUAL" selected>MANUAL</option>
+            <option value="RSS">RSS</option>
+            <option value="GDRIVE">GDRIVE</option>
+            <option value="IMPORT">IMPORT</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Source Link</label>
+          <input type="text" id="issueF-source-link" placeholder="https://..." />
+        </div>
+
+        <div class="form-group full">
+          <label>Tags</label>
+          <input type="text" id="issueF-tags" placeholder="Pisahkan dengan koma, contoh: iuu fishing, kapal asing, laut" />
+        </div>
+
+        <div class="form-group full">
+          <label>Update Awal</label>
+          <textarea id="issueF-initial-update" rows="3" placeholder="Opsional, langsung simpan catatan perkembangan pertama"></textarea>
+        </div>
+      </div>
+
+      <div id="issueFormMsg" class="form-msg hidden"></div>
+
+      <div class="form-actions">
+        <button class="btn-secondary" onclick="closeIssueModal()">Batal</button>
+        <button class="btn-primary" onclick="saveIssue()">Simpan Isu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL DETAIL ISU -->
+<div id="issueDetailOverlay" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:860px;">
+    <div class="modal-header">
+      <span id="issueDetailTitle">Detail Isu</span>
+      <button class="modal-close" onclick="closeIssueDetail()">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div id="issueDetailMeta" style="margin-bottom:14px;"></div>
+
+      <div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">
+        Riwayat Update
+      </div>
+
+      <div id="issueDetailUpdates" style="max-height:300px;overflow-y:auto;margin-bottom:16px;"></div>
+
+      <div class="form-card" style="padding:16px;margin-bottom:0;">
+        <div class="form-card-title" style="margin-bottom:12px;">Tambah Update</div>
+
+        <div class="form-grid">
+          <div class="form-group full">
+    app_sprint4.js?v=7        <label>Catatan Update <span class="required">*</span></label>
+            <textarea id="issueUpdText" rows="3" placeholder="Tulis perkembangan terbaru"></textarea>
+          </div>
+
+          <div class="form-group full">
+            <label>Evidence URL</label>
+            <input type="text" id="issueUpdEvidence" placeholder="Pisahkan dengan koma jika lebih dari satu" />
+          </div>
+        </div>
+
+        <div id="issueUpdateMsg" class="form-msg hidden"></div>
+
+        <div class="form-actions">
+          <button class="btn-secondary" onclick="closeIssueDetail()">Tutup</button>
+          <button class="btn-primary" onclick="saveIssueUpdate()">Simpan Update</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+  
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script src="app_sprint4.js?v100"></script>
+<script src="issues.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="import.js"></script>
+<script src="beneficiary.js"></script>
+<script src="documents.js"></script>
+<script src="impact.js"></script>
+<script src="print-report.js"></script>
+
+<script>
+function toggleSidebar() {
+  const s = document.getElementById('mainSidebar');
+  const o = document.getElementById('sidebarOverlay');
+  if (s) s.classList.toggle('open');
+  if (o) o.classList.toggle('open');
+}
+function closeSidebar() {
+  const s = document.getElementById('mainSidebar');
+  const o = document.getElementById('sidebarOverlay');
+  if (s) s.classList.remove('open');
+  if (o) o.classList.remove('open');
+}
+function toggleProfileDropdown() {
+  const wrap = document.getElementById('profileDropdownWrap');
+  if (wrap) wrap.classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('profileDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+});
+</script>
 </body>
 </html>
