@@ -1242,3 +1242,58 @@ table { min-width: 520px; }
 .data-table .text-green   { color: #2e7d32; }
 .data-table .text-orange  { color: #e65100; }
 .data-table .text-red     { color: #c62828; }
+
+
+/* ============================================================
+   PATCH LAYOUT — tambahkan di PALING BAWAH style.css
+   (rule di bawah akan override rule yang sama di atas)
+   ============================================================ */
+
+/* 1. Fix grid kartu proyek — responsif, bukan 4 kolom paksa */
+.proj-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* 2. Pastikan .main punya margin-left sesuai lebar sidebar */
+.main {
+  flex: 1;
+  margin-left: 220px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* 3. Auth controls di topbar */
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 4. Sidebar toggle btn hanya tampil di mobile */
+.sidebar-toggle-btn {
+  display: none;
+}
+
+/* 5. Responsive: di layar kecil sidebar collapse, konten full width */
+@media (max-width: 768px) {
+  .main {
+    margin-left: 0 !important;
+  }
+  .sidebar-toggle-btn {
+    display: inline-flex !important;
+  }
+  .proj-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+  .proj-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
