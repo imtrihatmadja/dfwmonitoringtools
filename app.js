@@ -1,10 +1,17 @@
 // ===================== CONFIG =====================
 const SUPABASE_URL      = "https://zdfxcxkgmksaeigyuibe.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZnhjeGtnbWtzYWVpZ3l1aWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3Mjc0NjAsImV4cCI6MjA5MjMwMzQ2MH0.baUlaWNvN3wMKHL05E71aSxedjKvWhfVQXHGXraWyVU";
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 window.client = client; // expose ke window agar documents.js & file lain bisa akses
 
 // ===================== STATE =====================
+let currentUser = null;
 let currentProject  = null;
 let indicators      = [];
 let allActivities   = [];
@@ -20,6 +27,92 @@ let savedFiles                = [];
 let projectReflections = [];
 const AUDIT_USER              = "Tim";
 const BUCKET        = "activity-files";
+
+// ===================== AUTH (GOOGLE + SUPABASE) =====================
+
+async function signInWithGoogle() {
+  const redirectTo = window.location.origin; // pastikan origin ini sudah masuk redirect allow list Supabase
+  const { error } = await client.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+    },
+  });
+  if (error) {
+    alert("Gagal login: " + error.message);
+  }
+}
+
+async function signOutGoogle() {
+  const { error } = await client.auth.signOut();
+  if (error) {
+    alert("Gagal logout: " + error.message);
+    return;
+  }
+  currentUser = null;
+  applyAuthUI(null);
+}
+
+function applyAuthUI(user) {
+  currentUser = user;
+
+  const userBadge = document.getElementById("auth-user-badge");
+  const loginBtn  = document.getElementById("auth-login-btn");
+  const logoutBtn = document.getElementById("auth-logout-btn");
+
+  if (userBadge && loginBtn && logoutBtn) {
+    if (user) {
+      const email = user.email || (user.user_metadata && user.user_metadata.email) || "User";
+      const name  = user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name);
+
+      userBadge.textContent = name || email;
+      userBadge.style.display = "inline-flex";
+
+      loginBtn.style.display = "none";
+      logoutBtn.style.display = "inline-flex";
+    } else {
+      userBadge.textContent = "";
+      userBadge.style.display = "none";
+
+      loginBtn.style.display = "inline-flex";
+      logoutBtn.style.display = "none";
+    }
+  }
+
+  // Sembunyikan / tampilkan area yang butuh auth
+  const authRequiredElems = document.querySelectorAll("[data-auth-required='true']");
+  authRequiredElems.forEach(el => {
+    el.style.display = user ? "" : "none";
+  });
+}
+
+async function requireAuth() {
+  if (!currentUser) {
+    alert("Silakan login dengan Google terlebih dahulu.");
+    throw new Error("User not authenticated");
+  }
+}
+
+async function initAuth() {
+  // baca session awal
+  const {
+    data: { session },
+  } = await client.auth.getSession();
+
+  applyAuthUI(session ? session.user : null);
+
+  // pantau perubahan auth
+  client.auth.onAuthStateChange((_event, newSession) => {
+    applyAuthUI(newSession ? newSession.user : null);
+  });
+}
+
+// panggil initAuth saat halaman siap
+document.addEventListener("DOMContentLoaded", () => {
+  initAuth().catch(err => {
+    console.error("Init auth error", err);
+  });
+});
 
 // ===================== PROGRESS HELPERS =====================
 function getLatestActual(ind) {
