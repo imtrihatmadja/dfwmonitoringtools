@@ -330,6 +330,11 @@ document.querySelectorAll(".nav-links li").forEach(li => {
   li.addEventListener("click", () => switchTab(li.dataset.tab));
 });
 window.switchTab = switchTab;
+// Di dalam function switchTab(tab) { ... }
+// Tambahkan di baris terakhir sebelum closing }:
+updateBackBtn();
+
+
 
 // ===================== STEP WIZARD (2 LANGKAH) =====================
 function setStep(n) {
