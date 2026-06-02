@@ -67,12 +67,35 @@
         <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
       </div>
     </div>
-    <div class="topbar-right">
+        <div class="topbar-right">
       <span class="realtime-badge">🟢 Realtime ON</span>
       <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
       <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
+
+      <!-- AUTH CONTROLS -->
+      <div class="auth-controls" style="display:flex; gap:8px; align-items:center; margin-left:12px;">
+        <button id="auth-login-btn"
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="signInWithGoogle()"
+                style="display:inline-flex; align-items:center; gap:4px;">
+          Login Google
+        </button>
+
+        <span id="auth-user-badge"
+              style="display:none; padding:2px 8px; border-radius:999px; background:#e5e7eb; font-size:0.85rem;">
+          <!-- diisi oleh applyAuthUI -->
+        </span>
+
+        <button id="auth-logout-btn"
+                type="button"
+                class="btn-secondary btn-sm"
+                onclick="signOutGoogle()"
+                style="display:none;">
+          Logout
+        </button>
+      </div>
     </div>
-  </div>
 
   <!-- TAB DASHBOARD -->
   <div id="tab-dashboard" class="tab-content active">
