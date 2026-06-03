@@ -1520,3 +1520,218 @@ body {
   .profile-btn  { padding: 4px 6px; }
   .realtime-badge { font-size: 10px; padding: 4px 8px 4px 6px; }
 }
+
+/* ================================================================
+   DETAIL PROYEK — REDESIGN KOMPREHENSIF
+   ================================================================ */
+
+/* ── Tombol Print biru ── */
+#topbarPrintBtn {
+  background: #2563eb !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 7px 16px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+}
+#topbarPrintBtn:hover { background: #1d4ed8 !important; }
+
+/* ── Layout Utama Detail: 2 kolom ── */
+.detail-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+  align-items: start;
+}
+.detail-full-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+  align-items: start;
+}
+
+/* ── Kartu generik Detail ── */
+.dp-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.05);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.dp-card:last-child { margin-bottom: 0; }
+.dp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.dp-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dp-card-title i { color: #2563eb; font-size: 13px; }
+.dp-card-body { padding: 16px 18px; }
+
+/* ── Kartu Informasi Proyek ── */
+.dp-project-name {
+  font-size: 19px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+  margin-bottom: 10px;
+}
+.dp-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+}
+.dp-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #475569;
+}
+.dp-meta-item i { font-size: 11px; color: #94a3b8; width: 14px; text-align: center; }
+.dp-meta-item strong { color: #1e293b; }
+
+/* ── Blok GOAL (biru) dan OUTCOMES (ungu) ── */
+.dp-goal-block {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-left: 3px solid #2563eb;
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin-bottom: 10px;
+}
+.dp-outcomes-block {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-left: 3px solid #7c3aed;
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+.dp-block-label {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 7px;
+}
+.dp-block-label.blue { background: #dbeafe; color: #1d4ed8; }
+.dp-block-label.purple { background: #f3e8ff; color: #7c3aed; }
+.dp-goal-text { font-size: 12.5px; color: #1e3a5f; line-height: 1.6; }
+.dp-outcomes-list { margin: 0; padding-left: 16px; list-style: decimal; }
+.dp-outcomes-list li { font-size: 12.5px; color: #3b0764; line-height: 1.55; margin-bottom: 4px; }
+
+/* ── Kartu Progress Keseluruhan ── */
+.dp-overall-pct { font-size: 48px; font-weight: 900; line-height: 1; letter-spacing: -1px; }
+.dp-overall-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.dp-status-badge {
+  font-size: 11px; font-weight: 700; padding: 4px 11px;
+  border-radius: 999px; text-transform: uppercase; letter-spacing: .4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.dp-progress-bar-thick { height: 12px; background: #f1f5f9; border-radius: 8px; overflow: hidden; margin: 10px 0 14px; }
+.dp-progress-bar-thick .dp-fill { height: 100%; border-radius: 8px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+.dp-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.dp-metric-box {
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 10px; padding: 10px 8px; text-align: center;
+}
+.dp-metric-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+.dp-metric-value { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1; }
+.dp-metric-value.small { font-size: 12px; font-weight: 700; }
+
+/* ── Kartu Anggaran ── */
+.dp-budget-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.dp-budget-label { font-size: 12px; color: #64748b; font-weight: 600; }
+.dp-budget-value { font-size: 14px; font-weight: 800; color: #0f172a; }
+.dp-budget-pct { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #fef3c7; color: #b45309; margin-left: 6px; }
+.dp-budget-bar { height: 10px; background: #f1f5f9; border-radius: 8px; overflow: hidden; margin: 10px 0 12px; }
+.dp-budget-bar-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444); border-radius: 8px; transition: width .5s; }
+
+/* ── Aktivitas dalam kartu ── */
+.dp-activity-item { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid #f1f5f9; }
+.dp-activity-item:last-child { border-bottom: none; }
+.dp-act-info { flex: 1; min-width: 0; }
+.dp-act-title { font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+.dp-act-title.done { text-decoration: line-through; color: #94a3b8; }
+.dp-act-meta { display: flex; gap: 8px; font-size: 11px; color: #64748b; flex-wrap: wrap; }
+.dp-act-progress-wrap { min-width: 100px; }
+.dp-act-pct-row { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+.dp-act-bar { height: 6px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.dp-act-bar-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+.dp-act-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.dp-act-btn {
+  width: 28px; height: 28px; border-radius: 7px;
+  border: 1px solid #e2e8f0; background: #f8fafc;
+  color: #64748b; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.dp-act-btn:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.dp-act-btn.danger:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+
+/* ── Kartu Capaian Indikator ── */
+.dp-ind-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+.dp-ind-item:last-child { border-bottom: none; }
+.dp-ind-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.dp-ind-name { font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.35; flex: 1; }
+.dp-ind-pct-badge { font-size: 16px; font-weight: 900; padding: 4px 11px; border-radius: 999px; flex-shrink: 0; line-height: 1; }
+.dp-ind-target-actual { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+.dp-ind-target-actual strong { color: #0f172a; font-size: 14px; }
+.dp-ind-bar { height: 7px; background: #f1f5f9; border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
+.dp-ind-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+
+/* ── Kartu Refleksi ── */
+.dp-refleksi-item {
+  padding: 12px 14px; border: 1px solid #e2e8f0;
+  border-radius: 10px; margin-bottom: 10px; background: #fdfdff;
+}
+.dp-refleksi-item:last-child { margin-bottom: 0; }
+.dp-refleksi-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.dp-refleksi-date { font-size: 11px; color: #94a3b8; }
+.dp-refleksi-title { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 5px; }
+.dp-refleksi-text { font-size: 12px; color: #334155; line-height: 1.6; }
+.dp-refleksi-lesson { font-size: 12px; color: #1d4ed8; margin-top: 5px; }
+.dp-refleksi-next { font-size: 12px; color: #15803d; margin-top: 3px; }
+
+/* ── Kartu Dokumen ── */
+.dp-doc-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border: 1px solid #e2e8f0;
+  border-radius: 10px; margin-bottom: 8px; background: #fff;
+}
+.dp-doc-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: #eff6ff; display: flex; align-items: center;
+  justify-content: center; font-size: 16px; flex-shrink: 0;
+}
+.dp-doc-name { font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dp-doc-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+/* ── Responsive ── */
+@media (max-width: 1200px) {
+  .detail-main-grid, .detail-full-grid { grid-template-columns: 1fr 1fr; }
+  .dp-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 860px) {
+  .detail-main-grid, .detail-full-grid { grid-template-columns: 1fr; }
+}
