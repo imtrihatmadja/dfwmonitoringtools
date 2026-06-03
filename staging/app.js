@@ -2480,21 +2480,57 @@ async function _dpLoadSubAktivitas(actId){
     const c=window.client||client;
     const{data,error}=await c.from('sub_activities').select('*').eq('activity_id',actId).order('created_at',{ascending:true});
     if(error){container.innerHTML='<div style="font-size:11px;color:#ef4444">Gagal memuat sub-aktivitas</div>';return;}
-    if(!data||!data.length){container.innerHTML='<div style="font-size:11px;color:#94a3b8;font-style:italic">Belum ada sub-aktivitas</div>';return;}
+    if(!data||!data.length){
+      container.innerHTML='<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:4px 0">Belum ada sub-aktivitas. Klik tombol <strong>Sub</strong> untuk menambah.</div>';
+      return;
+    }
     const statusColor={selesai:'#22c55e','sedang berjalan':'#3b82f6',tertunda:'#f59e0b','belum mulai':'#94a3b8'};
+    const statusBg   ={selesai:'#f0fdf4','sedang berjalan':'#eff6ff',tertunda:'#fffbeb','belum mulai':'#f8fafc'};
+    const priorityIcon={'high':'🔴','medium':'🟡','low':'🟢'};
+
     container.innerHTML=data.map(sub=>{
-      const sKey=(sub.status||'').toLowerCase();
+      const sKey=(sub.status||'belum mulai').toLowerCase();
       const sColor=statusColor[sKey]||'#94a3b8';
-      const priority={'high':'🔴','medium':'🟡','low':'🟢'}[(sub.priority||'').toLowerCase()]||'⚪';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:#f8fafc;border:1px solid #f1f5f9;margin-bottom:5px">
-        <span style="font-size:11px">${priority}</span>
-        <span style="flex:1;font-size:12px;color:#0f172a;font-weight:500">${_dpEsc(sub.title||'-')}</span>
-        <span style="font-size:10px;font-weight:700;color:${sColor};white-space:nowrap">${_dpEsc(sub.status||'-')}</span>
-        ${sub.pic?`<span style="font-size:10px;color:#94a3b8">👤${_dpEsc(sub.pic)}</span>`:''}
-      </div>`;
+      const sBg   =statusBg[sKey]   ||'#f8fafc';
+      const pIcon =priorityIcon[(sub.priority||'').toLowerCase()]||'⚪';
+      const due   =sub.due_date?new Date(sub.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):null;
+
+      return `
+<div style="border:1px solid #e8edf4;border-radius:10px;padding:10px 12px;background:${sBg};margin-bottom:7px;border-left:3px solid ${sColor}">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+        <span style="font-size:11px">${pIcon}</span>
+        <span style="font-size:13px;font-weight:700;color:#0f172a;overflow-wrap:break-word">${_dpEsc(sub.title||'Tanpa Judul')}</span>
+      </div>
+      ${sub.description?`<div style="font-size:11px;color:#475569;line-height:1.5;margin-bottom:4px">${_dpEsc(sub.description)}</div>`:''}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:#64748b;margin-top:3px">
+        ${sub.pic?`<span>👤 ${_dpEsc(sub.pic)}</span>`:''}
+        ${due?`<span>📅 ${due}</span>`:''}
+        <span style="font-weight:700;color:${sColor}">${_dpEsc(sub.status||'Belum Mulai')}</span>
+        ${sub.priority?`<span>Prioritas: ${_dpEsc(sub.priority)}</span>`:''}
+      </div>
+    </div>
+    <div style="display:flex;gap:5px;flex-shrink:0;align-items:center">
+      <button class="btn-secondary btn-sm"
+        style="font-size:10px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px"
+        onclick="event.stopPropagation();typeof editSubActivity==='function'&&editSubActivity('${sub.id}','${actId}')"
+        title="Edit sub-aktivitas">
+        <i class="fa-solid fa-pen-to-square"></i> Edit
+      </button>
+      <button class="btn-remove"
+        style="width:auto;padding:4px 8px;border-radius:6px;font-size:10px;display:inline-flex;align-items:center;gap:4px"
+        onclick="event.stopPropagation();typeof deleteSubActivity==='function'&&deleteSubActivity('${sub.id}','${actId}')"
+        title="Hapus sub-aktivitas">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  </div>
+</div>`;
     }).join('');
-  }catch(e){container.innerHTML='<div style="font-size:11px;color:#ef4444">Error: '+e.message+'</div>';}
+  }catch(e){container.innerHTML='<div style="font-size:11px;color:#ef4444">Error: '+_dpEsc(e.message)+'</div>';}
 }
+
 
 // ── Card: Capaian Indikator (scrollable) ──────────────────────
 function renderDpIndicatorsCard(proj){
@@ -2595,7 +2631,6 @@ async function _dpLoadDocuments(proj){
   if(!listEl)return;
   try{
     const c=window.client||client;
-    // query by project_id first, fallback to project_name match
     let data=null,error=null;
     if(proj.id){
       ({data,error}=await c.from('project_documents').select('*').eq('project_id',proj.id).order('created_at',{ascending:false}));
@@ -2610,18 +2645,134 @@ async function _dpLoadDocuments(proj){
     }
     if(countEl)countEl.textContent=data.length+' dokumen';
     if(!data.length){listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Belum ada dokumen untuk proyek ini</div>';return;}
-    const extIcon=name=>{const e=(name||'').split('.').pop().toLowerCase();return{pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',png:'🖼️',jpg:'🖼️',jpeg:'🖼️',ppt:'📑',pptx:'📑',zip:'📦'}[e]||'📎';};
-    listEl.innerHTML=data.map(doc=>`
-<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;background:#f8fafc;border:1px solid #f1f5f9;margin-bottom:6px">
-  <span style="font-size:18px;flex-shrink:0">${extIcon(doc.file_name||doc.name||'')}</span>
-  <div style="flex:1;min-width:0">
-    <div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_dpEsc(doc.file_name||doc.name||'Dokumen')}</div>
-    <div style="font-size:10px;color:#94a3b8;margin-top:1px">${doc.created_at?new Date(doc.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):''} ${doc.uploaded_by?'· '+_dpEsc(doc.uploaded_by):''}</div>
+
+    const extIcon=name=>{
+      const e=(name||'').split('.').pop().toLowerCase();
+      return{pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',
+             png:'🖼️',jpg:'🖼️',jpeg:'🖼️',gif:'🖼️',
+             ppt:'📑',pptx:'📑',zip:'📦',rar:'📦'}[e]||'📎';
+    };
+    const isImage=name=>/\.(jpg|jpeg|png|gif|webp)$/i.test(name||'');
+    const isDriveUrl=url=>(url||'').includes('drive.google.com')||(url||'').includes('docs.google.com');
+
+    listEl.innerHTML=data.map(doc=>{
+      const fname=doc.file_name||doc.name||'Dokumen';
+      const furl=doc.file_url||doc.url||doc.drive_url||'';
+      const fsize=doc.file_size?_dpFormatBytes(Number(doc.file_size)):'';
+      const uploaded=doc.created_at?new Date(doc.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
+      const uploader=doc.uploaded_by||doc.uploader||'';
+
+      // Preview: image → open in modal-like tab; others → open url
+      const previewBtn=furl?`
+        <button title="Preview" onclick="event.stopPropagation();_dpPreviewDoc('${_dpEsc(furl)}','${_dpEsc(fname)}')"
+          style="border:none;cursor:pointer;background:#eff6ff;color:#2563eb;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px">
+          <i class="fa-solid fa-eye"></i> Preview
+        </button>`:'';
+
+      // Google Drive button — show when URL is drive/docs
+      const driveBtn=isDriveUrl(furl)?`
+        <a href="${_dpEsc(furl)}" target="_blank" rel="noopener"
+          style="border:none;cursor:pointer;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px;text-decoration:none">
+          <i class="fa-brands fa-google-drive"></i> Drive
+        </a>`
+        : (furl?`
+        <a href="${_dpEsc(furl)}" target="_blank" rel="noopener"
+          style="border:none;cursor:pointer;background:#f8fafc;color:#475569;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px;text-decoration:none;border:1px solid #e2e8f0">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Buka
+        </a>`:'' );
+
+      const deleteBtn=`
+        <button title="Hapus dokumen"
+          onclick="event.stopPropagation();_dpDeleteDocument('${doc.id}','${_dpEsc(fname)}')"
+          style="border:none;cursor:pointer;background:#fee2e2;color:#dc2626;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px">
+          <i class="fa-solid fa-trash"></i>
+        </button>`;
+
+      return `
+<div style="border:1px solid #e8edf4;border-radius:10px;padding:10px 12px;background:#fff;margin-bottom:7px;transition:box-shadow .15s"
+  onmouseover="this.style.boxShadow='0 2px 8px rgba(15,23,42,.07)'" onmouseout="this.style.boxShadow='none'">
+  <div style="display:flex;align-items:flex-start;gap:10px">
+    <span style="font-size:22px;flex-shrink:0;line-height:1.2">${extIcon(fname)}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px"
+        title="${_dpEsc(fname)}">${_dpEsc(fname)}</div>
+      <div style="font-size:10px;color:#94a3b8">
+        ${uploaded}${uploader?' · '+_dpEsc(uploader):''}${fsize?' · '+fsize:''}
+      </div>
+    </div>
   </div>
-  ${doc.file_url||doc.url?`<a href="${_dpEsc(doc.file_url||doc.url)}" target="_blank" rel="noopener" style="font-size:11px;font-weight:600;color:#2563eb;text-decoration:none;flex-shrink:0">Buka ↗</a>`:''}
-</div>`).join('');
-  }catch(e){listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Error memuat dokumen: '+_dpEsc(e.message)+'</div>';}
+  <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
+    ${previewBtn}
+    ${driveBtn}
+    ${deleteBtn}
+  </div>
+</div>`;
+    }).join('');
+  }catch(e){
+    listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Error: '+_dpEsc(e.message)+'</div>';
+  }
 }
+
+// ── Helper: format bytes ──────────────────────────────────────
+function _dpFormatBytes(b){
+  if(!b)return'';
+  if(b<1024)return b+' B';
+  if(b<1048576)return(b/1024).toFixed(1)+' KB';
+  return(b/1048576).toFixed(1)+' MB';
+}
+
+// ── Helper: preview dokumen ───────────────────────────────────
+function _dpPreviewDoc(url, fname){
+  if(!url)return;
+  const isImg=/\.(jpg|jpeg|png|gif|webp)$/i.test(fname);
+  const isPdf=/\.pdf$/i.test(fname);
+  if(isImg||isPdf){
+    // open lightbox-style overlay
+    const existing=document.getElementById('dp-preview-overlay');
+    if(existing)existing.remove();
+    const ov=document.createElement('div');
+    ov.id='dp-preview-overlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=`
+      <div style="background:#fff;border-radius:14px;overflow:hidden;max-width:90vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <span style="font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw">${_dpEsc(fname)}</span>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <a href="${_dpEsc(url)}" target="_blank" rel="noopener"
+              style="font-size:12px;font-weight:600;color:#2563eb;text-decoration:none;padding:5px 10px;background:#eff6ff;border-radius:7px">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Buka Tab Baru
+            </a>
+            <button onclick="document.getElementById('dp-preview-overlay').remove()"
+              style="border:none;cursor:pointer;background:#f1f5f9;color:#475569;padding:5px 10px;border-radius:7px;font-size:12px;font-weight:600">
+              ✕ Tutup
+            </button>
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;min-height:300px">
+          ${isImg
+            ? `<img src="${_dpEsc(url)}" style="max-width:100%;max-height:75vh;object-fit:contain" alt="${_dpEsc(fname)}">`
+            : `<iframe src="${_dpEsc(url)}" style="width:80vw;height:75vh;border:none"></iframe>`}
+        </div>
+      </div>`;
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    document.body.appendChild(ov);
+  } else {
+    window.open(url,'_blank','noopener');
+  }
+}
+
+// ── Helper: delete dokumen ────────────────────────────────────
+async function _dpDeleteDocument(docId, fname){
+  if(!confirm(`Hapus dokumen "${fname}"?\n\nTindakan ini tidak dapat dibatalkan.`))return;
+  try{
+    const c=window.client||client;
+    const{error}=await c.from('project_documents').delete().eq('id',docId);
+    if(error){alert('Gagal menghapus: '+error.message);return;}
+    // re-load documents
+    if(typeof currentProject==='object'&&currentProject)_dpLoadDocuments(currentProject);
+  }catch(e){alert('Error: '+e.message);}
+}
+
 
 // ── Hook: renderProjectReflectionsPanel override ──────────────
 // After original loadProjectReflections saves to projectReflections,

@@ -1705,3 +1705,52 @@ body {
   .dp-card{box-shadow:none;border:1px solid #e2e8f0;}
   .dp-scrollable{max-height:none;overflow:visible;}
 }
+
+
+/* ================================================================
+   PATCH v4.1 — Sub-Aktivitas detail + Dokumen tombol aksi
+================================================================ */
+
+/* Sub-aktivitas body (expand) */
+.dp-act-body {
+  animation: dp-fadeIn .2s ease;
+  border-top: 1px dashed #e2e8f0;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+@keyframes dp-fadeIn {
+  from { opacity:0; transform:translateY(-4px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* btn-danger untuk tombol hapus sub-aktivitas */
+.btn-danger {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background .15s;
+}
+.btn-danger:hover { background: #fecaca; }
+
+/* Dokumen preview overlay */
+#dp-preview-overlay {
+  animation: dp-fadeIn .18s ease;
+}
+
+/* Dokumen card hover */
+.dp-docs-list > div:hover {
+  border-color: #cbd5e1 !important;
+}
+
+/* Responsive sub-list */
+@media (max-width: 480px) {
+  .dp-act-actions { gap: 2px; }
+}
