@@ -1839,3 +1839,18 @@ body {
 /* ── Activity body section labels ── */
 .act-note-section { }
 .act-note-title { }
+
+
+/* PATCH v4.3.1 — Perbaikan tinggi kartu aktivitas */
+.dp-act-legacy.dp-scrollable {
+  max-height: 520px; /* lebih tinggi agar kartu tidak terlalu gepeng saat data banyak */
+}
+.dp-act-legacy .activity-card {
+  margin-bottom: 8px;
+}
+.dp-act-legacy .activity-card-body {
+  max-height: none; /* biarkan body terbuka penuh di dalam scroll parent */
+}
+@media (max-height: 700px) {
+  .dp-act-legacy.dp-scrollable { max-height: 420px; }
+}
