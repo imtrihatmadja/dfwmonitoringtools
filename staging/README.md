@@ -1,39 +1,33 @@
-# PIMS — Detail Proyek Redesign v3
+# PIMS — Detail Proyek Redesign v4
 
-## File yang diperbarui
+## Ringkasan Perubahan v4
+
+| Fitur | Keterangan |
+|-------|-----------|
+| **Anggaran embedded** | Kartu Anggaran Proyek kini berada di dalam Kartu Progress Keseluruhan (dipisah garis tipis) agar tinggi kolom kanan seimbang dengan kolom kiri |
+| **Scroll Aktivitas** | Kartu Aktivitas Pelaksanaan bisa di-scroll (max-height 360px) sehingga halaman tidak terlalu panjang |
+| **Scroll Indikator** | Kartu Capaian Indikator juga scrollable (max-height 360px) |
+| **Sub-Aktivitas** | Tombol "Sub" tetap tampil di setiap baris aktivitas; klik judul aktivitas untuk expand detail + sub-aktivitas (diambil langsung dari tabel `sub_activities`) |
+| **Refleksi lengkap** | Kartu Refleksi & Pembelajaran menampilkan semua field: tanggal, tipe badge, judul, what_happened, lesson_learned, next_steps; re-render otomatis setiap `loadProjectReflections` dipanggil |
+| **Kartu Dokumen** | Kartu Dokumen Proyek tampil di kolom kanan (bawah); hanya dokumen yang cocok dengan `project_id` atau `project_name` proyek aktif yang ditampilkan |
+
+## Struktur File
 
 | File | Keterangan |
 |------|-----------|
-| `index.html` | HTML utama — tab-detail diperbarui dengan `#detail-content` wrapper |
-| `style.css`  | CSS utama + tambahan blok `DETAIL PROYEK REDESIGN v3` di akhir |
-| `app.js`     | JS utama + render patch `renderProjectDetailPageV3` di akhir |
-| `app_sprint4.js` | Tidak diubah (Sprint 4 staff workload) |
+| `index.html` | HTML utama — `#detail-content` wrapper + hidden panels untuk kompatibilitas JS |
+| `style.css`  | CSS original + blok Redesign v4 di akhir |
+| `app.js`     | JS original + render patch v4 (fungsi `renderProjectDetailPageV4`) di akhir |
+| `app_sprint4.js` | Tidak diubah |
 
-## Cara deploy
+## Cara Deploy
 
-1. Upload semua file ke repo GitHub / Netlify menggantikan versi lama.
-2. Pastikan nama file sudah sesuai dengan referensi di `index.html`.
-3. Hard refresh browser (Ctrl+Shift+R) untuk memuat versi baru.
+1. Upload semua file ke GitHub / Netlify **menggantikan** versi lama
+2. Hard refresh browser: **Ctrl + Shift + R**
 
-## Perubahan desain
+## Catatan Teknis
 
-### Sticky Topbar
-- Menampilkan breadcrumb "Detail Proyek" + nama proyek
-- Tombol: Realtime ON badge, Refresh, Print Laporan (biru), Login Google, Logout, Kembali
-
-### 2-Column Grid Layout
-- **Kolom kiri (lebih lebar):** Informasi Proyek → Aktivitas Pelaksanaan → Refleksi
-- **Kolom kanan:** Progress Keseluruhan → Anggaran Proyek → Capaian Indikator
-
-### Kartu-kartu
-- **Informasi Proyek:** Meta-grid (Lokasi, PIC, Pendana, Deadline) + blok Goal (biru) + blok Outcomes (ungu bernomor)
-- **Progress Keseluruhan:** Angka % besar + status badge (Sangat Baik/Baik/Sedang/Perlu Perhatian) + progress bar tebal + 4 metrik kunci
-- **Anggaran Proyek:** Progress bar oranye + nominal anggaran & realisasi + badge % terserap
-- **Aktivitas Pelaksanaan:** Setiap baris ada progress bar individual + label status berwarna + tombol edit/lihat/hapus
-- **Capaian Indikator:** Actual vs Target + badge % besar + progress bar per indikator
-
-### Konsistensi visual
-- `border-radius: 14px` pada semua kartu
-- `box-shadow: 0 2px 8px rgba(15,23,42,.05)` — melayang tipis
-- Padding konsisten `18px 20px`
-- Typography Satoshi (sama dengan sebelumnya)
+- Kartu Dokumen query Supabase: `project_documents` by `project_id`, fallback ke `project_name`
+- Sub-Aktivitas query Supabase: `sub_activities` by `activity_id`
+- Refleksi: hook ke `renderProjectReflectionsPanel` yang sudah ada di app.js — otomatis sync
+- Semua fungsi lama (edit proyek, update indikator, simpan refleksi, modal aktivitas) tetap berfungsi melalui hidden DOM elements

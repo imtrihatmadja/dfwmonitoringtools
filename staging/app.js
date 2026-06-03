@@ -2695,14 +2695,30 @@ function renderDpReflectionCard(reflections){
     const t=(r.type||'lesson').toLowerCase();
     const col=typeColor[t]||'#7c3aed';
     const lbl=typeLabel[t]||'Lesson Learned';
-    return `\n<div class=\"dp-reflection-item\">\n  <div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px\">\n    <span style=\"font-size:10px;color:#64748b\">${dt}</span>\n    <span style=\"font-size:10px;padding:2px 8px;border-radius:20px;background:${col}15;color:${col};font-weight:700;text-transform:uppercase\">${lbl}</span>\n  </div>\n  ${r.title?`<div style=\"font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px\">${_dpEsc(r.title)}</div>`:''}\n  ${r.what_happened?`<div style=\"font-size:12px;color:#334155;margin-bottom:3px;line-height:1.5\">${_dpEsc(r.what_happened)}</div>`:''}\n  ${r.lesson_learned?`<div style=\"font-size:12px;color:#1d4ed8;margin-bottom:3px\"><strong>Pelajaran:</strong> ${_dpEsc(r.lesson_learned)}</div>`:''}\n  ${r.next_steps?`<div style=\"font-size:12px;color:#15803d\"><strong>Ke depan:</strong> ${_dpEsc(r.next_steps)}</div>`:''}\n</div>`;\n  }).join('');\n
-  const listHtml = refs.length
-    ? rows
-    : '<div class=\"empty-state\" style=\"padding:16px 0\">Belum ada catatan refleksi</div>';
+    return `
+<div class="dp-reflection-item">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px">
+    <span style="font-size:10px;color:#64748b">${dt}</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${col}15;color:${col};font-weight:700;text-transform:uppercase">${lbl}</span>
+  </div>
+  ${r.title?`<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${_dpEsc(r.title)}</div>`:''}
+  ${r.what_happened?`<div style="font-size:12px;color:#334155;margin-bottom:3px;line-height:1.5">${_dpEsc(r.what_happened)}</div>`:''}
+  ${r.lesson_learned?`<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${_dpEsc(r.lesson_learned)}</div>`:''}
+  ${r.next_steps?`<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${_dpEsc(r.next_steps)}</div>`:''}
+</div>`;
+  }).join('');
 
-  return `\n<div class=\"dp-card\">\n  <div class=\"dp-card-header\">\n    <div class=\"dp-card-title\"><span class=\"dp-card-title-icon\">💡</span> Refleksi & Pembelajaran</div>\n    <span class=\"dp-card-badge\" id=\"dp-reflection-count\">${refs.length} catatan</span>\n  </div>\n  <div id=\"dp-reflection-list\" class=\"dp-reflection-list\">${listHtml}</div>\n  <div style=\"margin-top:10px;display:flex;justify-content:flex-end\">\n    <button class=\"btn-secondary btn-sm\" onclick=\"dpGoToReflectionForm()\"\n      style=\"font-size:11px;display:inline-flex;align-items:center;gap:6px\">\n      ✏️ Tambah / Edit Refleksi\n    </button>\n  </div>\n</div>`;\n}\n
-// Tombol di kartu baru akan scroll ke form asli yang ada di panel tersembunyi
-function dpGoToReflectionForm(){\n  try {\n    const panel = document.getElementById('projectReflectionPanel');\n    if(panel){\n      panel.style.display = ''; // pastikan tidak tersembunyi jika ada style tambahan\n    }\n    const dateEl = document.getElementById('pr-reflection-date');\n    if(dateEl){\n      dateEl.scrollIntoView({ behavior: 'smooth', block: 'center' });\n      dateEl.focus();\n    }\n  } catch(e){\n    console.warn('[DP] dpGoToReflectionForm error', e);\n  }\n}\n
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">💡</span> Refleksi & Pembelajaran</div>
+    <span class="dp-card-badge" id="dp-reflection-count">${refs.length} catatan</span>
+  </div>
+  <div id="dp-reflection-list" class="dp-reflection-list">${refs.length?rows:'<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>'}</div>
+  <div id="dp-reflection-add-area"></div>
+</div>`;
+}
+
 // ── Card: Dokumen Proyek (query Supabase per project) ─────────
 function renderDpDocumentsCard(proj){
   const projId=proj&&proj.id;
