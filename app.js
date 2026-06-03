@@ -1,0 +1,2854 @@
+// ===================== CONFIG =====================
+const SUPABASE_URL      = "https://zdfxcxkgmksaeigyuibe.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZnhjeGtnbWtzYWVpZ3l1aWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3Mjc0NjAsImV4cCI6MjA5MjMwMzQ2MH0.baUlaWNvN3wMKHL05E71aSxedjKvWhfVQXHGXraWyVU";
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
+window.client = client; // expose ke window agar documents.js & file lain bisa akses
+
+// ===================== STATE =====================
+let currentUser = null;
+let currentProject  = null;
+let indicators      = [];
+let allActivities   = [];
+let allActNotes     = [];
+let currentActId    = null;
+let currentActProject = "";
+let stagedFiles     = [];
+let outcomes        = [];
+let editingProjectOriginalName = null;
+let editingProjectId          = null;
+let originalIndicatorIds      = [];
+let savedFiles                = [];
+let projectReflections = [];
+const AUDIT_USER              = "Tim";
+const BUCKET        = "activity-files";
+
+// ===================== AUTH (GOOGLE + SUPABASE) =====================
+
+async function signInWithGoogle() {
+  const redirectTo = window.location.origin; // pastikan origin ini sudah masuk redirect allow list Supabase
+  const { error } = await client.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+    },
+  });
+  if (error) {
+    alert("Gagal login: " + error.message);
+  }
+}
+
+async function signOutGoogle() {
+  const { error } = await client.auth.signOut();
+  if (error) {
+    alert("Gagal logout: " + error.message);
+    return;
+  }
+  currentUser = null;
+  applyAuthUI(null);
+}
+
+function applyAuthUI(user) {
+  currentUser = user;
+
+  const userBadge = document.getElementById("auth-user-badge");
+  const loginBtn  = document.getElementById("auth-login-btn");
+  const logoutBtn = document.getElementById("auth-logout-btn");
+
+  if (userBadge && loginBtn && logoutBtn) {
+    if (user) {
+      const email = user.email || (user.user_metadata && user.user_metadata.email) || "User";
+      const name  = user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name);
+
+      userBadge.textContent = name || email;
+      userBadge.style.display = "inline-flex";
+
+      loginBtn.style.display = "none";
+      logoutBtn.style.display = "inline-flex";
+    } else {
+      userBadge.textContent = "";
+      userBadge.style.display = "none";
+
+      loginBtn.style.display = "inline-flex";
+      logoutBtn.style.display = "none";
+    }
+  }
+
+  // Sembunyikan / tampilkan area yang butuh auth
+  const authRequiredElems = document.querySelectorAll("[data-auth-required='true']");
+  authRequiredElems.forEach(el => {
+    el.style.display = user ? "" : "none";
+  });
+}
+
+async function requireAuth() {
+  if (!currentUser) {
+    alert("Silakan login dengan Google terlebih dahulu.");
+    throw new Error("User not authenticated");
+  }
+}
+
+async function initAuth() {
+  // baca session awal
+  const {
+    data: { session },
+  } = await client.auth.getSession();
+
+  applyAuthUI(session ? session.user : null);
+
+  // pantau perubahan auth
+  client.auth.onAuthStateChange((_event, newSession) => {
+    applyAuthUI(newSession ? newSession.user : null);
+  });
+}
+
+// panggil initAuth saat halaman siap
+document.addEventListener("DOMContentLoaded", () => {
+  initAuth().catch(err => {
+    console.error("Init auth error", err);
+  });
+});
+
+// ===================== PROGRESS HELPERS =====================
+function getLatestActual(ind) {
+  const upds = ind.indicator_updates || [];
+  return upds.length ? Number(upds[upds.length - 1].actual_value) : Number(ind.actual) || 0;
+}
+
+function calcAvgIndikator(proj) {
+  const inds = proj.project_indicators || [];
+  if (!inds.length) return null;
+  const total = inds.reduce((a, ind) => {
+    const actual = getLatestActual(ind);
+    const pct    = ind.target > 0 ? Math.round(actual / ind.target * 100) : 0;
+    return a + Math.min(pct, 100);
+  }, 0);
+  return Math.round(total / inds.length);
+}
+
+function calcAvgAktivitas(proj) {
+  // Gunakan activities_summary dari loadProjects (project_name, progress, status)
+  // ATAU allActivities jika sedang di halaman detail (data lebih fresh)
+  const acts = (proj.activities_summary && proj.activities_summary.length)
+    ? proj.activities_summary
+    : (allActivities && allActivities.length && currentProject && currentProject.name === proj.name)
+      ? allActivities
+      : [];
+  if (!acts.length) return null;
+  const total = acts.reduce((a, act) => a + (Number(act.progress) || 0), 0);
+  return Math.round(total / acts.length);
+}
+
+function calcOverallProgress(proj) {
+  const avgInd = calcAvgIndikator(proj);
+  const avgAct = calcAvgAktivitas(proj);
+  if (avgInd !== null && avgAct !== null) return Math.round((avgInd + avgAct) / 2);
+  if (avgInd !== null) return avgInd;
+  if (avgAct !== null) return avgAct;
+  return 0; // progress dihitung otomatis; tidak lagi fallback ke field manual
+}
+
+function progressColor(pct) {
+  if (pct >= 85) return "#22c55e";
+  if (pct >= 60) return "#3b82f6";
+  if (pct >= 35) return "#f59e0b";
+  return "#ef4444";
+}
+
+function progressLabel(pct) {
+  if (pct >= 85) return "Sangat Baik";
+  if (pct >= 60) return "Baik";
+  if (pct >= 35) return "Sedang";
+  return "Perlu Perhatian";
+}
+
+function formatRupiah(n) {
+  if (!n && n !== 0) return "-";
+  return "Rp " + Number(n).toLocaleString("id-ID");
+}
+function pctBudget(approved, actual) {
+  if (!approved || approved <= 0) return 0;
+  return Math.min(Math.round(actual / approved * 100), 999);
+}
+
+
+// ===================== PROGRESS HELPER (FORM) =====================
+function calcProgressFromIndicatorsForm() {
+  if (!indicators.length) return 0;
+  const total = indicators.reduce((sum, ind) => {
+    const target = Number(ind.target || 0);
+    const actual = Number(ind.actual || 0);
+    const pct    = target > 0 ? Math.min(Math.round((actual / target) * 100), 100) : 0;
+    return sum + pct;
+  }, 0);
+  return Math.round(total / indicators.length);
+}
+
+
+// Render daftar indikator prioritas (<50%) untuk mini-card dashboard
+function renderPriorityIndicators(item, projIndex) {
+  const inds = item.project_indicators || [];
+  if (!inds.length) return "";
+
+  const lowInds = inds
+    .map(ind => {
+      const actual = getLatestActual(ind);
+      const target = Number(ind.target) || 0;
+      const pct    = target > 0 ? Math.min(Math.round((actual / target) * 100), 100) : 0;
+      return { name: ind.indicator_name, actual, target, unit: ind.unit || "", type: ind.type, pct };
+    })
+    .filter(x => x.pct < 50)
+    .sort((a, b) => a.pct - b.pct);
+
+  if (!lowInds.length) return `
+    <div class="priority-ind-section">
+      <div class="priority-ind-title">
+        <span class="priority-ind-icon">✅</span>
+        <span>Semua indikator ≥ 50%</span>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat Detail Proyek">Detail →</button>
+      </div>
+    </div>`;
+
+  const MAX_SHOW = 3;
+  const shown    = lowInds.slice(0, MAX_SHOW);
+  const rest     = lowInds.length - MAX_SHOW;
+
+  // Warna berdasarkan tier: merah <25%, kuning/oranye 25-49%
+  function tierColor(pct) {
+    if (pct < 25) return { color: "#ef4444", bg: "#fef2f2", border: "#fecaca", label: "Kritis" };
+    return { color: "#f59e0b", bg: "#fffbeb", border: "#fde68a", label: "Perhatian" };
+  }
+
+  // Hitung jumlah per tier untuk badge ringkasan
+  const critCount = lowInds.filter(x => x.pct < 25).length;
+  const warnCount = lowInds.filter(x => x.pct >= 25).length;
+
+  return `
+    <div class="priority-ind-section">
+      <div class="priority-ind-title">
+        <span class="priority-ind-icon">âš ï¸</span>
+        <span>Prioritas Kerja</span>
+        <span class="priority-ind-badges">
+          ${critCount > 0 ? `<span class="priority-tier-badge kritis">${critCount} Kritis</span>` : ""}
+          ${warnCount > 0 ? `<span class="priority-tier-badge perhatian">${warnCount} Perhatian</span>` : ""}
+        </span>
+        <button class="priority-jump-btn" onclick="jumpToProject(${projIndex}, event)" title="Lihat semua indikator">Detail →</button>
+      </div>
+      <div class="priority-ind-list">
+        ${shown.map(ind => {
+          const t = tierColor(ind.pct);
+          return `
+          <div class="priority-ind-item" style="border-left:3px solid ${t.color};background:${t.bg}">
+            <div class="priority-ind-left">
+              <span class="priority-tier-dot" style="background:${t.color}" title="${t.label}"></span>
+              <div class="priority-ind-name" title="${escHtml(ind.name)}">${escHtml(ind.name)}</div>
+            </div>
+            <div class="priority-ind-right">
+              <div class="priority-ind-bar-wrap">
+                <div class="priority-ind-bar-fill" style="width:${ind.pct}%;background:${t.color}"></div>
+              </div>
+              <span class="priority-ind-pct" style="color:${t.color}">${ind.pct}%</span>
+              <button class="priority-goto-btn" style="color:${t.color};border-color:${t.border}"
+                onclick="jumpToIndicator(${projIndex},'${escHtml(ind.name)}',event)"
+                title="Buka & scroll ke indikator ini">↗</button>
+            </div>
+          </div>`;
+        }).join("")}
+        ${rest > 0 ? `
+          <button class="priority-ind-more-btn" onclick="jumpToProject(${projIndex}, event)">
+            +${rest} indikator lainnya — lihat semua
+          </button>` : ""}
+      </div>
+    </div>`;
+}
+
+
+// Lompat ke project detail dan scroll ke indikator spesifik
+window.jumpToIndicator = async function(projIndex, indName, event) {
+  if (event) event.stopPropagation();
+  const proj = window.allProjects[projIndex];
+  if (!proj) return;
+  await openProjectDetail(proj);
+  // Tunggu panel indikator selesai dirender
+  setTimeout(() => {
+    const inds = proj.project_indicators || [];
+    const idx  = inds.findIndex(ind => ind.indicator_name === indName);
+    if (idx < 0) return;
+    const card = document.getElementById("ind-card-" + idx);
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Highlight sementara
+    card.classList.add("ind-card-highlight");
+    setTimeout(() => card.classList.remove("ind-card-highlight"), 2000);
+  }, 400);
+};
+
+// Lompat ke project detail (dari tombol "Lihat Detail")
+window.jumpToProject = async function(projIndex, event) {
+  if (event) event.stopPropagation();
+  const proj = window.allProjects[projIndex];
+  if (!proj) return;
+  await openProjectDetail(proj);
+  await loadProjectReflections(proj.id);
+};
+
+// ===================== TAB NAVIGATION =====================
+const tabTitles = {
+  dashboard : ["Dashboard",     "Selamat datang, pantau semua proyek Anda"],
+  projects  : ["Daftar Proyek", "Semua data proyek yang dimonitor"],
+  documents : ["Dokumen",       "Manajemen dokumen proyek via Google Drive"],
+  input     : ["Tambah Proyek", "Tambah proyek baru"],
+  beneficiary: ["Penerima Manfaat", "Data penerima manfaat unik & riwayat partisipasi kegiatan"],
+  archive   : ["Arsip Proyek",  "Proyek yang diarsipkan dapat dipulihkan kapan saja"],
+  detail    : ["Detail Proyek", ""]
+};
+
+function switchTab(tab) {
+  document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
+  if (tab !== "detail") currentProject = null;
+  const printBtn = document.getElementById('topbarPrintBtn');
+  if (printBtn) printBtn.style.display = (tab === "detail") ? 'inline-flex' : 'none';
+  const li = document.querySelector(`[data-tab="${tab}"]`);
+  if (li) li.classList.add("active");
+  const targetTab = document.getElementById("tab-" + tab);
+  if (targetTab) targetTab.classList.add("active");
+  const t = tabTitles[tab];
+  document.getElementById("pageTitle").textContent    = t ? t[0] : "";
+  document.getElementById("pageSubtitle").textContent = t ? t[1] : "";
+  if (tab === "projects" || tab === "dashboard") loadProjects();
+  if (tab === "input") renderOutcomeList();
+  if (tab === "archive") loadArchivedProjects();
+  if (tab === "beneficiary") { loadBeneficiaries(); populateBenProjectFilter(); }
+  if (typeof updateBackBtn === "function") updateBackBtn();
+}
+document.querySelectorAll(".nav-links li").forEach(li => {
+  li.addEventListener("click", () => switchTab(li.dataset.tab));
+});
+window.switchTab = switchTab;
+
+
+
+// ===================== STEP WIZARD (2 LANGKAH) =====================
+function setStep(n) {
+  [1, 2].forEach(i => {
+    document.getElementById("form-step-" + i).classList.toggle("hidden", i !== n);
+    document.getElementById("form-step-" + i).classList.toggle("active", i === n);
+    const dot = document.getElementById("step-dot-" + i);
+    dot.classList.toggle("active", i === n);
+    dot.classList.toggle("done", i < n);
+  });
+}
+
+// Step 1 → Step 2
+
+document.getElementById("addOutcomeBtn").addEventListener("click", () => {
+  outcomes.push({ text: "" });
+  renderOutcomeList();
+});
+document.getElementById("toStep2Btn").addEventListener("click", () => {
+  const name = document.getElementById("f-name").value.trim();
+  const loc  = document.getElementById("f-location").value.trim();
+  const own  = document.getElementById("f-owner").value.trim();
+  if (!name || !loc || !own) {
+    alert("Harap isi semua field wajib: Nama Proyek, Lokasi, dan Penanggung Jawab.");
+    return;
+  }
+  setStep(2);
+  renderIndicatorList();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+// Kembali ke Step 1
+document.getElementById("backStep1Btn").addEventListener("click", () => setStep(1));
+
+// ===================== INDICATOR BUILDER =====================
+document.getElementById("addIndicatorBtn").addEventListener("click", () => {
+  indicators.push({ id: null, name: "", type: "Output", target: "", unit: "", actual: 0, previous_actual: 0, update_note: "", history: [], evidence: [] });
+  renderIndicatorList();
+});
+
+function escHtml(v) {
+  return (v || "").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function renderIndicatorList() {
+  const container = document.getElementById("indicatorList");
+  if (!indicators.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:20px">Belum ada indikator. Klik <strong>Tambah Indikator</strong>.</div>`;
+    return;
+  }
+  container.innerHTML = indicators.map((ind, i) => `
+    <div class="indicator-block">
+      <div class="indicator-block-header">
+        <div class="indicator-block-title">
+          <span class="badge badge-${(ind.type || "Output").toLowerCase()}">${ind.type || "Output"}</span>
+          ${ind.name || `Indikator ${i + 1}`}
+        </div>
+        <button class="btn-remove" onclick="removeIndicator(${i})"><i class='fa-solid fa-xmark'></i></button>
+      </div>
+      <div class="indicator-input-row">
+        <div class="form-group">
+          <label>Nama Indikator</label>
+          <input type="text" id="ind-name-${i}" value="${escHtml(ind.name)}"
+            placeholder="Contoh: Nelayan terlatih"
+            oninput="indicators[${i}].name=this.value;document.querySelector('#ind-name-${i}').closest('.indicator-block').querySelector('.indicator-block-title').lastChild.textContent=' '+this.value||' Indikator ${i+1}'">
+        </div>
+        <div class="form-group">
+          <label>Tipe</label>
+          <select id="ind-type-${i}" onchange="indicators[${i}].type=this.value">
+            <option ${ind.type === "Output"  ? "selected" : ""}>Output</option>
+            <option ${ind.type === "Outcome" ? "selected" : ""}>Outcome</option>
+            <option ${ind.type === "Impact"  ? "selected" : ""}>Impact</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Target</label>
+          <input type="number" id="ind-target-${i}" value="${ind.target}" placeholder="100"
+            oninput="indicators[${i}].target=this.value">
+        </div>
+        <div class="form-group">
+          <label>Satuan</label>
+          <input type="text" id="ind-unit-${i}" value="${escHtml(ind.unit)}" placeholder="orang / kg"
+            oninput="indicators[${i}].unit=this.value">
+        </div>
+        <div class="form-group">
+          <label>Capaian Awal</label>
+          <input type="number" id="ind-actual-${i}" value="${ind.actual || 0}" placeholder="0"
+            oninput="indicators[${i}].actual=Number(this.value)">
+        </div>
+        <div class="form-group full">
+          <label>Catatan Perkembangan <span style="font-weight:400;color:#94a3b8">(opsional)</span></label>
+          <textarea id="ind-note-${i}" rows="2"
+            placeholder="Perkembangan awal, kendala, atau temuan lapangan…"
+            oninput="indicators[${i}].update_note=this.value"
+            style="font-size:13px">${escHtml(ind.update_note)}</textarea>
+        </div>
+      </div>
+      ${ind.history && ind.history.length ? `
+        <div class="history-section">
+          <div class="history-section-title">Histori Capaian</div>
+          <div class="history-list">${renderHistoryItems(ind.history, ind.unit, ind.id)}</div>
+        </div>` : ""}
+    </div>
+  `).join("");
+}
+
+
+// ===================== OUTCOME BUILDER =====================
+function renderOutcomeList() {
+  const container = document.getElementById('outcomeList');
+  if (!container) return;
+  if (!outcomes.length) {
+    container.innerHTML = '<div style="font-size:12px;color:#94a3b8;padding:6px 0">Belum ada outcome. Klik &quot;+ Tambah Outcome&quot;.</div>';
+    return;
+  }
+  container.innerHTML = outcomes.map((oc, i) => `
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <span style="min-width:18px;padding-top:8px;font-size:12px;color:#94a3b8;font-weight:600">${i+1}.</span>
+      <textarea id="oc-text-${i}" rows="2"
+        placeholder="Deskripsi outcome ${i+1}..."
+        oninput="outcomes[${i}].text=this.value"
+        style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;resize:vertical"
+      >${escHtml(oc.text)}</textarea>
+      <button type="button" class="btn-remove" onclick="removeOutcome(${i})" title="Hapus"></button>
+    </div>
+  `).join('');
+}
+window.removeOutcome = function(i) {
+  outcomes.splice(i, 1);
+  renderOutcomeList();
+};
+
+window.removeIndicator = function (i) { indicators.splice(i, 1); renderIndicatorList(); };
+
+function renderHistoryItems(history, unit, indicatorId) {
+  if (!history || !history.length) return `<div class="history-empty">Belum ada riwayat update.</div>`;
+  const clearBtn = indicatorId
+    ? `<button class="btn-danger btn-sm" style="width:100%;margin-bottom:8px" onclick="clearIndicatorHistory('${indicatorId}')">Hapus Semua Riwayat</button>`
+    : "";
+  return clearBtn + [...history].reverse().map(h => `
+    <div class="history-item">
+      <div class="history-dot"></div>
+      <div class="history-content">
+        <div class="history-value">Capaian <strong>${h.actual_value} ${unit || ""}</strong></div>
+        ${h.note ? `<div class="history-note">${h.note}</div>` : ""}
+        <div class="history-date">${new Date(h.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+      </div>
+    </div>`).join("");
+}
+
+// ===================== SUBMIT (dari Step 2 langsung) =====================
+document.getElementById("submitAllBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("formMsg");
+  const btn = document.getElementById("submitAllBtn");
+  msg.className = "form-msg hidden";
+  btn.textContent = "Menyimpan…";
+  btn.disabled = true;
+
+  try {
+    // Baca nilai terbaru dari DOM
+    indicators.forEach((ind, i) => {
+      const actualEl = document.getElementById("ind-actual-" + i);
+      const noteEl   = document.getElementById("ind-note-"   + i);
+      if (actualEl) ind.actual      = Number(actualEl.value) || 0;
+      if (noteEl)   ind.update_note = noteEl.value.trim()    || null;
+    });
+
+    const p = {
+      name        : document.getElementById("f-name").value.trim(),
+      location    : document.getElementById("f-location").value.trim(),
+      owner       : document.getElementById("f-owner").value.trim(),
+      donor       : document.getElementById("f-donor").value.trim()      || null,
+      start_date  : document.getElementById("f-start-date").value        || null,
+      deadline    : document.getElementById("f-deadline").value          || null,
+      status      : document.getElementById("f-status").value,
+      progress    : calcProgressFromIndicatorsForm(),
+      description     : document.getElementById("f-desc").value.trim()           || null,
+      note            : document.getElementById("f-note").value.trim()            || null,
+      budget_approved : Number(document.getElementById("f-budget-approved").value) || 0,
+      budget_actual   : Number(document.getElementById("f-budget-actual").value)   || 0,
+      goal            : document.getElementById("f-goal").value.trim() || null,
+    };
+    if (!p.name) throw new Error("Nama proyek wajib diisi.");
+
+    // Simpan nilai budget_actual lama untuk cek apakah berubah
+    const prevProj = (window.allProjects || []).find(x => x.name === p.name);
+    const prevBudgetActual = prevProj ? (prevProj.budget_actual || 0) : -1;
+
+    const upsertPayload = { ...p };
+    if (editingProjectId) upsertPayload.id = editingProjectId;
+    const { data: pSaved, error: pErr } = await client
+      .from("projects").upsert(upsertPayload, { onConflict: "name" }).select("id").single();
+    if (pErr) throw new Error("Gagal simpan proyek: " + pErr.message);
+    const savedProjectId = pSaved?.id || editingProjectId || null;
+    if (savedProjectId) editingProjectId = savedProjectId;
+    client.from("audit_log").insert({
+      project_id: savedProjectId, project_name: p.name,
+      entity_type: "project", action: editingProjectOriginalName ? "update" : "create",
+      changed_by: AUDIT_USER,
+      new_values: { name: p.name, status: p.status, budget_approved: p.budget_approved, budget_actual: p.budget_actual },
+    }).then(()=>{}).catch(()=>{});
+
+    // Catat histori budget_actual jika berubah (atau pertama kali & > 0)
+    if (p.budget_actual > 0 && p.budget_actual !== prevBudgetActual) {
+      await client.from("budget_updates").insert({
+        project_name : p.name,
+        project_id   : savedProjectId || editingProjectId || null,
+        actual_value : p.budget_actual,
+        note         : null,
+        updated_by   : AUDIT_USER,
+      });
+      client.from("audit_log").insert({
+        project_id: savedProjectId||editingProjectId||null, project_name: p.name,
+        entity_type: "budget", action: "update", changed_by: AUDIT_USER,
+        new_values: { budget_approved: p.budget_approved, budget_actual: p.budget_actual },
+      }).then(()=>{}).catch(()=>{});
+    }
+
+        // Simpan outcomes: hapus lama, insert baru
+    const activeProjectName = editingProjectOriginalName || p.name;
+
+    await client.from("project_outcomes").delete().eq("project_name", activeProjectName);
+    const validOutcomes = outcomes.filter(oc => oc.text && oc.text.trim());
+    if (validOutcomes.length) {
+      await client.from("project_outcomes").insert(
+        validOutcomes.map((oc, idx) => ({ project_name: p.name, project_id: savedProjectId||editingProjectId||null, outcome_text: oc.text.trim(), sort_order: idx }))
+      );
+    }
+
+    const keptIndicatorIds = [];
+
+for (let i = 0; i < indicators.length; i++) {
+  const ind = indicators[i];
+  if (!ind.name || !ind.name.trim()) continue;
+
+  const savedProjectRef = savedProjectId || editingProjectId || null;
+
+  if (ind.id) {
+    // Indikator lama: jangan overwrite nilai/status/histori
+    const { data: existingInd, error: existingErr } = await client
+      .from("project_indicators")
+      .select("*")
+      .eq("id", ind.id)
+      .single();
+
+    if (existingErr) {
+      console.warn("Gagal mengambil indikator existing:", existingErr.message);
+      continue;
+    }
+
+    // Hanya sinkronkan referensi project jika nama proyek / id proyek berubah
+    const safeUpdatePayload = {};
+    const currentProjectName = existingInd.project_name || null;
+    const currentProjectId = existingInd.project_id || null;
+
+    if (currentProjectName !== p.name) {
+      safeUpdatePayload.project_name = p.name;
+    }
+    if (currentProjectId !== savedProjectRef) {
+      safeUpdatePayload.project_id = savedProjectRef;
+    }
+
+    if (Object.keys(safeUpdatePayload).length) {
+      const { error: updErr } = await client
+        .from("project_indicators")
+        .update(safeUpdatePayload)
+        .eq("id", ind.id);
+
+      if (updErr) {
+        console.warn("Gagal sinkron referensi indikator:", updErr.message);
+        continue;
+      }
+    }
+
+    // Kembalikan state lokal ke data DB agar form edit tidak menimpa indikator lama
+    indicators[i] = {
+      ...indicators[i],
+      id: existingInd.id,
+      name: existingInd.indicator_name,
+      type: existingInd.type,
+      target: existingInd.target,
+      unit: existingInd.unit,
+      actual: Number(existingInd.actual) || 0,
+      previous_actual: Number(existingInd.actual) || 0,
+      update_note: "",
+      history: indicators[i].history || [],
+      evidence: indicators[i].evidence || []
+    };
+
+    keptIndicatorIds.push(ind.id);
+    continue;
+  }
+
+  // Indikator baru: tetap boleh ditambahkan
+  const { count: existingCount } = await client
+  .from("project_indicators")
+  .select("id", { count: "exact", head: true })
+  .eq("project_name", p.name);
+
+const payload = {
+  project_name: p.name,
+  project_id: savedProjectRef,
+  indicator_name: ind.name.trim(),
+  type: ind.type,
+  target: Number(ind.target) || 0,
+  unit: ind.unit || null,
+  actual: Number(ind.actual) || 0,
+  sort_order: (existingCount || 0) + i,
+};
+
+  const { data: indData, error: indErr } = await client
+    .from("project_indicators")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (indErr) {
+    console.warn("Gagal simpan indikator baru:", indErr.message);
+    continue;
+  }
+
+  indicators[i].id = indData.id;
+  indicators[i].previous_actual = Number(ind.actual) || 0;
+  keptIndicatorIds.push(indData.id);
+
+  if ((Number(ind.actual) || 0) > 0 || (ind.update_note && ind.update_note.trim())) {
+    const { data: newHistSaved } = await client
+      .from("indicator_updates")
+      .insert({
+        indicator_id: indData.id,
+        project_id: savedProjectRef,
+        project_name: p.name,
+        indicator_name: ind.name.trim(),
+        actual_value: Number(ind.actual) || 0,
+        note: ind.update_note ? ind.update_note.trim() : null,
+        updated_by: AUDIT_USER,
+      })
+      .select()
+      .single();
+
+    indicators[i].history = [
+      ...(indicators[i].history || []),
+      newHistSaved || {
+        indicator_id: indData.id,
+        actual_value: Number(ind.actual) || 0,
+        updated_by: AUDIT_USER,
+        created_at: new Date().toISOString()
+      }
+    ];
+    indicators[i].update_note = "";
+  }
+}
+
+// Jangan hapus indikator lama yang tidak ada lagi di form edit
+const removedIds = (originalIndicatorIds || []).filter(id => !keptIndicatorIds.includes(id));
+if (removedIds.length) {
+  console.info("Indikator lama dipertahankan, tidak dihapus:", removedIds);
+}
+
+    // Rename propagasi otomatis via DB trigger: sync_project_name_on_rename
+
+    msg.textContent = "✅ Data berhasil disimpan!";
+    msg.className   = "form-msg success";
+    setTimeout(() => {
+      msg.className = "form-msg hidden";
+      resetForm(); setStep(1); switchTab("dashboard");
+    }, 1800);
+    editingProjectOriginalName = p.name;
+    editingProjectId = savedProjectId || editingProjectId || null;
+    originalIndicatorIds = indicators.map(ind => ind.id).filter(Boolean);
+    await loadProjects();
+
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className   = "form-msg error";
+  } finally {
+    btn.textContent = "💾 Simpan Proyek";
+    btn.disabled    = false;
+  }
+});
+
+function resetForm() {
+  ["f-name","f-location","f-owner","f-donor","f-start-date","f-deadline","f-desc","f-note",
+   "f-budget-approved","f-budget-actual"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  document.getElementById("f-status").value   = "Aktif";
+  document.getElementById("f-goal").value = "";
+  outcomes = [];
+  renderOutcomeList();
+  editingProjectOriginalName = null;
+  editingProjectId          = null;
+  originalIndicatorIds      = [];
+  // progress dihitung otomatis
+  indicators = [];
+}
+
+// ===================== LOAD PROJECTS =====================
+async function loadProjects() {
+  const { data: projects, error } = await client.from("projects").select().order("updated_at", { ascending: false });
+  if (error) {
+    console.error("loadProjects error:", error);
+    const msg = document.getElementById("projectLoadError");
+    if (msg) { msg.textContent = "Gagal memuat proyek: " + (error.message || JSON.stringify(error)); msg.style.display = "block"; }
+    return;
+  }
+  const msg = document.getElementById("projectLoadError");
+  if (msg) msg.style.display = "none";
+  const { data: inds } = await client
+  .from("project_indicators")
+  .select()
+  .order("created_at", { ascending: true });
+  const { data: upds  } = await client.from("indicator_updates").select().order("created_at", { ascending: true });
+  const { data: evids } = await client.from("indicator_evidence").select();
+  const { data: actsData } = await client.from("project_activities").select("project_name,progress,status");
+  const { data: budgetHist } = await client.from("budget_updates").select().order("created_at", { ascending: true });
+  const { data: outcomesData } = await client.from("project_outcomes").select().order("sort_order");
+
+  // filter client-side: tampilkan yang archived=false atau archived tidak ada
+  const activeProjects = (projects || []).filter(proj => !proj.archived);
+  const items = activeProjects.map(proj => ({
+    ...proj,
+    project_indicators: (inds || [])
+  .filter(ind => ind.project_name === proj.name)
+  .sort((a, b) => {
+    // Urutkan berdasarkan sort_order jika ada, fallback ke created_at
+    if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order;
+    return new Date(a.created_at) - new Date(b.created_at);
+  })
+  .map(ind => ({
+    ...ind,
+    indicator_updates : (upds || []).filter(u => u.indicator_id === ind.id),
+    indicator_evidence: (evids || []).filter(e => e.indicator_id === ind.id),
+  })),
+    activities_summary: (actsData || []).filter(a => a.project_name === proj.name),
+    activityCount: (actsData || []).filter(a => a.project_name === proj.name).length,
+    budget_updates: (budgetHist || []).filter(b => b.project_name === proj.name),
+    project_outcomes: (outcomesData || []).filter(o => o.project_name === proj.name),
+  }));
+
+  window.allProjects = items;
+  renderStats(items);
+  renderCards(items);
+  renderTable(items);
+  renderSidebarSubmenu(items);
+
+  if (currentProject && document.getElementById("tab-detail").classList.contains("active")) {
+    const updated = items.find(p => p.name === currentProject.name);
+    if (updated) openProjectDetail(updated);
+  }
+}
+
+function renderStats(items) {
+  document.getElementById("totalProjects").textContent   = items.length;
+  document.getElementById("activeProjects").textContent  = items.filter(x => ["Aktif","On Track"].includes(x.status)).length;
+  document.getElementById("lateProjects").textContent    = items.filter(x => x.status === "Terlambat").length;
+  const avg = items.length ? Math.round(items.reduce((a,b) => a + calcOverallProgress(b), 0) / items.length) : 0;
+  document.getElementById("avgProgress").textContent     = avg + "%";
+  document.getElementById("projectCount").textContent    = items.length + " proyek";
+}
+
+function renderCards(items) {
+  const container = document.getElementById("projectCards");
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-state">Belum ada proyek. <a href="#" onclick="switchTab('input');return false">Tambah proyek</a></div>`;
+    return;
+  }
+  container.innerHTML = items.map((item, i) => {
+    const cls = item.status.toLowerCase().replace(/\s+/g, "-");
+    const indCount = item.project_indicators.length;
+    return `
+      <div class="proj-card ${cls}" onclick="openProjectDetail(window.allProjects[${i}])">
+        <div class="proj-card-header">
+          <div class="proj-card-name">${item.name}</div>
+          <span class="badge badge-${cls}">${item.status}</span>
+        </div>
+        <div class="proj-card-meta">${item.location}&nbsp;&nbsp;${item.owner}${item.donor ? `&nbsp;&nbsp;${item.donor}` : ""}</div>
+        ${(() => {
+          const ov = calcOverallProgress(item);
+          const oc = progressColor(ov);
+          const ol = progressLabel(ov);
+          return `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+            <span style="font-size:11px;color:#64748b;font-weight:600">Progress</span>
+            <span style="display:flex;align-items:center;gap:5px">
+              <span style="font-size:13px;font-weight:800;color:${oc}">${ov}%</span>
+              <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${oc}15;color:${oc};font-weight:700">${ol}</span>
+            </span>
+          </div>
+          <div class="progress-bar" style="height:7px;margin-bottom:2px">
+            <div class="progress-fill" style="width:${ov}%;background:${oc}"></div>
+          </div>`;
+        })()}
+        ${(item.budget_approved > 0 || item.budget_actual > 0) ? `
+        <div class="proj-card-budget">
+          <div class="proj-card-budget-row">
+            <span class="budget-label">Anggaran Disetujui</span>
+            <span class="budget-value">${formatRupiah(item.budget_approved)}</span>
+          </div>
+          <div class="proj-card-budget-row">
+            <span class="budget-label">Realisasi</span>
+            <span class="budget-value budget-actual">${formatRupiah(item.budget_actual)}
+              ${item.budget_approved > 0 ? `<span class="budget-pct">${pctBudget(item.budget_approved, item.budget_actual)}%</span>` : ""}
+            </span>
+          </div>
+          <div class="progress-bar" style="height:4px;margin-top:4px">
+            <div class="progress-fill" style="width:${Math.min(pctBudget(item.budget_approved, item.budget_actual), 100)}%;background:#f59e0b"></div>
+          </div>
+        </div>` : ""}
+                ${(item.goal || (item.project_outcomes && item.project_outcomes.length)) ? `
+          <div style="border-top:1px solid #f1f5f9;margin:8px 0 6px;padding-top:8px">
+            ${item.goal ? `<div style="font-size:11px;color:#475569;margin-bottom:4px;line-height:1.5"><span style="font-weight:700;color:#2563eb">🎯 Goal:</span> ${item.goal}</div>` : ""}
+            ${item.project_outcomes && item.project_outcomes.length ? `
+              <div style="font-size:11px;color:#475569">
+                <span style="font-weight:700;color:#7c3aed">ðŸ† Outcomes (${item.project_outcomes.length}):</span>
+                <ul style="margin:3px 0 0 14px;padding:0;line-height:1.6">
+                  ${item.project_outcomes.map(o => `<li>${o.outcome_text}</li>`).join("")}
+                </ul>
+              </div>
+            ` : ""}
+          </div>
+        ` : ""}
+        ${renderPriorityIndicators(item, i)}
+        <div class="proj-card-footer">
+          <span class="ind-count">${indCount} Indikator</span>
+          <span class="ind-count" style="background:#f0fdf4;color:#15803d">${item.activityCount || 0} Aktivitas</span>
+        </div>
+        <div class="proj-card-actions">
+          <span style="font-size:11px;color:#94a3b8">${item.deadline || ""}</span>
+          <button class="btn-danger btn-sm" style="margin-left:auto"
+            onclick="event.stopPropagation();deleteProject('${item.id}','${item.name.replace(/'/g,"\\'")}')">Hapus</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderTable(items) {
+  const tbody = document.getElementById("projectTable");
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:28px">Belum ada data.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = items.map((item, i) => {
+    const cls = item.status.toLowerCase().replace(/\s+/g, "-");
+    const dt  = new Date(item.updated_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    return `
+      <tr style="cursor:pointer" onclick="openProjectDetail(window.allProjects[${i}])">
+        <td>${i+1}</td>
+        <td><strong>${item.name}</strong>${item.donor ? `<br><small style="color:#94a3b8">${item.donor}</small>` : ""}</td>
+        <td>${item.location}</td>
+        <td>${item.owner}</td>
+        <td><span class="badge badge-${cls}">${item.status}</span></td>
+        <td>
+          ${(() => {
+            const ov = calcOverallProgress(item);
+            const oc = progressColor(ov);
+            return `<div class="progress-bar" style="min-width:70px">
+              <div class="progress-fill" style="width:${ov}%;background:${oc}"></div>
+            </div>
+            <small style="color:${oc};font-weight:700">${ov}%</small>`;
+          })()}
+        </td>
+        <td>${item.deadline || "-"}</td>
+        <td>${dt}</td>
+        <td>
+          <button class="btn-edit" onclick="event.stopPropagation();fillFormEdit(${i})">Edit</button>
+          <button class="btn-danger btn-sm" style="margin-left:4px"
+            onclick="event.stopPropagation();deleteProject(window.allProjects[${i}].id,window.allProjects[${i}].name)">Hapus</button>
+        </td>
+      </tr>`;
+  }).join("");
+}
+
+// ===================== SEARCH =====================
+document.getElementById("searchInput").addEventListener("input", function () {
+  const q = this.value.toLowerCase();
+  renderTable(window.allProjects.filter(x =>
+    x.name.toLowerCase().includes(q) ||
+    x.location.toLowerCase().includes(q) ||
+    x.owner.toLowerCase().includes(q)
+  ));
+});
+
+// ===================== DETAIL PROYEK =====================
+window.openProjectDetail = async function (proj) {
+  currentProject    = proj;
+  window.currentProject = proj;
+  currentActProject = proj.name;
+  tabTitles.detail[1] = proj.name;
+  document.getElementById("pageTitle").textContent    = "Detail Proyek";
+  document.getElementById("pageSubtitle").textContent = proj.name;
+  document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
+  document.getElementById("tab-detail").classList.add("active");
+  // Tampilkan tombol print di topbar
+  const _pb = document.getElementById("topbarPrintBtn");
+  if (_pb) _pb.style.display = "inline-flex";
+  renderDetailHeader(proj);
+  await loadActivities(proj.name);
+  renderIndicatorUpdatePanel(proj);
+  loadProjectReflections(proj.id);
+};
+
+// ===================== PROJECT REFLECTIONS (SPRINT 3) =====================
+
+async function loadProjectReflections(projectId) {
+  const c = window.client || client;
+  projectReflections = [];
+  if (!projectId || !client || typeof client.from !== "function") return [];
+
+  const { data, error } = await client
+    .from('project_reflections')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('reflection_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('loadProjectReflections error:', error.message);
+    return [];
+  }
+
+  projectReflections = data || [];
+  if (typeof renderProjectReflectionsPanel === "function") {
+    renderProjectReflectionsPanel();
+  }
+  return projectReflections;
+}
+
+window.renderProjectReflectionsPanel = function () {
+  const listEl  = document.getElementById('pr-reflection-list');
+  const countEl = document.getElementById('pr-reflection-count');
+
+  if (!listEl) return;
+
+  if (!Array.isArray(projectReflections) || !projectReflections.length) {
+    listEl.innerHTML = `
+      <div class="empty-state" style="padding:18px 12px">
+        Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
+      </div>`;
+    if (countEl) countEl.textContent = '0 catatan';
+    return;
+  }
+
+  if (countEl) countEl.textContent = projectReflections.length + ' catatan';
+
+  listEl.innerHTML = projectReflections.map((r) => {
+    const d   = r.reflection_date || r.created_at;
+    const dt  = d ? new Date(d).toLocaleDateString('id-ID', {
+      day:'2-digit', month:'short', year:'numeric'
+    }) : '-';
+    const t   = (r.type || '').toLowerCase();
+    const lbl = t === 'success' ? 'Success'
+              : t === 'challenge' ? 'Challenge'
+              : t === 'recommendation' ? 'Rekomendasi'
+              : 'Lesson Learned';
+    const badgeColor =
+      t === 'success'        ? '#22c55e' :
+      t === 'challenge'      ? '#f97316' :
+      t === 'recommendation' ? '#0ea5e9' :
+                               '#7c3aed';
+
+    return `
+      <div class="activity-card" style="border-radius:10px;border:1px solid #e2e8f0;padding:10px 11px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:#64748b">${dt}</span>
+            <span style="
+              font-size:10px;
+              padding:2px 7px;
+              border-radius:999px;
+              background:${badgeColor}15;
+              color:${badgeColor};
+              font-weight:700;
+              text-transform:uppercase;
+              letter-spacing:.03em;">
+              ${lbl}
+            </span>
+          </div>
+          <button type="button" onclick="deleteProjectReflection('${r.id}')"
+      style="border:none;background:#fee2e2;color:#dc2626;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer;font-weight:600"
+      title="Hapus refleksi">Hapus</button>
+      </div>
+        ${r.title ? `<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${r.title}</div>` : ''}
+        ${r.what_happened ? `<div style="font-size:12px;color:#334155;margin-bottom:4px">${r.what_happened}</div>` : ''}
+        ${r.lesson_learned ? `<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${r.lesson_learned}</div>` : ''}
+        ${r.next_steps ? `<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${r.next_steps}</div>` : ''}
+      </div>`;
+  }).join('');
+};
+
+
+window.saveProjectReflection = async function () {
+const c = window.client || client;
+if (!currentProject || !c || typeof c.from !== "function") return;
+
+const projId = currentProject.id;
+const dateEl   = document.getElementById('pr-reflection-date');
+const typeEl   = document.getElementById('pr-reflection-type');
+const titleEl  = document.getElementById('pr-reflection-title');
+const whatEl   = document.getElementById('pr-what-happened');
+const workEl   = document.getElementById('pr-what-worked');
+const didntEl  = document.getElementById('pr-what-didnt');
+const lessonEl = document.getElementById('pr-lesson');
+const nextEl   = document.getElementById('pr-next-steps');
+const msgEl    = document.getElementById('pr-reflection-msg');
+
+const reflection_date = dateEl?.value || new Date().toISOString().slice(0,10);
+const type            = typeEl?.value || 'lesson';
+const title           = (titleEl?.value || '').trim();
+const what_happened   = (whatEl?.value || '').trim();
+const what_worked     = (workEl?.value || '').trim();
+const what_didnt      = (didntEl?.value || '').trim();
+const lesson_learned  = (lessonEl?.value || '').trim();
+const next_steps      = (nextEl?.value || '').trim();
+
+if (!lesson_learned && !what_happened) {
+  if (msgEl) {
+  msgEl.textContent = 'Isi minimal \"Apa yang terjadi\" atau \"Pelajaran utama\".';
+  msgEl.className = 'form-msg error';
+  }
+  return;
+}
+
+if (msgEl) {
+  msgEl.textContent = '';
+  msgEl.className = 'form-msg hidden';
+}
+
+try {
+  const payload = {
+  project_id: projId,
+  reflection_date,
+  type,
+  title: title || null,
+  what_happened: what_happened || null,
+  what_worked: what_worked || null,
+  what_didnt: what_didnt || null,
+  lesson_learned: lesson_learned || null,
+  next_steps: next_steps || null,
+  tags: null,
+  created_by: AUDIT_USER || null
+  };
+
+  const { error } = await client
+  .from('project_reflections')
+  .insert(payload);
+
+  if (error) {
+  console.error('saveProjectReflection error:', error.message);
+  if (msgEl) {
+    msgEl.textContent = 'Gagal menyimpan refleksi: ' + error.message;
+    msgEl.className = 'form-msg error';
+  }
+  return;
+  }
+
+  // kosongkan form
+  if (titleEl)  titleEl.value  = '';
+  if (whatEl)   whatEl.value   = '';
+  if (workEl)   workEl.value   = '';
+  if (didntEl)  didntEl.value  = '';
+  if (lessonEl) lessonEl.value = '';
+  if (nextEl)   nextEl.value   = '';
+
+  if (msgEl) {
+  msgEl.textContent = 'Refleksi tersimpan.';
+  msgEl.className = 'form-msg success';
+  setTimeout(() => {
+    msgEl.className = 'form-msg hidden';
+  }, 1200);
+  }
+
+  await loadProjectReflections(projId);
+} catch (e) {
+  console.error('saveProjectReflection exception:', e);
+  if (msgEl) {
+  msgEl.textContent = 'Terjadi error tak terduga.';
+  msgEl.className = 'form-msg error';
+  }
+}
+};
+
+window.deleteProjectReflection = async function (id) {
+if (!id) return;
+if (!currentProject || !currentProject.id) return;
+if (!confirm('Hapus catatan refleksi ini?')) return;
+
+const c = window.client || client;
+if (!c || typeof c.from !== "function") return;
+
+try {
+  const { error } = await c
+  .from("project_reflections")
+  .delete()
+  .eq("id", id)
+  .eq("project_id", currentProject.id);
+
+  if (error) {
+  console.error("deleteProjectReflection error:", error.message);
+  alert("Gagal menghapus: " + error.message);
+  return;
+  }
+
+  projectReflections = projectReflections.filter(r => r.id !== id);
+  if (typeof window.renderProjectReflectionsPanel === "function") {
+  window.renderProjectReflectionsPanel();
+  }
+  await loadProjects();
+} catch (e) {
+  console.error("deleteProjectReflection exception:", e);
+  alert("Terjadi error saat menghapus refleksi.");
+}
+};
+
+function renderDetailHeader(proj) {
+  const safeProj = proj || {};
+  const inds = Array.isArray(safeProj.project_indicators) ? safeProj.project_indicators : [];
+  const outcomes = Array.isArray(safeProj.project_outcomes) ? safeProj.project_outcomes : [];
+  const budgetUpdates = Array.isArray(safeProj.budget_updates) ? safeProj.budget_updates : [];
+
+  const indDone = inds.filter(ind => {
+    const actual = getLatestActual(ind || {});
+    const target = Number(ind?.target) || 0;
+    const pct = target > 0 ? Math.round(actual / target * 100) : 0;
+    return pct >= 100;
+  }).length;
+
+  const cls = (safeProj.status || 'aktif').toLowerCase().replace(/\s+/g, '-');
+  const avgInd = inds.length
+    ? Math.round(
+        inds.reduce((a, ind) => {
+          const actual = getLatestActual(ind || {});
+          const target = Number(ind?.target) || 0;
+          const pct = target > 0 ? Math.round(actual / target * 100) : 0;
+          return a + Math.min(pct, 100);
+        }, 0) / inds.length
+      )
+    : 0;
+
+  const overall = calcOverallProgress(safeProj || {});
+  const ovColor = progressColor(overall || 0);
+  const ovLabel = progressLabel(overall || 0);
+  const avgActPct = calcAvgAktivitas(safeProj);
+  const avgIndPct = calcAvgIndikator(safeProj);
+  const updatedAtLabel = safeProj.updated_at
+    ? new Date(safeProj.updated_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' })
+    : '-';
+
+  const detailHeaderEl = document.getElementById('detailHeader');
+  if (!detailHeaderEl) return;
+
+  detailHeaderEl.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+      <span class="badge badge-${cls}">${safeProj.status || 'Aktif'}</span>
+      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()" style="margin-left:auto">✏️ Edit Proyek</button>
+      <button class="btn-remove" onclick="deleteProject('${safeProj.id || ''}','${String(safeProj.name || '').replace(/'/g, "\'")}')" title="Arsipkan proyek">🗑</button>
+    </div>
+
+    <div class="detail-header-grid">
+      <div class="detail-card detail-card-left">
+        <div class="detail-project-name">${safeProj.name || '-'}</div>
+        <div class="detail-meta" style="margin-top:6px;margin-bottom:10px">
+          <span>📍 ${safeProj.location || '-'}</span>
+          <span>👤 ${safeProj.owner || '-'}</span>
+          ${safeProj.donor ? `<span>🏦 ${safeProj.donor}</span>` : ''}
+          ${safeProj.deadline ? `<span>📅 Deadline: ${safeProj.deadline}</span>` : ''}
+        </div>
+
+        ${safeProj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${safeProj.description}</p>` : ''}
+
+        <div class="dh-goal-box">
+          <div class="dh-section-label dh-label-blue">🎯 Goal</div>
+          <div style="font-size:13px;color:#1e3a5f;line-height:1.6">${safeProj.goal || 'Belum ada goal proyek.'}</div>
+        </div>
+
+        <div class="dh-outcomes-box">
+          <div class="dh-section-label dh-label-purple">🏆 Outcomes</div>
+          ${outcomes.length ? `
+            <ol style="margin:6px 0 0;padding-left:18px">
+              ${outcomes.map(o => `
+                <li style="font-size:13px;color:#3b0764;line-height:1.5;margin-bottom:5px">
+                  ${o.outcome_text || o.text || '-'}
+                </li>
+              `).join('')}
+            </ol>
+          ` : `<div style="font-size:13px;color:#64748b;line-height:1.6">Belum ada outcome proyek.</div>`}
+        </div>
+      </div>
+
+      <div class="detail-card detail-card-right">
+        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
+            <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:36px;font-weight:800;color:${ovColor};line-height:1">${overall || 0}%</span>
+            <span style="font-size:11px;color:#94a3b8">rata-rata aktivitas &amp; indikator</span>
+          </div>
+          <div class="overall-progress-bar">
+            <div class="overall-progress-fill" style="width:${overall || 0}%;background:${ovColor}"></div>
+          </div>
+          <div class="overall-breakdown" style="margin-top:8px">
+            <div class="overall-breakdown-item">
+              <span class="overall-breakdown-dot" style="background:#6366f1"></span>
+              <span>Aktivitas</span>
+              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + '%' : '—'}</span>
+            </div>
+            <div class="overall-breakdown-sep">+</div>
+            <div class="overall-breakdown-item">
+              <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
+              <span>Indikator</span>
+              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + '%' : '—'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-stats" style="margin-bottom:12px">
+          <div class="detail-stat"><div class="detail-stat-label">Total Indikator</div><div class="detail-stat-value">${inds.length}</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${updatedAtLabel}</div></div>
+        </div>
+
+        ${(Number(safeProj.budget_approved) > 0 || Number(safeProj.budget_actual) > 0) ? `
+          <div class="detail-budget-box">
+            <div class="detail-budget-title">💰 Anggaran Proyek</div>
+            <div class="detail-budget-row">
+              <span>Disetujui</span>
+              <strong>${formatRupiah(Number(safeProj.budget_approved) || 0)}</strong>
+            </div>
+            <div class="detail-budget-row">
+              <span>Realisasi</span>
+              <strong style="color:#f59e0b">${formatRupiah(Number(safeProj.budget_actual) || 0)}
+                ${Number(safeProj.budget_approved) > 0 ? `<span class="budget-pct">${pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0)}%</span>` : ''}
+              </strong>
+            </div>
+            <div class="progress-bar" style="height:6px;margin:6px 0 4px">
+              <div class="progress-fill" style="width:${Math.min(pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0),100)}%;background:#f59e0b"></div>
+            </div>
+            ${budgetUpdates.length ? `
+              <div class="detail-budget-history">
+                <div class="detail-budget-history-title">Riwayat Update Realisasi</div>
+                ${[...budgetUpdates].reverse().slice(0,5).map(b => `
+                  <div class="mini-history-item">
+                    <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
+                    <span class="mini-history-note">${b.note || ''}</span>
+                    <span class="mini-history-date">${b.created_at ? new Date(b.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</span>
+                  </div>`).join('')}
+              </div>` : ''}
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ===================== INDICATOR UPDATE PANEL =====================
+function renderIndicatorUpdatePanel(proj) {
+  const container = document.getElementById("indicatorUpdateList");
+  const inds      = proj.project_indicators;
+  if (!inds.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:30px;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">ðŸ“Š</div>
+      <div style="font-weight:600;color:#0f172a;margin-bottom:4px">Belum ada indikator</div>
+      <small style="color:#94a3b8">Edit proyek untuk menambah indikator</small>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = inds.map((ind, i) => {
+    const sortedUpd     = ind.indicator_updates ? [...ind.indicator_updates] : [];
+    const lastH         = sortedUpd.length ? sortedUpd[sortedUpd.length - 1] : null;
+    const currentActual = lastH ? Number(lastH.actual_value) : Number(ind.actual) || 0;
+    const target        = Number(ind.target) || 0;
+    const pct           = target > 0 ? Math.min(Math.round(currentActual / target * 100), 100) : 0;
+    const pctColor      = pct >= 100 ? "#22c55e" : pct >= 70 ? "#3b82f6" : pct >= 40 ? "#f59e0b" : "#ef4444";
+    const lastTs        = lastH
+      ? new Date(lastH.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})
+      : null;
+
+    return `
+      <div class="ind-update-card" id="ind-card-${i}">
+        <!-- Header -->
+        <div class="ind-update-header">
+          <div style="flex:1;min-width:0">
+            <div class="ind-update-name">${ind.indicator_name}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">
+              <span class="badge badge-${(ind.type||"output").toLowerCase()}" style="font-size:10px">${ind.type}</span>
+              &nbsp;Target: <strong>${target} ${ind.unit||""}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Capaian saat ini - menonjol -->
+        <div class="ind-capaian-display">
+          <div class="ind-capaian-main">
+            <span class="ind-capaian-actual" id="ind-actual-display-${i}" style="color:${pctColor}">${currentActual}</span>
+            <span class="ind-capaian-unit">${ind.unit||""}</span>
+            <span class="ind-capaian-sep">/</span>
+            <span class="ind-capaian-target">${target} ${ind.unit||""}</span>
+          </div>
+          <div class="ind-capaian-pct-badge" id="ind-pct-badge-${i}"
+            style="background:${pctColor}15;color:${pctColor};border:1px solid ${pctColor}40">
+            ${pct}%
+          </div>
+        </div>
+        <div class="progress-bar" style="height:8px;margin:6px 0 4px">
+          <div class="progress-fill" id="ind-bar-${i}" style="width:${pct}%;background:${pctColor}"></div>
+        </div>
+        <div class="ind-last-update" id="ind-ts-${i}">
+          ${lastTs
+            ? `ðŸ• Update terakhir: <strong>${lastTs}</strong>`
+            : `<span style="color:#94a3b8;font-style:italic">Belum pernah diupdate</span>`}
+        </div>
+
+        <!-- Input update kumulatif -->
+        <div class="ind-kumul-box">
+          <div class="ind-kumul-header">
+            <span><i class='fa-solid fa-plus'></i> Tambah Capaian Baru</span>
+            <span class="ind-kumul-hint">nilai akan dijumlahkan ke capaian saat ini</span>
+          </div>
+          <div class="ind-kumul-row">
+            <div class="form-group" style="flex:1">
+              <label>Tambahan Nilai <span style="color:#94a3b8;font-weight:400">(${ind.unit||"satuan"})</span></label>
+              <input type="number" id="upd-add-${i}" min="0" placeholder="0"
+                oninput="previewKumul(${i}, ${currentActual}, ${target})"
+                style="font-size:14px;font-weight:600">
+            </div>
+            <div class="form-group" style="flex:1">
+              <label>Hasil (preview)</label>
+              <input type="number" id="upd-preview-${i}" value="${currentActual}" readonly
+                style="background:#f1f5f9;font-weight:700;color:${pctColor}">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:6px">
+            <label>Catatan <span style="color:#94a3b8;font-weight:400">(opsional)</span></label>
+            <textarea id="upd-note-${i}" rows="2"
+              placeholder="Perkembangan, kendala, atau temuan lapangan…"
+              style="font-size:12px"></textarea>
+          </div>
+          <button class="btn-ind-update" id="upd-btn-${i}"
+            onclick="saveOneIndicator(${i}, '${ind.id}', ${currentActual}, ${target}, '${escHtml(ind.indicator_name)}', '${escHtml(ind.unit||"")}')">
+            💾 Simpan Update
+          </button>
+          <div id="upd-msg-${i}" class="form-msg hidden" style="margin-top:6px;font-size:12px"></div>
+        </div>
+
+        <!-- Riwayat -->
+        ${sortedUpd.length ? `
+        <div class="mini-history" style="margin-top:10px">
+          <div class="mini-history-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>ðŸ“‹ ${sortedUpd.length} Riwayat Update</span>
+            <button class="btn-danger btn-sm" style="font-size:10px;padding:3px 8px"
+              onclick="clearIndicatorHistory('${ind.id}')">Hapus Semua</button>
+          </div>
+          <div class="mini-history-list">
+            ${[...sortedUpd].reverse().slice(0,5).map(h=>`
+              <div class="mini-history-item">
+                <span class="mini-history-val" style="min-width:80px">${h.actual_value} ${ind.unit||""}</span>
+                <span class="mini-history-note">${h.note||""}</span>
+                <span class="mini-history-date">
+                  ${new Date(h.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}
+                </span>
+              </div>`).join("")}
+            ${sortedUpd.length>5?`<div class="mini-history-more">${sortedUpd.length-5} update lainnya</div>`:""}
+          </div>
+        </div>` : ""}
+      </div>`;
+  }).join("");
+}
+
+
+// Preview kumulatif realtime: tambahan + current = hasil
+window.previewKumul = function (i, currentActual, target) {
+  const addEl     = document.getElementById("upd-add-" + i);
+  const prevEl    = document.getElementById("upd-preview-" + i);
+  if (!addEl || !prevEl) return;
+  const addVal    = parseFloat(addEl.value) || 0;
+  const newTotal  = currentActual + addVal;
+  const pct       = target > 0 ? Math.min(Math.round(newTotal / target * 100), 100) : 0;
+  const pctColor  = pct >= 100 ? "#22c55e" : pct >= 70 ? "#3b82f6" : pct >= 40 ? "#f59e0b" : "#ef4444";
+  prevEl.value       = newTotal;
+  prevEl.style.color = pctColor;
+};
+
+// Simpan update untuk SATU indikator (kumulatif)
+window.saveOneIndicator = async function (i, indId, currentActual, target, indName, unit) {
+  const addEl   = document.getElementById("upd-add-" + i);
+  const noteEl  = document.getElementById("upd-note-" + i);
+  const msgEl   = document.getElementById("upd-msg-" + i);
+  const btn     = document.getElementById("upd-btn-" + i);
+  if (!addEl || !msgEl || !btn) return;
+
+  const addVal  = parseFloat(addEl.value) || 0;
+  const note    = noteEl ? noteEl.value.trim() || null : null;
+
+  // Wajib ada tambahan atau catatan
+  if (addVal === 0 && !note) {
+    msgEl.textContent = "âš ï¸ Isi tambahan nilai atau catatan terlebih dahulu.";
+    msgEl.className   = "form-msg error";
+    msgEl.style.display = "block";
+    setTimeout(() => { msgEl.className = "form-msg hidden"; msgEl.style.display = ""; }, 3000);
+    return;
+  }
+
+  btn.textContent = "Menyimpan…";
+  btn.disabled    = true;
+  msgEl.className = "form-msg hidden";
+
+  try {
+    const newTotal = currentActual + addVal;
+
+    // Update kolom actual di project_indicators
+    await client.from("project_indicators").update({ actual: newTotal }).eq("id", indId);
+
+    // Selalu insert ke indicator_updates (nilai sudah pasti berbeda karena kumulatif)
+    await client.from("indicator_updates").insert({
+      indicator_id   : indId,
+      project_name   : currentProject.name,
+      indicator_name : indName,
+      actual_value   : newTotal,
+      note,
+      updated_by     : AUDIT_USER,
+    });
+
+    // Kosongkan input
+    addEl.value  = "";
+    if (noteEl) noteEl.value = "";
+
+    // Tampilkan sukses
+    msgEl.textContent   = `✅ Capaian diperbarui: ${currentActual} + ${addVal} = ${newTotal} ${unit}`;
+    msgEl.className     = "form-msg success";
+    msgEl.style.display = "block";
+
+    // Reload dan refresh panel
+    await loadProjects();
+    const updated = (window.allProjects || []).find(p => p.name === currentProject.name);
+    if (updated) {
+      updated.activities_summary = allActivities.map(a => ({
+        project_name: a.project_name, progress: a.progress, status: a.status,
+      }));
+      currentProject = updated;
+      window.currentProject = updated;
+      renderDetailHeader(currentProject);
+      renderIndicatorUpdatePanel(currentProject);
+    }
+
+  } catch (err) {
+    msgEl.textContent   = "âŒ " + err.message;
+    msgEl.className     = "form-msg error";
+    msgEl.style.display = "block";
+  } finally {
+    btn.textContent = "💾 Simpan Update";
+    btn.disabled    = false;
+  }
+};
+
+// Legacy updateIndPct - kept for compatibility
+window.updateIndPct = function (i, target) {
+  const actual   = parseFloat(document.getElementById("upd-actual-" + i)?.value) || 0;
+  const pct      = target > 0 ? Math.min(Math.round(actual / target * 100), 100) : 0;
+  const el       = document.getElementById("upd-pct-" + i);
+  const pctColor = pct >= 100 ? "#22c55e" : pct >= 70 ? "#3b82f6" : pct >= 40 ? "#f59e0b" : "#ef4444";
+  if (el) { el.value = pct; el.style.color = pctColor; el.style.fontWeight = "700"; }
+};
+
+
+// Edit proyek dari panel kanan
+document.getElementById("editProjectBtn").addEventListener("click", () => {
+  if (!currentProject) return;
+  fillFormEdit(window.allProjects.findIndex(p => p.name === currentProject.name));
+});
+
+// ===================== FILL FORM EDIT =====================
+window.fillFormEdit = function (idx) {
+  const item = window.allProjects[idx];
+  editingProjectOriginalName = item.name;
+  editingProjectId          = item.id || null;
+  originalIndicatorIds = (item.project_indicators || []).map(ind => ind.id).filter(Boolean);
+  document.getElementById("f-name").value       = item.name;
+  document.getElementById("f-location").value   = item.location;
+  document.getElementById("f-owner").value      = item.owner;
+  document.getElementById("f-donor").value      = item.donor       || "";
+  document.getElementById("f-start-date").value = item.start_date  || "";
+  document.getElementById("f-deadline").value   = item.deadline    || "";
+  document.getElementById("f-status").value     = item.status;
+  document.getElementById("f-desc").value            = item.description    || "";
+  document.getElementById("f-note").value            = item.note           || "";
+  document.getElementById("f-budget-approved").value = item.budget_approved || "";
+  document.getElementById("f-budget-actual").value   = item.budget_actual   || "";
+  document.getElementById("f-goal").value = item.goal || "";
+  outcomes = (item.project_outcomes || []).map(o => ({ text: o.outcome_text }));
+  renderOutcomeList();
+  indicators = item.project_indicators.map(ind => {
+    const latestActual = getLatestActual(ind);
+    return {
+      id              : ind.id,
+      name            : ind.indicator_name,
+      type            : ind.type,
+      target          : ind.target,
+      unit            : ind.unit,
+      actual          : latestActual,
+      previous_actual : latestActual,
+      update_note     : "",
+      history         : ind.indicator_updates  || [],
+      evidence        : ind.indicator_evidence || [],
+    };
+  });
+  renderIndicatorList();
+  document.getElementById("pageTitle").textContent    = "Edit Proyek";
+  document.getElementById("pageSubtitle").textContent = item.name;
+  document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".nav-links li").forEach(x => x.classList.remove("active"));
+  document.querySelector("[data-tab='input']").classList.add("active");
+  document.getElementById("tab-input").classList.add("active");
+  setStep(1);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+
+// ===================== RESTORE & ARSIP =====================
+window.restoreProject = async function (id, name) {
+  if (!confirm(`Pulihkan proyek "${name}" dari arsip?`)) return;
+  const { error } = await client.from("projects").update({
+    archived: false, archived_at: null, archived_by: null
+  }).eq("name", name);
+  if (error) { alert("Gagal pulihkan: " + error.message); return; }
+  client.from("audit_log").insert({
+    project_id: id||null, project_name: name, entity_type: "project", action: "restore", changed_by: AUDIT_USER,
+  }).then(()=>{}).catch(()=>{});
+  await loadProjects();
+  if (document.getElementById("archivedProjectList")) loadArchivedProjects();
+};
+
+window._archivedData = [];
+window.loadArchivedProjects = async function () {
+  const tbody = document.getElementById("archivedProjectList");
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#94a3b8;font-size:13px;">⏳ Memuat data...</td></tr>';
+  const _client = window.client || client;
+  if (!_client || typeof _client.from !== 'function') {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#ef4444;font-size:13px;">⚠️ Koneksi database belum siap. Coba refresh halaman.</td></tr>';
+    return;
+  }
+  const { data, error } = await _client.from("projects")
+    .select("id, name, location, owner, donor, status, archived_at, archived_by")
+    .eq("archived", true)
+    .order("archived_at", { ascending: false });
+  if (error) { console.error(error); tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;color:#ef4444;">${error.message}</td></tr>`; return; }
+  window._archivedData = data || [];
+  renderArchivedRows(window._archivedData);
+};
+
+function renderArchivedRows(rows) {
+  const tbody = document.getElementById("archivedProjectList");
+  if (!tbody) return;
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#94a3b8;font-size:13px;">📦 Tidak ada proyek yang diarsipkan.</td></tr>';
+    return;
+  }
+  const statusClass = s => {
+    if (!s) return 'badge badge-ditangguhkan';
+    const sl = s.toLowerCase();
+    if (sl.includes('aktif') || sl.includes('on-track') || sl.includes('on track')) return 'badge badge-aktif';
+    if (sl.includes('terlambat') || sl.includes('at risk')) return 'badge badge-terlambat';
+    if (sl.includes('selesai') || sl.includes('completed')) return 'badge badge-selesai';
+    return 'badge badge-ditangguhkan';
+  };
+  tbody.innerHTML = rows.map((p, i) => `
+    <tr>
+      <td style="color:#94a3b8;font-size:12px">${i + 1}</td>
+      <td>
+        <div style="font-weight:600;font-size:13px;color:#0f172a">${p.name}</div>
+        ${p.donor ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${p.donor}</div>` : ''}
+      </td>
+      <td style="font-size:12px;color:#475569">${p.location || '-'}<br><span style="color:#94a3b8">${p.owner || '-'}</span></td>
+      <td style="font-size:12px;color:#475569">${p.donor || '-'}</td>
+      <td><span class="${statusClass(p.status)}">${p.status || 'N/A'}</span></td>
+      <td style="font-size:12px;color:#475569;white-space:nowrap">${p.archived_at ? new Date(p.archived_at).toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}) : '-'}</td>
+      <td style="font-size:12px;color:#475569">${p.archived_by || '-'}</td>
+      <td>
+        <button class="btn-secondary btn-sm" style="white-space:nowrap"
+          onclick="restoreProject('${p.id}','${p.name.replace(/'/g,"\\'")}')">
+          <i class="fa-solid fa-rotate-left"></i> Pulihkan
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+window.filterArchivedProjects = function(q) {
+  if (!q) { renderArchivedRows(window._archivedData); return; }
+  const lower = q.toLowerCase();
+  const filtered = (window._archivedData || []).filter(p =>
+    (p.name||'').toLowerCase().includes(lower) ||
+    (p.owner||'').toLowerCase().includes(lower) ||
+    (p.location||'').toLowerCase().includes(lower)
+  );
+  renderArchivedRows(filtered);
+};
+
+// ===================== AUDIT LOG VIEWER =====================
+window.loadProjectAuditLog = async function (projectId, projectName) {
+  const { data, error } = await client.from("audit_log")
+    .select("entity_type, action, changed_by, new_values, note, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) { console.error(error); return []; }
+  return data || [];
+};
+
+// ===================== AKTIVITAS =====================
+async function loadActivities(projectName) {
+  const { data: acts  } = await client.from("project_activities").select().eq("project_name", projectName).order("sort_order").order("created_at");
+  const { data: notes } = await client.from("activity_notes").select().eq("project_name", projectName).order("created_at", { ascending: false });
+  allActivities   = acts  || [];
+  window.allActivities = allActivities;
+  allActNotes     = notes || [];
+  renderActivityListDetail();
+  if (typeof loadAllParticipantBadges === "function") loadAllParticipantBadges();
+  updateFileCountBadges();
+  // Refresh header progress setelah aktivitas dimuat (data activities_summary fresh)
+  if (currentProject) {
+    // Suntikkan activities_summary terbaru ke currentProject
+    currentProject.activities_summary = allActivities.map(a => ({
+      project_name: a.project_name,
+      progress    : a.progress,
+      status      : a.status,
+    }));
+    renderDetailHeader(currentProject);
+  }
+}
+
+function renderActivityListDetail() {
+  const container = document.getElementById("activityListDetail");
+  if (!allActivities.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:20px">Belum ada aktivitas.<br>Klik <strong>Tambah</strong> untuk menambah.</div>`;
+    return;
+  }
+
+  const avg  = Math.round(allActivities.reduce((a, b) => a + (Number(b.progress) || 0), 0) / allActivities.length);
+  const done = allActivities.filter(a => a.status === "Selesai").length;
+
+  container.innerHTML = `
+    <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#15803d;font-weight:600">
+      ${done}/${allActivities.length} selesai &nbsp;&nbsp; Rata-rata progress ${avg}%
+    </div>
+    ${allActivities.map(act => {
+      const cls      = act.status.toLowerCase().replace(/\s+/g, "-");
+      const notes    = allActNotes.filter(n => n.activity_id === act.id);
+      const checked  = act.status === "Selesai";
+      const badgeCls = cls === "selesai" ? "badge-selesai-act" : `badge-${cls}`;
+
+      return `
+        <div class="activity-card ${cls}" id="actcard-${act.id}">
+          <div class="activity-card-header" onclick="toggleActBody('${act.id}')">
+            <div class="act-check ${checked ? "checked" : ""}"
+              onclick="event.stopPropagation();toggleActDone('${act.id}',${checked})"
+              title="${checked ? "Tandai belum selesai" : "Tandai selesai"}">${checked ? "<i class='fa-solid fa-check'></i>" : ""}</div>
+            <div class="activity-card-info">
+              <div class="activity-card-title ${checked ? "done" : ""}">${act.title}</div>
+              <div class="activity-card-meta">
+                ${act.pic      ? `<span>${act.pic}</span>`      : ""}
+                ${act.due_date ? `<span>${act.due_date}</span>` : ""}
+                <span><span class="badge ${badgeCls}" style="font-size:10px">${act.status}</span></span>
+                ${notes.length ? `<span>${notes.length} 📝</span>` : ""}
+                <span class="file-count-badge" id="filecount-${act.id}"></span>
+              </div>
+            </div>
+            <div class="activity-card-progress">
+              <div class="activity-card-pct">${act.progress}%</div>
+              <div class="progress-bar" style="width:80px;height:5px">
+                <div class="progress-fill" style="width:${act.progress}%"></div>
+              </div>
+            </div>
+            <div class="activity-card-actions" onclick="event.stopPropagation()">
+              <button class="btn-secondary btn-sm" style="font-size:11px;padding:4px 8px;margin-right:4px" title="Peserta Kegiatan"
+                onclick="openAddParticipantModalById('${act.id}')">
+                <i class='fa-solid fa-users'></i>
+                <span id="pcount-${act.id}" style="font-size:10px"></span>
+              </button>
+              <button class="btn-edit"   onclick="openActModal('${act.id}')"><i class='fa-solid fa-pen-to-square'></i></button>
+              <button class="btn-remove" onclick="deleteActivity('${act.id}')"><i class='fa-solid fa-xmark'></i></button>
+            </div>
+                        <button class="btn-sub-activity" onclick="openSubActivityModal('${act.id}');event.stopPropagation();"><i class="fa-solid fa-clone"></i> Sub-Aktivitas</button>
+          </div>
+          <div class="activity-card-body" id="actbody-${act.id}">
+            ${act.description ? `<p style="font-size:12px;color:#475569;margin:10px 0 6px">${act.description}</p>` : ""}
+            <div class="act-note-section">
+              <div class="act-note-title">⚠️ Tantangan & Hambatan</div>
+              <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
+                <textarea id="inline-note-${act.id}" rows="2"
+                  placeholder="Tulis catatan pelaksanaan…"
+                  style="flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical"></textarea>
+                <button class="btn-upload" onclick="saveInlineNote('${act.id}')">+</button>
+              </div>
+              <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
+            </div>
+          </div>
+        </div>`;
+    }).join("")}
+  `;
+}
+  
+ 
+
+// Update badge jumlah peserta di card aktivitas
+window.refreshParticipantBadge = async function (activityId) {
+  const _client = window.client || client;
+  const { count } = await _client
+    .from('activity_participants')
+    .select('id', { count: 'exact', head: true })
+    .eq('activity_id', activityId);
+  const el = document.getElementById('pcount-' + activityId);
+  if (el) el.textContent = count > 0 ? count : '';
+};
+
+// Load semua badge peserta setelah render activity list
+window.loadAllParticipantBadges = async function () {
+  if (!window.allActivities?.length) return;
+  const _client = window.client || client;
+  const ids = allActivities.map(a => a.id);
+  const { data } = await _client
+    .from('activity_participants')
+    .select('activity_id')
+    .in('activity_id', ids);
+  if (!data) return;
+  // Hitung per activity
+  const countMap = {};
+  data.forEach(r => { countMap[r.activity_id] = (countMap[r.activity_id]||0) + 1; });
+  ids.forEach(id => {
+    const el = document.getElementById('pcount-' + id);
+    if (el) el.textContent = countMap[id] > 0 ? countMap[id] : '';
+  });
+};
+// Wrapper aman untuk buka modal peserta dari activity card
+window.openAddParticipantModalById = function (actId) {
+  const act = (window.allActivities || []).find(a => a.id === actId);
+  if (!act) return;
+  const projName = window.currentProject?.name || '';
+  if (typeof openAddParticipantModal === 'function') {
+    openAddParticipantModal(actId, act.title || '', projName);
+  }
+};
+
+
+
+function renderActNotes(notes) {
+  if (!notes.length) return `<div class="history-empty">Belum ada catatan.</div>`;
+  return notes.map(n => `
+    <div class="act-note-item">
+      <div class="history-dot"></div>
+      <div class="act-note-content">
+        <div class="act-note-text">${n.note}</div>
+        <div class="act-note-date">${new Date(n.created_at).toLocaleString("id-ID",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} — ${n.noted_by || "Tim"}</div>
+      </div>
+    </div>`).join("");
+}
+
+window.toggleActBody = function (id) {
+  document.getElementById("actbody-" + id)?.classList.toggle("open");
+};
+
+window.toggleActDone = async function (id, wasChecked) {
+  const update = { status: wasChecked ? "Sedang Berjalan" : "Selesai" };
+  if (!wasChecked) update.progress = 100;
+  await client.from("project_activities").update(update).eq("id", id);
+  await loadActivities(currentActProject);
+  await loadProjects();
+};
+
+window.saveInlineNote = async function (actId) {
+  const ta   = document.getElementById("inline-note-" + actId);
+  const note = ta.value.trim();
+  if (!note) { alert("Catatan tidak boleh kosong."); return; }
+  await client.from("activity_notes").insert({ activity_id: actId, project_name: currentActProject, note, noted_by: "Tim" });
+  ta.value = "";
+  await loadActivities(currentActProject);
+};
+
+window.deleteActivity = async function (id) {
+  if (!confirm("Hapus aktivitas ini?")) return;
+  await client.from("project_activities").delete().eq("id", id);
+  await loadActivities(currentActProject);
+  await loadProjects();
+};
+
+async function updateFileCountBadges() {
+  if (!allActivities.length) return;
+  const { data } = await client.from("activity_files").select("activity_id").in("activity_id", allActivities.map(a => a.id));
+  const counts = {};
+  (data || []).forEach(r => { counts[r.activity_id] = (counts[r.activity_id] || 0) + 1; });
+  allActivities.forEach(act => {
+    const el = document.getElementById("filecount-" + act.id);
+    if (el) el.textContent = counts[act.id] ? `ðŸ“Ž ${counts[act.id]}` : "";
+  });
+}
+
+// Tambah aktivitas dari panel detail
+document.getElementById("addActivityBtnDetail").addEventListener("click", () => openActModal(null));
+
+// ===================== MODAL AKTIVITAS =====================
+window.openActModal = async function (id) {
+  currentActId = id;
+  document.getElementById("actModalTitle").textContent = id ? "Edit Aktivitas" : "Tambah Aktivitas";
+  ["act-id","act-title","act-desc","act-pic","act-new-note"].forEach(x => { document.getElementById(x).value = ""; });
+  document.getElementById("act-status").value       = "Belum Mulai";
+  document.getElementById("act-start").value        = "";
+  document.getElementById("act-due").value          = "";
+  document.getElementById("act-progress").value     = 0;
+  document.getElementById("act-progress-range").value = 0;
+  document.getElementById("act-progress-val").textContent = "0";
+  document.getElementById("actFormMsg").className   = "form-msg hidden";
+  document.getElementById("actNoteList").innerHTML  = `<div class="history-empty">Belum ada catatan.</div>`;
+  stagedFiles = []; savedFiles = [];
+  renderStagingList(); renderSavedFiles();
+  renderStagingList(); renderSavedFiles();
+  document.getElementById("actUploadProgress").textContent = "";
+  // Sprint 2: reset panel isu
+  const _ip = document.getElementById("actIssuesPanel");
+  if (_ip) _ip.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">Simpan aktivitas terlebih dahulu.</div>';
+
+  
+  document.getElementById("actUploadProgress").textContent = "";
+
+  if (id) {
+    const act = allActivities.find(a => a.id === id);
+    if (act) {
+      document.getElementById("act-title").value            = act.title;
+      document.getElementById("act-desc").value             = act.description || "";
+      document.getElementById("act-pic").value              = act.pic || "";
+      document.getElementById("act-status").value           = act.status;
+      document.getElementById("act-start").value            = act.start_date || "";
+      document.getElementById("act-due").value              = act.due_date   || "";
+      document.getElementById("act-progress").value         = act.progress;
+      document.getElementById("act-progress-range").value   = act.progress;
+      document.getElementById("act-progress-val").textContent = act.progress;
+      const notes = allActNotes.filter(n => n.activity_id === id);
+      document.getElementById("actNoteList").innerHTML = renderActNotes(notes);
+      await loadSavedFiles(id);
+      await loadSavedFiles(id);
+      // Sprint 2
+      if (typeof window.renderActivityIssuesPanel === "function") {
+        window.renderActivityIssuesPanel(id);
+      }
+    }
+  }
+  document.getElementById("actModalOverlay").classList.remove("hidden");
+};
+
+["actModalClose","actModalClose2"].forEach(id => {
+  document.getElementById(id).addEventListener("click", () => {
+    document.getElementById("actModalOverlay").classList.add("hidden");
+  });
+});
+document.getElementById("actModalOverlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("actModalOverlay"))
+    document.getElementById("actModalOverlay").classList.add("hidden");
+});
+
+document.getElementById("saveNoteBtn").addEventListener("click", async () => {
+  const note = document.getElementById("act-new-note").value.trim();
+  if (!note)          { alert("Catatan tidak boleh kosong."); return; }
+  if (!currentActId)  { alert("Simpan aktivitas terlebih dahulu."); return; }
+  await client.from("activity_notes").insert({ activity_id: currentActId, project_name: currentActProject, note, noted_by: "Tim" });
+  document.getElementById("act-new-note").value = "";
+  const { data: notes } = await client.from("activity_notes").select().eq("activity_id", currentActId).order("created_at", { ascending: false });
+  allActNotes = [...allActNotes.filter(n => n.activity_id !== currentActId), ...(notes || [])];
+  document.getElementById("actNoteList").innerHTML = renderActNotes(notes || []);
+});
+
+document.getElementById("saveActivityBtn").addEventListener("click", async () => {
+  const msg   = document.getElementById("actFormMsg");
+  const title = document.getElementById("act-title").value.trim();
+  if (!title) { msg.textContent = "Judul wajib diisi."; msg.className = "form-msg error"; return; }
+  const payload = {
+    project_name : currentActProject,
+    title,
+    description  : document.getElementById("act-desc").value.trim()  || null,
+    pic          : document.getElementById("act-pic").value.trim()    || null,
+    status       : document.getElementById("act-status").value,
+    start_date   : document.getElementById("act-start").value         || null,
+    due_date     : document.getElementById("act-due").value           || null,
+    progress     : Number(document.getElementById("act-progress").value) || 0,
+  };
+  let error;
+  if (currentActId) {
+    ({ error } = await client.from("project_activities").update(payload).eq("id", currentActId));
+  } else {
+    const { data, error: insErr } = await client.from("project_activities").insert(payload).select().single();
+    error = insErr;
+    if (data) currentActId = data.id;
+  }
+  if (error) { msg.textContent = error.message; msg.className = "form-msg error"; return; }
+  msg.textContent = "✅ Tersimpan!";
+  msg.className   = "form-msg success";
+  setTimeout(() => {
+    document.getElementById("actModalOverlay").classList.add("hidden");
+    msg.className = "form-msg hidden";
+  }, 1200);
+  await loadActivities(currentActProject);
+  await loadProjects();
+});
+
+// ===================== FILE UPLOAD =====================
+function getFileIcon(n) {
+  return /\.(jpg|jpeg|png|gif|webp)$/i.test(n) ? "ðŸ–¼ï¸"
+       : /\.pdf$/i.test(n) ? "ðŸ“„"
+       : /\.(doc|docx)$/i.test(n) ? "ðŸ“"
+       : /\.(xls|xlsx|csv)$/i.test(n) ? "ðŸ“Š"
+       : /\.(ppt|pptx)$/i.test(n) ? "ðŸ“‘" : "ðŸ“Ž";
+}
+function formatBytes(b) {
+  if (!b) return "";
+  if (b < 1024) return b + " B";
+  if (b < 1048576) return (b/1024).toFixed(1) + " KB";
+  return (b/1048576).toFixed(1) + " MB";
+}
+function isImage(n) { return /\.(jpg|jpeg|png|gif|webp)$/i.test(n); }
+
+function renderStagingList() {
+  const container   = document.getElementById("actFileStagingList");
+  const uploadRow   = document.getElementById("actUploadAllRow");
+  if (!stagedFiles.length) { container.innerHTML = ""; uploadRow.classList.add("hidden"); return; }
+  uploadRow.classList.remove("hidden");
+  container.innerHTML = stagedFiles.map(sf => {
+    const thumb = isImage(sf.file.name)
+      ? `<img class="file-thumb" src="${URL.createObjectURL(sf.file)}" alt="">`
+      : `<div class="file-thumb-placeholder">${getFileIcon(sf.file.name)}</div>`;
+    const statusMap = { wait:"Menunggu", uploading:"Upload…", ok:"OK", err: sf.errMsg || "Gagal" };
+    return `
+      <div class="file-staging-item ${sf.status==="ok"?"uploaded":""} ${sf.status==="err"?"error-item":""}">
+        ${thumb}
+        <div class="file-staging-info">
+          <div class="file-staging-name" title="${sf.file.name}">${sf.file.name}</div>
+          <div class="file-staging-size">${formatBytes(sf.file.size)}</div>
+          <div class="file-progress-bar" id="bar-${sf.id}"><div class="file-progress-fill" style="width:${sf.status==="ok"?"100":"0"}%"></div></div>
+        </div>
+        <span class="file-staging-status ${sf.status}">${statusMap[sf.status]}</span>
+        ${sf.status !== "uploading" ? `<button class="file-remove-btn" onclick="removeStagedFile('${sf.id}')"><i class='fa-solid fa-xmark'></i></button>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function renderSavedFiles() {
+  const container = document.getElementById("actSavedFilesList");
+  const titleEl   = document.getElementById("savedFilesTitle");
+  if (!savedFiles.length) {
+    container.innerHTML = `<div class="history-empty" style="font-size:12px">Belum ada file.</div>`;
+    titleEl.style.display = "none"; return;
+  }
+  titleEl.style.display = "block";
+  container.innerHTML = savedFiles.map(f => {
+    const thumb = isImage(f.file_name)
+      ? `<img class="file-thumb" src="${f.file_url}" alt="" loading="lazy">`
+      : `<div class="file-thumb-placeholder">${getFileIcon(f.file_name)}</div>`;
+    return `
+      <div class="file-saved-item">
+        ${thumb}
+        <div class="file-saved-info">
+          <div class="file-saved-name" title="${f.file_name}">${f.file_name}</div>
+          <div class="file-saved-meta">${formatBytes(f.file_size)} — ${new Date(f.created_at).toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</div>
+        </div>
+        <div class="file-saved-actions">
+          <a href="${f.file_url}" target="_blank" class="file-btn-view">Lihat</a>
+          <button class="file-btn-delete" onclick="deleteSavedFile('${f.id}','${f.file_url}')"><i class='fa-solid fa-xmark'></i></button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function addFilesToStaging(fileList) {
+  Array.from(fileList).forEach(file => {
+    if (file.size > 10 * 1024 * 1024) { alert(file.name + " terlalu besar (maks 10 MB)."); return; }
+    stagedFiles.push({ file, id: Date.now() + Math.random().toString(36).slice(2), status: "wait", errMsg: "" });
+  });
+  renderStagingList();
+}
+
+document.getElementById("actFileInput").addEventListener("change", function () {
+  addFilesToStaging(this.files); this.value = "";
+});
+const dropzone = document.getElementById("actDropzone");
+dropzone.addEventListener("dragover",  e => { e.preventDefault(); dropzone.classList.add("dragover"); });
+dropzone.addEventListener("dragleave", ()  => dropzone.classList.remove("dragover"));
+dropzone.addEventListener("drop",      e  => { e.preventDefault(); dropzone.classList.remove("dragover"); addFilesToStaging(e.dataTransfer.files); });
+
+window.removeStagedFile = function (id) { stagedFiles = stagedFiles.filter(sf => sf.id !== id); renderStagingList(); };
+
+document.getElementById("actUploadAllBtn").addEventListener("click", async () => {
+  if (!currentActId) { alert("Simpan aktivitas terlebih dahulu."); return; }
+  const pending = stagedFiles.filter(sf => sf.status === "wait" || sf.status === "err");
+  if (!pending.length) { alert("Tidak ada file yang perlu diupload."); return; }
+  const btn  = document.getElementById("actUploadAllBtn");
+  const prog = document.getElementById("actUploadProgress");
+  btn.disabled = true;
+  for (let i = 0; i < pending.length; i++) {
+    const sf = pending[i];
+    sf.status = "uploading"; renderStagingList();
+    prog.textContent = `Upload ${i+1}/${pending.length}…`;
+    const path = `${currentActId}/${Date.now()}-${sf.file.name}`;
+    const { error: upErr } = await client.storage.from(BUCKET).upload(path, sf.file, { upsert: true });
+    if (upErr) { sf.status = "err"; sf.errMsg = upErr.message; renderStagingList(); continue; }
+    const bar = document.querySelector(`#bar-${sf.id} .file-progress-fill`);
+    if (bar) bar.style.width = "100%";
+    const { data: urlData } = client.storage.from(BUCKET).getPublicUrl(path);
+    const { error: dbErr } = await client.from("activity_files").insert({
+      activity_id : currentActId,
+      project_name: currentActProject,
+      file_name   : sf.file.name,
+      file_url    : urlData.publicUrl,
+      file_size   : sf.file.size,
+      file_type   : sf.file.type || null,
+      uploaded_by : "Tim",
+    });
+    sf.status = dbErr ? "err" : "ok";
+    sf.errMsg = dbErr ? dbErr.message : "";
+    renderStagingList();
+  }
+  prog.textContent = "Selesai!";
+  btn.disabled = false;
+  await loadSavedFiles(currentActId);
+  setTimeout(() => {
+    stagedFiles = stagedFiles.filter(sf => sf.status !== "ok");
+    renderStagingList();
+    if (!stagedFiles.length) prog.textContent = "";
+  }, 2000);
+  await loadActivities(currentActProject);
+});
+
+async function loadSavedFiles(actId) {
+  const { data } = await client.from("activity_files").select().eq("activity_id", actId).order("created_at", { ascending: false });
+  savedFiles = data || [];
+  renderSavedFiles();
+}
+
+window.deleteSavedFile = async function (fileId, fileUrl) {
+  if (!confirm("Hapus file ini?")) return;
+  try {
+    const parts = fileUrl.split(BUCKET + "/");
+    if (parts[1]) await client.storage.from(BUCKET).remove([decodeURIComponent(parts[1])]);
+  } catch (e) { /* abaikan error storage */ }
+  await client.from("activity_files").delete().eq("id", fileId);
+  await loadSavedFiles(currentActId);
+  await loadActivities(currentActProject);
+};
+
+// ===================== HAPUS PROYEK =====================
+window.deleteProject = async function (id, name) {
+  if (!confirm(`Arsipkan proyek "${name}"?\n\nOK = Arsipkan (data tetap aman)\nCancel = Batal`)) return;
+  const { error } = await client.from("projects").update({
+    archived    : true,
+    archived_at : new Date().toISOString(),
+    archived_by : AUDIT_USER,
+  }).eq("name", name);
+  if (error) { alert("Gagal arsipkan proyek: " + error.message); return; }
+  client.from("audit_log").insert({
+    project_id: id||null, project_name: name,
+    entity_type: "project", action: "archive", changed_by: AUDIT_USER,
+  }).then(()=>{}).catch(()=>{});
+  currentProject = null;
+  await loadProjects();
+  switchTab("archive");
+};
+
+
+// ===================== HAPUS RIWAYAT INDIKATOR =====================
+window.clearIndicatorHistory = async function (indicatorId) {
+  if (!confirm("Hapus semua riwayat capaian indikator ini? Tidak bisa dikembalikan.")) return;
+  const { error } = await client.from("indicator_updates").delete().eq("indicator_id", indicatorId);
+  if (error) { alert("Gagal hapus riwayat: " + error.message); return; }
+  await loadProjects();
+};
+
+// ===================== SIDEBAR SUBMENU =====================
+function renderSidebarSubmenu(items) {
+  const submenu = document.getElementById("projectSubmenu");
+  if (!submenu) return;
+  if (!items.length) { submenu.innerHTML = ""; return; }
+  submenu.innerHTML = items.map((item, i) => {
+    const cls       = item.status.toLowerCase().replace(/\s+/g, "-");
+    const shortName = item.name.length > 22 ? item.name.substring(0, 22) + "…" : item.name;
+    return `<li onclick="openProjectDetail(window.allProjects[${i}])">
+      <span class="submenu-dot dot-${cls}"></span>
+      <span class="submenu-name" title="${item.name.replace(/"/g,"&quot;")}">${shortName}</span>
+    </li>`;
+  }).join("");
+}
+
+// ===================== PANEL SCROLL SHADOW =====================
+function initPanelScrollShadow() {
+  document.querySelectorAll(".panel-scroll").forEach(el => {
+    const wrap = el.closest(".panel-scroll-wrap");
+    if (!wrap) return;
+    const check = () => wrap.classList.toggle("at-bottom", el.scrollHeight - el.scrollTop - el.clientHeight < 10);
+    el.addEventListener("scroll", check);
+    check();
+  });
+}
+(function () {
+  const orig = window.switchTab;
+  window.switchTab = function (tab) {
+    orig(tab);
+    if (tab === "detail") setTimeout(initPanelScrollShadow, 300);
+  };
+})();
+
+// ===================== OBSERVER BADGE COUNTER =====================
+(function () {
+  const observer = new MutationObserver(() => {
+    const list    = document.getElementById("activityListDetail");
+    const counter = document.getElementById("activityCount");
+    if (list && counter) counter.textContent = list.querySelectorAll(".activity-card").length + " aktivitas";
+    const indList    = document.getElementById("indicatorUpdateList");
+    const indCounter = document.getElementById("indCount");
+    if (indList && indCounter) indCounter.textContent = indList.querySelectorAll(".ind-update-card").length + " indikator";
+    setTimeout(initPanelScrollShadow, 100);
+  });
+  document.addEventListener("DOMContentLoaded", () => {
+    const actList = document.getElementById("activityListDetail");
+    const indList = document.getElementById("indicatorUpdateList");
+    if (actList) observer.observe(actList, { childList: true, subtree: true });
+    if (indList) observer.observe(indList, { childList: true, subtree: true });
+    initPanelScrollShadow();
+  });
+})();
+
+// ===================== REALTIME + INIT =====================
+client.channel("projects-rt")
+  .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, loadProjects)
+  .subscribe();
+
+document.getElementById("refreshBtn").addEventListener("click", loadProjects);
+
+setStep(1);
+loadProjects();
+
+
+window.auditRefleksiSchema = async function(){
+  const { data, error } = await (window.client || client).rpc('sql', { query: "select column_name, is_nullable, data_type from information_schema.columns where table_name='refleksi' order by ordinal_position;" });
+  return { data, error };
+};
+// ============================= STAFF WORKLOAD TAB =============================
+let staffWorkloadData = [];
+let staffDashboardMetrics = {};
+
+async function loadStaffWorkload() {
+  try {
+    const { data, error } = await client.from("view_staff_workload").select("*");
+    if (error) throw error;
+    staffWorkloadData = data || [];
+
+    const { data: metrics } = await client.from("view_workload_dashboard").select("metric,value");
+    if (metrics) {
+      staffDashboardMetrics = {};
+      metrics.forEach(m => { staffDashboardMetrics[m.metric] = m.value; });
+    }
+
+    const m = staffDashboardMetrics;
+    const el = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v || "0"; };
+    el("staffCount",    m?.TOTAL_STAFF_ACTIVE);
+    el("activityCount", m?.TOTAL_ACTIVITIES);
+    el("progressAvg",   (m?.AVG_ACTIVITY_PROGRESS || "0").replace("%", ""));
+    el("taskPending",   m?.TOTAL_TASKS_PENDING);
+
+    const sync = document.getElementById("staffLastSync");
+    if (sync) sync.textContent = "Last sync: " + new Date().toLocaleTimeString("id-ID");
+
+    renderStaffTable();
+  } catch (err) {
+    console.error("Staff load error:", err);
+    const body = document.getElementById("staffTableBody");
+    if (body) body.innerHTML = '<tr><td colspan="10" style="padding: 24px; text-align: center; color: #c62828;">Error: ' + err.message + '</td></tr>';
+  }
+}
+
+function renderStaffTable() {
+  const body = document.getElementById("staffTableBody");
+  if (!body) return;
+
+  const filter = (document.getElementById("staffFilter") || {}).value || "all";
+  const rows = staffWorkloadData.filter(r => {
+    if (filter === "active") return r.is_active === true;
+    if (filter === "inactive") return r.is_active === false;
+    return true;
+  });
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="10" style="padding: 24px; text-align: center; color: #888;">Tidak ada data staff.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(s => {
+    const prg = s.avg_activity_progress || 0;
+    const prgCol = prg >= 75 ? "color:#2e7d32" : prg >= 50 ? "color:#e65100" : "color:#c62828";
+    const status = s.is_active
+      ? '<span style="background:#e6f7e6;color:#2e7d32;padding:2px 8px;border-radius:4px;font-size:11px;">Aktif</span>'
+      : '<span style="background:#f5f5f5;color:#888;padding:2px 8px;border-radius:4px;font-size:11px;">Tidak Aktif</span>';
+    const lastUpd = s.latest_activity_update
+      ? new Date(s.latest_activity_update).toLocaleDateString("id-ID") : "—";
+
+    return '<tr>'+
+      '<td style="padding:10px 16px;font-weight:600">'+(s.staff_name||"—")+'</td>'+
+      '<td style="padding:10px 16px">'+(s.staff_role||"—")+'</td>'+
+      '<td style="padding:10px 16px">'+(s.project_count||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.activity_count||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.task_count||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.tasks_completed||0)+'</td>'+
+      '<td style="padding:10px 16px">'+(s.tasks_pending||0)+'</td>'+
+      '<td style="padding:10px 16px;'+prgCol+'">'+prg+'%</td>'+
+      '<td style="padding:10px 16px">'+status+'</td>'+
+      '<td style="padding:10px 16px;color:#888">'+lastUpd+'</td>'+
+      '</tr>';
+  }).join("");
+}
+
+
+/* ================================================================
+   DETAIL PROYEK — RENDER PATCH v4
+   Perubahan dari v3:
+   - Anggaran Proyek EMBEDDED dalam kartu Progress Keseluruhan
+   - Kartu Aktivitas & Indikator: scrollable (max-height)
+   - Aktivitas: tombol Sub-Aktivitas tetap ada + expand on click
+   - Refleksi: render dari projectReflections global (field lengkap)
+   - Kartu Dokumen: filter per proyek aktif (query Supabase)
+================================================================ */
+
+// ── Helpers ──────────────────────────────────────────────────
+function _dpEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _dpIndBadgeClass(pct){if(pct>=85)return'green';if(pct>=60)return'blue';if(pct>=35)return'yellow';return'red';}
+function _dpStatusClass(label){const l=(label||'').toLowerCase();if(l.includes('sangat'))return'sangat-baik';if(l.includes('baik'))return'baik';if(l.includes('sedang'))return'sedang';return'perlu';}
+
+// ── Sticky Topbar ─────────────────────────────────────────────
+function renderDetailTopbarV4(proj){
+  const name=_dpEsc(proj.name||'Proyek');
+  return `
+<div class="detail-topbar" id="dp-topbar">
+  <div class="detail-topbar-left">
+    <span class="detail-topbar-breadcrumb">Detail Proyek</span>
+    <span class="detail-topbar-name" title="${name}">${name}</span>
+  </div>
+  <div class="detail-topbar-right">
+    <span class="realtime-badge">
+      <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:5px;animation:pulse 2s infinite"></span>
+      Realtime ON
+    </span>
+    <button class="btn-refresh-sm" onclick="loadProjectDetail&&loadProjectDetail(currentProject)">🔄 Refresh</button>
+    <button class="btn-print" onclick="window.print()">🖨️ Print Laporan</button>
+    <span id="auth-user-badge" class="realtime-badge" style="display:none;background:#eff6ff;color:#2563eb;border-color:#bfdbfe;"></span>
+    <button id="auth-login-btn" class="btn-secondary btn-sm" onclick="signInWithGoogle()" style="display:none">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:14px;height:14px;vertical-align:middle;margin-right:4px">Login Google
+    </button>
+    <button id="auth-logout-btn" class="btn-secondary btn-sm" onclick="signOutGoogle()" style="display:none">Logout</button>
+    <button class="btn-back-sm" onclick="switchTab('dashboard')">← Kembali</button>
+  </div>
+</div>`;
+}
+
+// ── Card: Informasi Proyek (kiri atas) ────────────────────────
+function renderDpInfoCard(proj){
+  const s=proj||{};
+  const meta=[
+    {icon:'📍',label:'Lokasi',  val:s.location||'-'},
+    {icon:'👤',label:'PIC',     val:s.pic||s.owner||'-'},
+    {icon:'💰',label:'Pendana', val:s.donor||'-'},
+    {icon:'📅',label:'Deadline',val:s.deadline?new Date(s.deadline).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-'},
+  ];
+  const metaHtml=meta.map(m=>`
+    <div class="dp-meta-item">
+      <span class="dp-meta-icon">${m.icon}</span>
+      <div class="dp-meta-content">
+        <div class="dp-meta-label">${m.label}</div>
+        <div class="dp-meta-value">${_dpEsc(m.val)}</div>
+      </div>
+    </div>`).join('');
+
+  const goalText=_dpEsc(s.goal||s.description||'Belum ada goal proyek.');
+  const outcomesArr=Array.isArray(s.project_outcomes)?s.project_outcomes:Array.isArray(s.outcomes)?s.outcomes:[];
+  let outcomesHtml='';
+  if(outcomesArr.length){
+    const items=outcomesArr.map((o,i)=>`
+      <li><span class="dp-outcome-num">${i+1}</span>
+      <span>${_dpEsc(typeof o==='string'?o:(o.outcome_text||o.text||o.description||''))}</span></li>`).join('');
+    outcomesHtml=`<div class="dp-outcome-block"><span class="dp-block-label purple">🏆 Outcomes</span><ul class="dp-outcome-list">${items}</ul></div>`;
+  }
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Informasi Proyek</div>
+    <span class="badge badge-${(s.status||'aktif').toLowerCase().replace(/\s+/g,'-')}">${s.status||'Aktif'}</span>
+  </div>
+  <div class="dp-meta-grid">${metaHtml}</div>
+  <div class="dp-goal-block"><span class="dp-block-label blue">🎯 Goal</span><div class="dp-block-text">${goalText}</div></div>
+  ${outcomesHtml}
+</div>`;
+}
+
+// ── Card: Progress Keseluruhan + Anggaran (embedded) ──────────
+function renderDpProgressCard(proj){
+  const pct=calcOverallProgress(proj);
+  const color=progressColor(pct);
+  const label=progressLabel(pct);
+  const statusCls=_dpStatusClass(label);
+  const inds=(proj.project_indicators||[]);
+  const totalInd=inds.length;
+  const tercapai=inds.filter(ind=>{const a=getLatestActual(ind);return ind.target>0?Math.round(a/ind.target*100)>=100:false;}).length;
+  const avgInd=calcAvgIndikator(proj);
+  const lastUpdate=inds.reduce((latest,ind)=>{
+    const upds=ind.indicator_updates||[];
+    if(!upds.length)return latest;
+    const d=new Date(upds[upds.length-1].updated_at||0);
+    return d>latest?d:latest;
+  },new Date(0));
+  const lastUpdateStr=lastUpdate.getTime()>0?lastUpdate.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
+
+  // Budget embedded
+  const approved=Number(proj.budget_approved)||0;
+  const actual=Number(proj.budget_actual)||0;
+  const budgetPct=approved>0?Math.min(Math.round(actual/approved*100),100):0;
+  const budgetSection=( approved||actual)?`
+  <div class="dp-budget-embedded">
+    <div class="dp-card-header" style="margin-bottom:10px;margin-top:4px;padding-top:14px;border-top:1px solid #f1f5f9;">
+      <div class="dp-card-title" style="font-size:12px"><span class="dp-card-title-icon">💵</span> Anggaran Proyek</div>
+      <span class="dp-budget-pct-badge">${budgetPct}% terserap</span>
+    </div>
+    <div class="dp-budget-amounts">
+      <div><div class="dp-meta-label">Total Anggaran</div><div class="dp-budget-total">${formatRupiah(approved)}</div></div>
+      <div style="text-align:right"><div class="dp-meta-label">Realisasi</div><div class="dp-budget-actual">${formatRupiah(actual)}</div></div>
+    </div>
+    <div class="dp-budget-bar-track"><div class="dp-budget-bar-fill" style="width:${budgetPct}%"></div></div>
+    <div class="dp-budget-labels"><span>Rp 0</span><span>${formatRupiah(approved)}</span></div>
+  </div>`:'';
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📊</span> Progress Keseluruhan</div>
+  </div>
+  <div class="dp-progress-hero">
+    <div class="dp-progress-pct" style="color:${color}">${pct}%</div>
+    <span class="dp-status-badge ${statusCls}">${label}</span>
+  </div>
+  <div class="dp-progress-bar-wrap">
+    <div class="dp-progress-bar-track"><div class="dp-progress-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    <div class="dp-progress-sub-label"><span>0%</span><span>Target 100%</span></div>
+  </div>
+  <div class="dp-metrics-grid">
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Total Indikator</div>
+      <div class="dp-metric-value">${totalInd}</div>
+      <div class="dp-metric-sub">indikator</div>
+    </div>
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Indikator Tercapai</div>
+      <div class="dp-metric-value" style="color:#22c55e">${tercapai}</div>
+      <div class="dp-metric-sub">dari ${totalInd}</div>
+    </div>
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Avg. Indikator</div>
+      <div class="dp-metric-value">${avgInd!==null?avgInd+'%':'-'}</div>
+      <div class="dp-metric-sub">rata-rata</div>
+    </div>
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Update Terakhir</div>
+      <div class="dp-metric-value" style="font-size:13px">${lastUpdateStr}</div>
+      <div class="dp-metric-sub">terakhir update</div>
+    </div>
+  </div>
+  ${budgetSection}
+</div>`;
+}
+
+// ── Card: Aktivitas (scrollable, sub-aktivitas expand on click) ─
+function renderDpActivitiesCard(activities, proj){
+  const acts=activities||[];
+  const projName=_dpEsc((proj&&proj.name)||'');
+
+  const actRows=acts.map(act=>{
+    const pct=Number(act.progress)||0;
+    const statusKey=(act.status||'').toLowerCase().replace(/\s+/g,'-');
+    const isDone=statusKey==='selesai';
+    const picText=act.pic?`👤 ${_dpEsc(act.pic)}`:'';
+    const dueText=act.due_date?`📅 ${new Date(act.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}`:'';
+    let statusBadge='';
+    if(isDone)                             statusBadge=`<span class="badge badge-selesai" style="font-size:10px">✓ Selesai</span>`;
+    else if(statusKey==='sedang-berjalan') statusBadge=`<span class="badge badge-sedang-berjalan" style="font-size:10px">▶ Berjalan</span>`;
+    else if(statusKey==='tertunda')        statusBadge=`<span class="badge badge-tertunda" style="font-size:10px">⏸ Tertunda</span>`;
+    else                                   statusBadge=`<span class="badge badge-belum-mulai" style="font-size:10px">○ Belum Mulai</span>`;
+
+    return `
+<div class="dp-act-item ${statusKey}" id="dp-act-${act.id}">
+  <div class="dp-act-row1" onclick="_dpToggleActBody('${act.id}')" style="cursor:pointer">
+    <div class="dp-act-title${isDone?' done':''}">${_dpEsc(act.title||act.name||'Aktivitas')}</div>
+    <div class="dp-act-right">
+      <span class="dp-act-pct" style="color:${progressColor(pct)}">${pct}%</span>
+      <div class="dp-act-actions" onclick="event.stopPropagation()">
+        <button class="dp-act-btn" onclick="openActModal('${act.id}')" title="Edit">✏️</button>
+        <button class="dp-act-btn" onclick="openSubActivityModal&&openSubActivityModal('${act.id}')" title="Sub-Aktivitas" style="font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-weight:600"><i class='fa-solid fa-clone' style='margin-right:3px'></i>Sub</button>
+        <button class="dp-act-btn del" onclick="typeof deleteActivity==='function'&&deleteActivity('${act.id}')" title="Hapus">🗑</button>
+      </div>
+    </div>
+  </div>
+  <div class="dp-act-bar-track"><div class="dp-act-bar-fill" style="width:${pct}%"></div></div>
+  <div class="dp-act-row2">
+    <div class="dp-act-meta">${picText}${dueText?`<span>${dueText}</span>`:''}</div>
+    ${statusBadge}
+  </div>
+  <!-- Sub-Aktivitas expand body -->
+  <div class="dp-act-body" id="dp-actbody-${act.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0">
+    ${act.description?`<p style="font-size:12px;color:#475569;margin:0 0 8px;line-height:1.5">${_dpEsc(act.description)}</p>`:''}
+    <div id="dp-sub-list-${act.id}" style="margin-top:4px">
+      <div style="font-size:11px;color:#94a3b8">Memuat sub-aktivitas...</div>
+    </div>
+  </div>
+</div>`;
+  }).join('');
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Aktivitas Pelaksanaan</div>
+    <span class="dp-card-badge">${acts.length} aktivitas</span>
+  </div>
+  <div class="dp-act-list dp-scrollable">${acts.length?actRows:'<div class="empty-state">📋 Belum ada aktivitas pelaksanaan</div>'}</div>
+</div>`;
+}
+
+// ── Toggle body aktivitas + load sub-aktivitas ─────────────────
+function _dpToggleActBody(actId){
+  const body=document.getElementById('dp-actbody-'+actId);
+  if(!body)return;
+  const isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'block';
+  if(!isOpen){_dpLoadSubAktivitas(actId);}
+}
+
+async function _dpLoadSubAktivitas(actId){
+  const container=document.getElementById('dp-sub-list-'+actId);
+  if(!container)return;
+  try{
+    const c=window.client||client;
+    const{data,error}=await c.from('sub_activities').select('*').eq('activity_id',actId).order('created_at',{ascending:true});
+    if(error){container.innerHTML='<div style="font-size:11px;color:#ef4444">Gagal memuat sub-aktivitas</div>';return;}
+    if(!data||!data.length){
+      container.innerHTML='<div style="font-size:11px;color:#94a3b8;font-style:italic;padding:4px 0">Belum ada sub-aktivitas. Klik tombol <strong>Sub</strong> untuk menambah.</div>';
+      return;
+    }
+    const statusColor={selesai:'#22c55e','sedang berjalan':'#3b82f6',tertunda:'#f59e0b','belum mulai':'#94a3b8'};
+    const statusBg   ={selesai:'#f0fdf4','sedang berjalan':'#eff6ff',tertunda:'#fffbeb','belum mulai':'#f8fafc'};
+    const priorityIcon={'high':'🔴','medium':'🟡','low':'🟢'};
+
+    container.innerHTML=data.map(sub=>{
+      const sKey=(sub.status||'belum mulai').toLowerCase();
+      const sColor=statusColor[sKey]||'#94a3b8';
+      const sBg   =statusBg[sKey]   ||'#f8fafc';
+      const pIcon =priorityIcon[(sub.priority||'').toLowerCase()]||'⚪';
+      const due   =sub.due_date?new Date(sub.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):null;
+
+      return `
+<div style="border:1px solid #e8edf4;border-radius:10px;padding:10px 12px;background:${sBg};margin-bottom:7px;border-left:3px solid ${sColor}">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+        <span style="font-size:11px">${pIcon}</span>
+        <span style="font-size:13px;font-weight:700;color:#0f172a;overflow-wrap:break-word">${_dpEsc(sub.title||'Tanpa Judul')}</span>
+      </div>
+      ${sub.description?`<div style="font-size:11px;color:#475569;line-height:1.5;margin-bottom:4px">${_dpEsc(sub.description)}</div>`:''}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:#64748b;margin-top:3px">
+        ${sub.pic?`<span>👤 ${_dpEsc(sub.pic)}</span>`:''}
+        ${due?`<span>📅 ${due}</span>`:''}
+        <span style="font-weight:700;color:${sColor}">${_dpEsc(sub.status||'Belum Mulai')}</span>
+        ${sub.priority?`<span>Prioritas: ${_dpEsc(sub.priority)}</span>`:''}
+      </div>
+    </div>
+    <div style="display:flex;gap:5px;flex-shrink:0;align-items:center">
+      <button class="btn-secondary btn-sm"
+        style="font-size:10px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px"
+        onclick="event.stopPropagation();typeof editSubActivity==='function'&&editSubActivity('${sub.id}','${actId}')"
+        title="Edit sub-aktivitas">
+        <i class="fa-solid fa-pen-to-square"></i> Edit
+      </button>
+      <button class="btn-remove"
+        style="width:auto;padding:4px 8px;border-radius:6px;font-size:10px;display:inline-flex;align-items:center;gap:4px"
+        onclick="event.stopPropagation();typeof deleteSubActivity==='function'&&deleteSubActivity('${sub.id}','${actId}')"
+        title="Hapus sub-aktivitas">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  </div>
+</div>`;
+    }).join('');
+  }catch(e){container.innerHTML='<div style="font-size:11px;color:#ef4444">Error: '+_dpEsc(e.message)+'</div>';}
+}
+
+
+// ── Card: Capaian Indikator (scrollable) ──────────────────────
+function renderDpIndicatorsCard(proj){
+  const inds=(proj.project_indicators||[]);
+  const rows=inds.map(ind=>{
+    const actual=getLatestActual(ind);
+    const target=Number(ind.target)||0;
+    const unit=ind.unit||'';
+    const pct=target>0?Math.min(Math.round(actual/target*100),100):0;
+    const badgeCls=_dpIndBadgeClass(pct);
+    const color=progressColor(pct);
+    const lastUpd=(ind.indicator_updates||[]);
+    const lastDate=lastUpd.length?new Date(lastUpd[lastUpd.length-1].updated_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):null;
+    const typeLabel=ind.type==='outcome'?'Outcome':ind.type==='impact'?'Impact':'Output';
+    const typeBadge=`<span class="badge badge-${ind.type||'output'}" style="font-size:9px">${typeLabel}</span>`;
+    return `
+<div class="dp-ind-item">
+  <div class="dp-ind-header">
+    <div><div class="dp-ind-name">${_dpEsc(ind.indicator_name||ind.name||'Indikator')}</div><div style="margin-top:3px">${typeBadge}</div></div>
+    <span class="dp-ind-pct-badge ${badgeCls}">${pct}%</span>
+  </div>
+  <div class="dp-ind-target-row">
+    <span class="dp-ind-actual">${actual}</span>
+    <span class="dp-ind-unit">${_dpEsc(unit)}</span>
+    <span class="dp-ind-sep">/</span>
+    <span class="dp-ind-target-val">${target} ${_dpEsc(unit)} (target)</span>
+  </div>
+  <div class="dp-ind-bar-track"><div class="dp-ind-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+  ${lastDate?`<div style="margin-top:5px;font-size:10px;color:#94a3b8">Update: ${lastDate}</div>`:''}
+</div>`;
+  }).join('');
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📊</span> Capaian Indikator</div>
+    <span class="dp-card-badge">${inds.length} indikator</span>
+  </div>
+  <div class="dp-ind-list dp-scrollable">${inds.length?rows:'<div class="empty-state">📊 Belum ada indikator kinerja</div>'}</div>
+</div>`;
+}
+
+// ── Card: Refleksi & Pembelajaran ────────────────────────────
+function renderDpReflectionCard(reflections){
+  const refs=Array.isArray(reflections)?reflections:(Array.isArray(projectReflections)?projectReflections:[]);
+  const typeColor={success:'#22c55e',challenge:'#f97316',recommendation:'#0ea5e9',lesson:'#7c3aed'};
+  const typeLabel={success:'Success',challenge:'Challenge',recommendation:'Rekomendasi',lesson:'Lesson Learned'};
+
+  const rows=refs.map(r=>{
+    const d=r.reflection_date||r.created_at;
+    const dt=d?new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'-';
+    const t=(r.type||'lesson').toLowerCase();
+    const col=typeColor[t]||'#7c3aed';
+    const lbl=typeLabel[t]||'Lesson Learned';
+    return `
+<div class="dp-reflection-item">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px">
+    <span style="font-size:10px;color:#64748b">${dt}</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${col}15;color:${col};font-weight:700;text-transform:uppercase">${lbl}</span>
+  </div>
+  ${r.title?`<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${_dpEsc(r.title)}</div>`:''}
+  ${r.what_happened?`<div style="font-size:12px;color:#334155;margin-bottom:3px;line-height:1.5">${_dpEsc(r.what_happened)}</div>`:''}
+  ${r.lesson_learned?`<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${_dpEsc(r.lesson_learned)}</div>`:''}
+  ${r.next_steps?`<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${_dpEsc(r.next_steps)}</div>`:''}
+</div>`;
+  }).join('');
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">💡</span> Refleksi & Pembelajaran</div>
+    <span class="dp-card-badge" id="dp-reflection-count">${refs.length} catatan</span>
+  </div>
+  <div id="dp-reflection-list" class="dp-reflection-list">${refs.length?rows:'<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>'}</div>
+  <div id="dp-reflection-add-area"></div>
+</div>`;
+}
+
+// ── Card: Dokumen Proyek (query Supabase per project) ─────────
+function renderDpDocumentsCard(proj){
+  const projId=proj&&proj.id;
+  const projName=proj&&proj.name;
+  return `
+<div class="dp-card" id="dp-docs-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📁</span> Dokumen Proyek</div>
+    <span class="dp-card-badge" id="dp-docs-count">—</span>
+  </div>
+  <div id="dp-docs-list" class="dp-scrollable" style="min-height:60px">
+    <div class="empty-state" style="padding:20px 0">Memuat dokumen...</div>
+  </div>
+</div>`;
+}
+
+async function _dpLoadDocuments(proj){
+  const listEl=document.getElementById('dp-docs-list');
+  const countEl=document.getElementById('dp-docs-count');
+  if(!listEl)return;
+  try{
+    const c=window.client||client;
+    let data=null,error=null;
+    if(proj.id){
+      ({data,error}=await c.from('project_documents').select('*').eq('project_id',proj.id).order('created_at',{ascending:false}));
+    }
+    if((!data||!data.length)&&proj.name){
+      ({data,error}=await c.from('project_documents').select('*').eq('project_name',proj.name).order('created_at',{ascending:false}));
+    }
+    if(error||!data){
+      listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Belum ada dokumen atau tabel belum tersedia</div>';
+      if(countEl)countEl.textContent='0 dokumen';
+      return;
+    }
+    if(countEl)countEl.textContent=data.length+' dokumen';
+    if(!data.length){listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Belum ada dokumen untuk proyek ini</div>';return;}
+
+    const extIcon=name=>{
+      const e=(name||'').split('.').pop().toLowerCase();
+      return{pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',
+             png:'🖼️',jpg:'🖼️',jpeg:'🖼️',gif:'🖼️',
+             ppt:'📑',pptx:'📑',zip:'📦',rar:'📦'}[e]||'📎';
+    };
+    const isImage=name=>/\.(jpg|jpeg|png|gif|webp)$/i.test(name||'');
+    const isDriveUrl=url=>(url||'').includes('drive.google.com')||(url||'').includes('docs.google.com');
+
+    listEl.innerHTML=data.map(doc=>{
+      const fname=doc.file_name||doc.name||'Dokumen';
+      const furl=doc.file_url||doc.url||doc.drive_url||'';
+      const fsize=doc.file_size?_dpFormatBytes(Number(doc.file_size)):'';
+      const uploaded=doc.created_at?new Date(doc.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
+      const uploader=doc.uploaded_by||doc.uploader||'';
+
+      // Preview: image → open in modal-like tab; others → open url
+      const previewBtn=furl?`
+        <button title="Preview" onclick="event.stopPropagation();_dpPreviewDoc('${_dpEsc(furl)}','${_dpEsc(fname)}')"
+          style="border:none;cursor:pointer;background:#eff6ff;color:#2563eb;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px">
+          <i class="fa-solid fa-eye"></i> Preview
+        </button>`:'';
+
+      // Google Drive button — show when URL is drive/docs
+      const driveBtn=isDriveUrl(furl)?`
+        <a href="${_dpEsc(furl)}" target="_blank" rel="noopener"
+          style="border:none;cursor:pointer;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px;text-decoration:none">
+          <i class="fa-brands fa-google-drive"></i> Drive
+        </a>`
+        : (furl?`
+        <a href="${_dpEsc(furl)}" target="_blank" rel="noopener"
+          style="border:none;cursor:pointer;background:#f8fafc;color:#475569;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px;text-decoration:none;border:1px solid #e2e8f0">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Buka
+        </a>`:'' );
+
+      const deleteBtn=`
+        <button title="Hapus dokumen"
+          onclick="event.stopPropagation();_dpDeleteDocument('${doc.id}','${_dpEsc(fname)}')"
+          style="border:none;cursor:pointer;background:#fee2e2;color:#dc2626;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:3px">
+          <i class="fa-solid fa-trash"></i>
+        </button>`;
+
+      return `
+<div style="border:1px solid #e8edf4;border-radius:10px;padding:10px 12px;background:#fff;margin-bottom:7px;transition:box-shadow .15s"
+  onmouseover="this.style.boxShadow='0 2px 8px rgba(15,23,42,.07)'" onmouseout="this.style.boxShadow='none'">
+  <div style="display:flex;align-items:flex-start;gap:10px">
+    <span style="font-size:22px;flex-shrink:0;line-height:1.2">${extIcon(fname)}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px"
+        title="${_dpEsc(fname)}">${_dpEsc(fname)}</div>
+      <div style="font-size:10px;color:#94a3b8">
+        ${uploaded}${uploader?' · '+_dpEsc(uploader):''}${fsize?' · '+fsize:''}
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
+    ${previewBtn}
+    ${driveBtn}
+    ${deleteBtn}
+  </div>
+</div>`;
+    }).join('');
+  }catch(e){
+    listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Error: '+_dpEsc(e.message)+'</div>';
+  }
+}
+
+// ── Helper: format bytes ──────────────────────────────────────
+function _dpFormatBytes(b){
+  if(!b)return'';
+  if(b<1024)return b+' B';
+  if(b<1048576)return(b/1024).toFixed(1)+' KB';
+  return(b/1048576).toFixed(1)+' MB';
+}
+
+// ── Helper: preview dokumen ───────────────────────────────────
+function _dpPreviewDoc(url, fname){
+  if(!url)return;
+  const isImg=/\.(jpg|jpeg|png|gif|webp)$/i.test(fname);
+  const isPdf=/\.pdf$/i.test(fname);
+  if(isImg||isPdf){
+    // open lightbox-style overlay
+    const existing=document.getElementById('dp-preview-overlay');
+    if(existing)existing.remove();
+    const ov=document.createElement('div');
+    ov.id='dp-preview-overlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=`
+      <div style="background:#fff;border-radius:14px;overflow:hidden;max-width:90vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <span style="font-size:13px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw">${_dpEsc(fname)}</span>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <a href="${_dpEsc(url)}" target="_blank" rel="noopener"
+              style="font-size:12px;font-weight:600;color:#2563eb;text-decoration:none;padding:5px 10px;background:#eff6ff;border-radius:7px">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Buka Tab Baru
+            </a>
+            <button onclick="document.getElementById('dp-preview-overlay').remove()"
+              style="border:none;cursor:pointer;background:#f1f5f9;color:#475569;padding:5px 10px;border-radius:7px;font-size:12px;font-weight:600">
+              ✕ Tutup
+            </button>
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;min-height:300px">
+          ${isImg
+            ? `<img src="${_dpEsc(url)}" style="max-width:100%;max-height:75vh;object-fit:contain" alt="${_dpEsc(fname)}">`
+            : `<iframe src="${_dpEsc(url)}" style="width:80vw;height:75vh;border:none"></iframe>`}
+        </div>
+      </div>`;
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    document.body.appendChild(ov);
+  } else {
+    window.open(url,'_blank','noopener');
+  }
+}
+
+// ── Helper: delete dokumen ────────────────────────────────────
+async function _dpDeleteDocument(docId, fname){
+  if(!confirm(`Hapus dokumen "${fname}"?\n\nTindakan ini tidak dapat dibatalkan.`))return;
+  try{
+    const c=window.client||client;
+    const{error}=await c.from('project_documents').delete().eq('id',docId);
+    if(error){alert('Gagal menghapus: '+error.message);return;}
+    // re-load documents
+    if(typeof currentProject==='object'&&currentProject)_dpLoadDocuments(currentProject);
+  }catch(e){alert('Error: '+e.message);}
+}
+
+
+// ── Hook: renderProjectReflectionsPanel override ──────────────
+// After original loadProjectReflections saves to projectReflections,
+// we also re-render the dp-reflection-list inside the new card.
+(function(){
+  const _origRPRP=window.renderProjectReflectionsPanel;
+  window.renderProjectReflectionsPanel=function(){
+    if(typeof _origRPRP==='function')_origRPRP();
+    // Re-render in new card
+    const listEl=document.getElementById('dp-reflection-list');
+    const countEl=document.getElementById('dp-reflection-count');
+    if(!listEl)return;
+    const refs=Array.isArray(projectReflections)?projectReflections:[];
+    if(countEl)countEl.textContent=refs.length+' catatan';
+    const typeColor={success:'#22c55e',challenge:'#f97316',recommendation:'#0ea5e9',lesson:'#7c3aed'};
+    const typeLabel={success:'Success',challenge:'Challenge',recommendation:'Rekomendasi',lesson:'Lesson Learned'};
+    if(!refs.length){listEl.innerHTML='<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>';return;}
+    listEl.innerHTML=refs.map(r=>{
+      const d=r.reflection_date||r.created_at;
+      const dt=d?new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'-';
+      const t=(r.type||'lesson').toLowerCase();
+      const col=typeColor[t]||'#7c3aed';
+      const lbl=typeLabel[t]||'Lesson Learned';
+      return `<div class="dp-reflection-item">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px">
+          <span style="font-size:10px;color:#64748b">${dt}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${col}15;color:${col};font-weight:700;text-transform:uppercase">${lbl}</span>
+        </div>
+        ${r.title?`<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${_dpEsc(r.title)}</div>`:''}
+        ${r.what_happened?`<div style="font-size:12px;color:#334155;margin-bottom:3px;line-height:1.5">${_dpEsc(r.what_happened)}</div>`:''}
+        ${r.lesson_learned?`<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${_dpEsc(r.lesson_learned)}</div>`:''}
+        ${r.next_steps?`<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${_dpEsc(r.next_steps)}</div>`:''}
+      </div>`;
+    }).join('');
+  };
+})();
+
+// ── MAIN: Render halaman detail lengkap ───────────────────────
+async function renderProjectDetailPageV4(proj, activities, reflections){
+  const container=document.getElementById('detail-content');
+  if(!container){console.warn('[DP v4] #detail-content tidak ditemukan');return false;}
+
+  container.innerHTML=`
+${renderDetailTopbarV4(proj)}
+<div class="dp-content-grid">
+  <div class="dp-left-col">
+    ${renderDpInfoCard(proj)}
+    ${renderDpActivitiesCard(activities,proj)}
+    ${renderDpReflectionCard(reflections)}
+  </div>
+  <div class="dp-right-col">
+    ${renderDpProgressCard(proj)}
+    ${renderDpIndicatorsCard(proj)}
+    ${renderDpDocumentsCard(proj)}
+  </div>
+</div>`;
+
+  // Load documents asynchronously
+  _dpLoadDocuments(proj);
+
+  // Re-render reflections from global if available
+  if(Array.isArray(projectReflections)&&projectReflections.length){
+    window.renderProjectReflectionsPanel&&window.renderProjectReflectionsPanel();
+  }
+
+  return true;
+}
+
+// ── Override renderDetailHeader ───────────────────────────────
+(function(){
+  const _orig=typeof renderDetailHeader==='function'?renderDetailHeader:null;
+  window.renderDetailHeader=function(proj){
+    renderProjectDetailPageV4(proj,allActivities,projectReflections).then(ok=>{
+      if(!ok&&_orig)_orig(proj);
+    });
+  };
+})();
+
+console.log('[DP v4] Detail Proyek render patch loaded — budget embedded, scroll, sub-aktivitas, refleksi, dokumen.');
