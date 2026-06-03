@@ -1854,3 +1854,55 @@ body {
 @media (max-height: 700px) {
   .dp-act-legacy.dp-scrollable { max-height: 420px; }
 }
+
+
+/* PATCH v4.3.2 — Aktivitas setinggi layar penuh dengan scroll internal */
+/* Container kartu aktivitas memakai tinggi min yang besar, tapi konten
+   di dalamnya (activity-card lama) yang melakukan scroll. */
+
+/* Bungkus list aktivitas legacy */
+.dp-act-legacy {
+  max-height: calc(100vh - 260px); /* kira-kira setinggi layar, dikurangi header/topbar */
+  min-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Jangan pakai flex-layout baru untuk list legacy; biarkan layout lama bekerja */
+.dp-act-legacy.dp-act-list {
+  display: block;
+}
+
+/* Kartu aktivitas lama: beri jarak vertikal yang nyaman */
+.dp-act-legacy .activity-card {
+  margin-bottom: 10px;
+}
+
+/* Pastikan body kartu bisa terbuka normal di dalam area scroll */
+.dp-act-legacy .activity-card-body {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Scrollbar tipis tapi jelas */
+.dp-act-legacy::-webkit-scrollbar {
+  width: 6px;
+}
+.dp-act-legacy::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+.dp-act-legacy::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.dp-act-legacy::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (max-height: 720px) {
+  .dp-act-legacy {
+    max-height: calc(100vh - 220px);
+    min-height: 320px;
+  }
+}
