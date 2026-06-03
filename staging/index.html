@@ -403,15 +403,19 @@
 
   <!-- TAB DETAIL PROYEK -->
   <div id="tab-detail" class="tab-content">
-  <!-- DP v3: Container utama yang di-render oleh renderProjectDetailPageV3 -->
+
+  <!-- DP v4: Container utama yang di-render oleh renderProjectDetailPageV4 -->
   <div id="detail-content"></div>
 
-  <!-- Panel lama disembunyikan; tetap ada agar JS activity & indicator tetap berfungsi -->
+  <!-- Hidden panels: DOM tetap ada agar JS loadActivities, renderIndicatorUpdatePanel,
+       loadProjectReflections, saveProjectReflection, openSubActivityModal bekerja normal -->
   <div style="display:none" aria-hidden="true">
-    <!-- detailHeader lama -->
+
     <div class="detail-header" id="detailHeader"></div>
+
     <div class="detail-split">
-      <!-- PANEL KIRI: Aktivitas -->
+
+      <!-- PANEL KIRI: Aktivitas (disembunyikan, data diambil ke dp-act-list) -->
       <div class="detail-panel">
         <div class="panel-titlebar">
           <span class="panel-title">📋 Aktivitas Pelaksanaan</span>
@@ -450,7 +454,7 @@
         </div>
       </div>
 
-      <!-- PANEL: Refleksi & Pembelajaran -->
+      <!-- PANEL: Refleksi & Pembelajaran (disembunyikan, data dirender ke dp-reflection-list) -->
       <div class="detail-panel" id="projectReflectionPanel">
         <div class="panel-titlebar">
           <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
@@ -463,10 +467,13 @@
                 Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
               </div>
             </div>
+            <!-- Form tambah refleksi — tetap aktif lewat saveProjectReflection() -->
             <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:10px">
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-                <input type="date" id="pr-reflection-date" style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
-                <select id="pr-reflection-type" style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+                <input type="date" id="pr-reflection-date"
+                  style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+                <select id="pr-reflection-type"
+                  style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
                   <option value="lesson">Lesson Learned</option>
                   <option value="success">Success</option>
                   <option value="challenge">Challenge</option>
@@ -495,8 +502,10 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
+
+    </div><!-- /detail-split -->
+  </div><!-- /hidden panels -->
+
 </div><!-- /tab-detail -->
 
 <!-- ===== TAB PENERIMA MANFAAT ===== -->
@@ -977,8 +986,8 @@
 </div>
   
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=300"></script>
-  <script src="app_sprint4.js?v=300"></script>
+  <script src="app.js?v=400"></script>
+  <script src="app_sprint4.js?v=400"></script>
   <script src="issues.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="import.js"></script>
@@ -1438,8 +1447,8 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
     
     <!-- === MAIN APP === -->
-    <script src="app.js?v=300"></script>
-    <script src="app_sprint4.js?v=300"></script>
+    <script src="app.js?v=400"></script>
+    <script src="app_sprint4.js?v=400"></script>
 
 
 </div><!-- end .main -->

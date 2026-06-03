@@ -2254,32 +2254,23 @@ function renderStaffTable() {
 
 
 /* ================================================================
-   DETAIL PROYEK — RENDER PATCH v3
-   Di-inject di akhir app-2.js
+   DETAIL PROYEK — RENDER PATCH v4
+   Perubahan dari v3:
+   - Anggaran Proyek EMBEDDED dalam kartu Progress Keseluruhan
+   - Kartu Aktivitas & Indikator: scrollable (max-height)
+   - Aktivitas: tombol Sub-Aktivitas tetap ada + expand on click
+   - Refleksi: render dari projectReflections global (field lengkap)
+   - Kartu Dokumen: filter per proyek aktif (query Supabase)
 ================================================================ */
 
-// ── Helpers ──
-function _dpEsc(v) {
-  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function _dpIndBadgeClass(pct) {
-  if (pct >= 85) return 'green';
-  if (pct >= 60) return 'blue';
-  if (pct >= 35) return 'yellow';
-  return 'red';
-}
-function _dpStatusClass(label) {
-  if (!label) return 'baik';
-  const l = label.toLowerCase();
-  if (l.includes('sangat')) return 'sangat-baik';
-  if (l.includes('baik'))   return 'baik';
-  if (l.includes('sedang')) return 'sedang';
-  return 'perlu';
-}
+// ── Helpers ──────────────────────────────────────────────────
+function _dpEsc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _dpIndBadgeClass(pct){if(pct>=85)return'green';if(pct>=60)return'blue';if(pct>=35)return'yellow';return'red';}
+function _dpStatusClass(label){const l=(label||'').toLowerCase();if(l.includes('sangat'))return'sangat-baik';if(l.includes('baik'))return'baik';if(l.includes('sedang'))return'sedang';return'perlu';}
 
-// ── Sticky Topbar ──
-function renderDetailTopbarV3(proj) {
-  const name = _dpEsc(proj.name || 'Proyek');
+// ── Sticky Topbar ─────────────────────────────────────────────
+function renderDetailTopbarV4(proj){
+  const name=_dpEsc(proj.name||'Proyek');
   return `
 <div class="detail-topbar" id="dp-topbar">
   <div class="detail-topbar-left">
@@ -2291,12 +2282,8 @@ function renderDetailTopbarV3(proj) {
       <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:5px;animation:pulse 2s infinite"></span>
       Realtime ON
     </span>
-    <button class="btn-refresh-sm" onclick="loadProjectDetail && loadProjectDetail(currentProject)">
-      🔄 Refresh
-    </button>
-    <button class="btn-print" onclick="window.print()">
-      🖨️ Print Laporan
-    </button>
+    <button class="btn-refresh-sm" onclick="loadProjectDetail&&loadProjectDetail(currentProject)">🔄 Refresh</button>
+    <button class="btn-print" onclick="window.print()">🖨️ Print Laporan</button>
     <span id="auth-user-badge" class="realtime-badge" style="display:none;background:#eff6ff;color:#2563eb;border-color:#bfdbfe;"></span>
     <button id="auth-login-btn" class="btn-secondary btn-sm" onclick="signInWithGoogle()" style="display:none">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:14px;height:14px;vertical-align:middle;margin-right:4px">Login Google
@@ -2307,16 +2294,16 @@ function renderDetailTopbarV3(proj) {
 </div>`;
 }
 
-// ── Card: Informasi Proyek ──
-function renderDpInfoCard(proj) {
-  const s = proj || {};
-  const meta = [
-    { icon: '📍', label: 'Lokasi',  val: s.location || '-' },
-    { icon: '👤', label: 'PIC',     val: s.pic || s.owner || '-' },
-    { icon: '💰', label: 'Pendana', val: s.donor || '-' },
-    { icon: '📅', label: 'Deadline',val: s.deadline ? new Date(s.deadline).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-' },
+// ── Card: Informasi Proyek (kiri atas) ────────────────────────
+function renderDpInfoCard(proj){
+  const s=proj||{};
+  const meta=[
+    {icon:'📍',label:'Lokasi',  val:s.location||'-'},
+    {icon:'👤',label:'PIC',     val:s.pic||s.owner||'-'},
+    {icon:'💰',label:'Pendana', val:s.donor||'-'},
+    {icon:'📅',label:'Deadline',val:s.deadline?new Date(s.deadline).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-'},
   ];
-  const metaHtml = meta.map(m => `
+  const metaHtml=meta.map(m=>`
     <div class="dp-meta-item">
       <span class="dp-meta-icon">${m.icon}</span>
       <div class="dp-meta-content">
@@ -2325,66 +2312,63 @@ function renderDpInfoCard(proj) {
       </div>
     </div>`).join('');
 
-  const goalText = _dpEsc(s.goal || s.description || 'Belum ada goal proyek.');
-  const goalHtml = `
-    <div class="dp-goal-block">
-      <span class="dp-block-label blue">🎯 Goal</span>
-      <div class="dp-block-text">${goalText}</div>
-    </div>`;
-
-  const outcomesArr = Array.isArray(s.project_outcomes) ? s.project_outcomes
-                    : Array.isArray(s.outcomes) ? s.outcomes : [];
-  let outcomesHtml = '';
-  if (outcomesArr.length) {
-    const items = outcomesArr.map((o, i) => `
-      <li>
-        <span class="dp-outcome-num">${i + 1}</span>
-        <span>${_dpEsc(typeof o === 'string' ? o : (o.outcome_text || o.text || o.description || JSON.stringify(o)))}</span>
-      </li>`).join('');
-    outcomesHtml = `
-      <div class="dp-outcome-block">
-        <span class="dp-block-label purple">🏆 Outcomes</span>
-        <ul class="dp-outcome-list">${items}</ul>
-      </div>`;
+  const goalText=_dpEsc(s.goal||s.description||'Belum ada goal proyek.');
+  const outcomesArr=Array.isArray(s.project_outcomes)?s.project_outcomes:Array.isArray(s.outcomes)?s.outcomes:[];
+  let outcomesHtml='';
+  if(outcomesArr.length){
+    const items=outcomesArr.map((o,i)=>`
+      <li><span class="dp-outcome-num">${i+1}</span>
+      <span>${_dpEsc(typeof o==='string'?o:(o.outcome_text||o.text||o.description||''))}</span></li>`).join('');
+    outcomesHtml=`<div class="dp-outcome-block"><span class="dp-block-label purple">🏆 Outcomes</span><ul class="dp-outcome-list">${items}</ul></div>`;
   }
 
   return `
 <div class="dp-card">
   <div class="dp-card-header">
     <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Informasi Proyek</div>
-    <span class="badge badge-${(s.status||'aktif').toLowerCase().replace(/\s+/g,'-')}">${s.status || 'Aktif'}</span>
+    <span class="badge badge-${(s.status||'aktif').toLowerCase().replace(/\s+/g,'-')}">${s.status||'Aktif'}</span>
   </div>
   <div class="dp-meta-grid">${metaHtml}</div>
-  ${goalHtml}
+  <div class="dp-goal-block"><span class="dp-block-label blue">🎯 Goal</span><div class="dp-block-text">${goalText}</div></div>
   ${outcomesHtml}
 </div>`;
 }
 
-// ── Card: Progress Keseluruhan ──
-function renderDpProgressCard(proj) {
-  const pct      = calcOverallProgress(proj);
-  const color    = progressColor(pct);
-  const label    = progressLabel(pct);
-  const statusCls = _dpStatusClass(label);
-  const inds     = (proj.project_indicators || []);
-  const totalInd = inds.length;
-  const tercapai = inds.filter(ind => {
-    const actual = getLatestActual(ind);
-    return ind.target > 0 ? Math.round(actual / ind.target * 100) >= 100 : false;
-  }).length;
-  const avgInd = calcAvgIndikator(proj);
-  const lastUpdate = inds.reduce((latest, ind) => {
-    const upds = ind.indicator_updates || [];
-    if (!upds.length) return latest;
-    const d = new Date(upds[upds.length-1].updated_at || 0);
-    return d > latest ? d : latest;
-  }, new Date(0));
-  const lastUpdateStr = lastUpdate.getTime() > 0
-    ? lastUpdate.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
-    : '-';
+// ── Card: Progress Keseluruhan + Anggaran (embedded) ──────────
+function renderDpProgressCard(proj){
+  const pct=calcOverallProgress(proj);
+  const color=progressColor(pct);
+  const label=progressLabel(pct);
+  const statusCls=_dpStatusClass(label);
+  const inds=(proj.project_indicators||[]);
+  const totalInd=inds.length;
+  const tercapai=inds.filter(ind=>{const a=getLatestActual(ind);return ind.target>0?Math.round(a/ind.target*100)>=100:false;}).length;
+  const avgInd=calcAvgIndikator(proj);
+  const lastUpdate=inds.reduce((latest,ind)=>{
+    const upds=ind.indicator_updates||[];
+    if(!upds.length)return latest;
+    const d=new Date(upds[upds.length-1].updated_at||0);
+    return d>latest?d:latest;
+  },new Date(0));
+  const lastUpdateStr=lastUpdate.getTime()>0?lastUpdate.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'-';
 
-  // Budget sub-card HTML (embedded in right col)
-  const budgetHtml = renderDpBudgetCard(proj);
+  // Budget embedded
+  const approved=Number(proj.budget_approved)||0;
+  const actual=Number(proj.budget_actual)||0;
+  const budgetPct=approved>0?Math.min(Math.round(actual/approved*100),100):0;
+  const budgetSection=( approved||actual)?`
+  <div class="dp-budget-embedded">
+    <div class="dp-card-header" style="margin-bottom:10px;margin-top:4px;padding-top:14px;border-top:1px solid #f1f5f9;">
+      <div class="dp-card-title" style="font-size:12px"><span class="dp-card-title-icon">💵</span> Anggaran Proyek</div>
+      <span class="dp-budget-pct-badge">${budgetPct}% terserap</span>
+    </div>
+    <div class="dp-budget-amounts">
+      <div><div class="dp-meta-label">Total Anggaran</div><div class="dp-budget-total">${formatRupiah(approved)}</div></div>
+      <div style="text-align:right"><div class="dp-meta-label">Realisasi</div><div class="dp-budget-actual">${formatRupiah(actual)}</div></div>
+    </div>
+    <div class="dp-budget-bar-track"><div class="dp-budget-bar-fill" style="width:${budgetPct}%"></div></div>
+    <div class="dp-budget-labels"><span>Rp 0</span><span>${formatRupiah(approved)}</span></div>
+  </div>`:'';
 
   return `
 <div class="dp-card">
@@ -2396,9 +2380,7 @@ function renderDpProgressCard(proj) {
     <span class="dp-status-badge ${statusCls}">${label}</span>
   </div>
   <div class="dp-progress-bar-wrap">
-    <div class="dp-progress-bar-track">
-      <div class="dp-progress-bar-fill" style="width:${pct}%;background:${color}"></div>
-    </div>
+    <div class="dp-progress-bar-track"><div class="dp-progress-bar-fill" style="width:${pct}%;background:${color}"></div></div>
     <div class="dp-progress-sub-label"><span>0%</span><span>Target 100%</span></div>
   </div>
   <div class="dp-metrics-grid">
@@ -2414,7 +2396,7 @@ function renderDpProgressCard(proj) {
     </div>
     <div class="dp-metric-item">
       <div class="dp-metric-label">Avg. Indikator</div>
-      <div class="dp-metric-value">${avgInd !== null ? avgInd + '%' : '-'}</div>
+      <div class="dp-metric-value">${avgInd!==null?avgInd+'%':'-'}</div>
       <div class="dp-metric-sub">rata-rata</div>
     </div>
     <div class="dp-metric-item">
@@ -2423,76 +2405,51 @@ function renderDpProgressCard(proj) {
       <div class="dp-metric-sub">terakhir update</div>
     </div>
   </div>
-</div>
-${budgetHtml}`;
-}
-
-// ── Card: Anggaran ──
-function renderDpBudgetCard(proj) {
-  const approved = Number(proj.budget_approved) || 0;
-  const actual   = Number(proj.budget_actual)   || 0;
-  if (!approved && !actual) return '';
-  const pct = approved > 0 ? Math.min(Math.round(actual / approved * 100), 100) : 0;
-
-  return `
-<div class="dp-card">
-  <div class="dp-card-header">
-    <div class="dp-card-title"><span class="dp-card-title-icon">💵</span> Anggaran Proyek</div>
-    <span class="dp-budget-pct-badge">${pct}% terserap</span>
-  </div>
-  <div class="dp-budget-amounts">
-    <div>
-      <div class="dp-meta-label">Total Anggaran</div>
-      <div class="dp-budget-total">${formatRupiah(approved)}</div>
-    </div>
-    <div style="text-align:right">
-      <div class="dp-meta-label">Realisasi</div>
-      <div class="dp-budget-actual">${formatRupiah(actual)}</div>
-    </div>
-  </div>
-  <div class="dp-budget-bar-track">
-    <div class="dp-budget-bar-fill" style="width:${pct}%"></div>
-  </div>
-  <div class="dp-budget-labels">
-    <span>Rp 0</span><span>${formatRupiah(approved)}</span>
-  </div>
+  ${budgetSection}
 </div>`;
 }
 
-// ── Card: Aktivitas ──
-function renderDpActivitiesCard(activities, proj) {
-  const acts = activities || [];
-  const actRows = acts.map(act => {
-    const pct = Number(act.progress) || 0;
-    const statusKey = (act.status || '').toLowerCase().replace(/\s+/g,'-');
-    const isDone = statusKey === 'selesai';
-    const picText  = act.pic      ? `👤 ${_dpEsc(act.pic)}` : '';
-    const dueText  = act.due_date ? `📅 ${new Date(act.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}` : '';
-    let statusBadge = '';
-    if (isDone)                         statusBadge = `<span class="badge badge-selesai" style="font-size:10px">✓ Selesai</span>`;
-    else if (statusKey==='sedang-berjalan') statusBadge = `<span class="badge badge-sedang-berjalan" style="font-size:10px">▶ Berjalan</span>`;
-    else if (statusKey==='tertunda')    statusBadge = `<span class="badge badge-tertunda" style="font-size:10px">⏸ Tertunda</span>`;
-    else                                statusBadge = `<span class="badge badge-belum-mulai" style="font-size:10px">○ Belum Mulai</span>`;
+// ── Card: Aktivitas (scrollable, sub-aktivitas expand on click) ─
+function renderDpActivitiesCard(activities, proj){
+  const acts=activities||[];
+  const projName=_dpEsc((proj&&proj.name)||'');
+
+  const actRows=acts.map(act=>{
+    const pct=Number(act.progress)||0;
+    const statusKey=(act.status||'').toLowerCase().replace(/\s+/g,'-');
+    const isDone=statusKey==='selesai';
+    const picText=act.pic?`👤 ${_dpEsc(act.pic)}`:'';
+    const dueText=act.due_date?`📅 ${new Date(act.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}`:'';
+    let statusBadge='';
+    if(isDone)                             statusBadge=`<span class="badge badge-selesai" style="font-size:10px">✓ Selesai</span>`;
+    else if(statusKey==='sedang-berjalan') statusBadge=`<span class="badge badge-sedang-berjalan" style="font-size:10px">▶ Berjalan</span>`;
+    else if(statusKey==='tertunda')        statusBadge=`<span class="badge badge-tertunda" style="font-size:10px">⏸ Tertunda</span>`;
+    else                                   statusBadge=`<span class="badge badge-belum-mulai" style="font-size:10px">○ Belum Mulai</span>`;
 
     return `
-<div class="dp-act-item ${statusKey}">
-  <div class="dp-act-row1">
-    <div class="dp-act-title${isDone?' done':''}">${_dpEsc(act.title || act.name || 'Aktivitas')}</div>
+<div class="dp-act-item ${statusKey}" id="dp-act-${act.id}">
+  <div class="dp-act-row1" onclick="_dpToggleActBody('${act.id}')" style="cursor:pointer">
+    <div class="dp-act-title${isDone?' done':''}">${_dpEsc(act.title||act.name||'Aktivitas')}</div>
     <div class="dp-act-right">
       <span class="dp-act-pct" style="color:${progressColor(pct)}">${pct}%</span>
-      <div class="dp-act-actions">
+      <div class="dp-act-actions" onclick="event.stopPropagation()">
         <button class="dp-act-btn" onclick="openActModal('${act.id}')" title="Edit">✏️</button>
-        <button class="dp-act-btn" onclick="typeof viewActDetail==='function'&&viewActDetail('${act.id}')" title="Lihat">👁</button>
+        <button class="dp-act-btn" onclick="openSubActivityModal&&openSubActivityModal('${act.id}')" title="Sub-Aktivitas" style="font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-weight:600"><i class='fa-solid fa-clone' style='margin-right:3px'></i>Sub</button>
         <button class="dp-act-btn del" onclick="typeof deleteActivity==='function'&&deleteActivity('${act.id}')" title="Hapus">🗑</button>
       </div>
     </div>
   </div>
-  <div class="dp-act-bar-track">
-    <div class="dp-act-bar-fill" style="width:${pct}%"></div>
-  </div>
+  <div class="dp-act-bar-track"><div class="dp-act-bar-fill" style="width:${pct}%"></div></div>
   <div class="dp-act-row2">
     <div class="dp-act-meta">${picText}${dueText?`<span>${dueText}</span>`:''}</div>
     ${statusBadge}
+  </div>
+  <!-- Sub-Aktivitas expand body -->
+  <div class="dp-act-body" id="dp-actbody-${act.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0">
+    ${act.description?`<p style="font-size:12px;color:#475569;margin:0 0 8px;line-height:1.5">${_dpEsc(act.description)}</p>`:''}
+    <div id="dp-sub-list-${act.id}" style="margin-top:4px">
+      <div style="font-size:11px;color:#94a3b8">Memuat sub-aktivitas...</div>
+    </div>
   </div>
 </div>`;
   }).join('');
@@ -2503,34 +2460,60 @@ function renderDpActivitiesCard(activities, proj) {
     <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Aktivitas Pelaksanaan</div>
     <span class="dp-card-badge">${acts.length} aktivitas</span>
   </div>
-  <div class="dp-act-list">${acts.length ? actRows : '<div class="empty-state">📋 Belum ada aktivitas pelaksanaan</div>'}</div>
+  <div class="dp-act-list dp-scrollable">${acts.length?actRows:'<div class="empty-state">📋 Belum ada aktivitas pelaksanaan</div>'}</div>
 </div>`;
 }
 
-// ── Card: Capaian Indikator ──
-function renderDpIndicatorsCard(proj) {
-  const inds = (proj.project_indicators || []);
-  const rows = inds.map(ind => {
-    const actual = getLatestActual(ind);
-    const target = Number(ind.target) || 0;
-    const unit   = ind.unit || '';
-    const pct    = target > 0 ? Math.min(Math.round(actual / target * 100), 100) : 0;
-    const badgeCls = _dpIndBadgeClass(pct);
-    const color  = progressColor(pct);
-    const lastUpd = (ind.indicator_updates || []);
-    const lastDate = lastUpd.length
-      ? new Date(lastUpd[lastUpd.length-1].updated_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
-      : null;
-    const typeLabel = ind.type === 'outcome' ? 'Outcome' : ind.type === 'impact' ? 'Impact' : 'Output';
-    const typeBadge = `<span class="badge badge-${ind.type||'output'}" style="font-size:9px">${typeLabel}</span>`;
+// ── Toggle body aktivitas + load sub-aktivitas ─────────────────
+function _dpToggleActBody(actId){
+  const body=document.getElementById('dp-actbody-'+actId);
+  if(!body)return;
+  const isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'block';
+  if(!isOpen){_dpLoadSubAktivitas(actId);}
+}
 
+async function _dpLoadSubAktivitas(actId){
+  const container=document.getElementById('dp-sub-list-'+actId);
+  if(!container)return;
+  try{
+    const c=window.client||client;
+    const{data,error}=await c.from('sub_activities').select('*').eq('activity_id',actId).order('created_at',{ascending:true});
+    if(error){container.innerHTML='<div style="font-size:11px;color:#ef4444">Gagal memuat sub-aktivitas</div>';return;}
+    if(!data||!data.length){container.innerHTML='<div style="font-size:11px;color:#94a3b8;font-style:italic">Belum ada sub-aktivitas</div>';return;}
+    const statusColor={selesai:'#22c55e','sedang berjalan':'#3b82f6',tertunda:'#f59e0b','belum mulai':'#94a3b8'};
+    container.innerHTML=data.map(sub=>{
+      const sKey=(sub.status||'').toLowerCase();
+      const sColor=statusColor[sKey]||'#94a3b8';
+      const priority={'high':'🔴','medium':'🟡','low':'🟢'}[(sub.priority||'').toLowerCase()]||'⚪';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:#f8fafc;border:1px solid #f1f5f9;margin-bottom:5px">
+        <span style="font-size:11px">${priority}</span>
+        <span style="flex:1;font-size:12px;color:#0f172a;font-weight:500">${_dpEsc(sub.title||'-')}</span>
+        <span style="font-size:10px;font-weight:700;color:${sColor};white-space:nowrap">${_dpEsc(sub.status||'-')}</span>
+        ${sub.pic?`<span style="font-size:10px;color:#94a3b8">👤${_dpEsc(sub.pic)}</span>`:''}
+      </div>`;
+    }).join('');
+  }catch(e){container.innerHTML='<div style="font-size:11px;color:#ef4444">Error: '+e.message+'</div>';}
+}
+
+// ── Card: Capaian Indikator (scrollable) ──────────────────────
+function renderDpIndicatorsCard(proj){
+  const inds=(proj.project_indicators||[]);
+  const rows=inds.map(ind=>{
+    const actual=getLatestActual(ind);
+    const target=Number(ind.target)||0;
+    const unit=ind.unit||'';
+    const pct=target>0?Math.min(Math.round(actual/target*100),100):0;
+    const badgeCls=_dpIndBadgeClass(pct);
+    const color=progressColor(pct);
+    const lastUpd=(ind.indicator_updates||[]);
+    const lastDate=lastUpd.length?new Date(lastUpd[lastUpd.length-1].updated_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):null;
+    const typeLabel=ind.type==='outcome'?'Outcome':ind.type==='impact'?'Impact':'Output';
+    const typeBadge=`<span class="badge badge-${ind.type||'output'}" style="font-size:9px">${typeLabel}</span>`;
     return `
 <div class="dp-ind-item">
   <div class="dp-ind-header">
-    <div>
-      <div class="dp-ind-name">${_dpEsc(ind.indicator_name || ind.name || 'Indikator')}</div>
-      <div style="margin-top:3px">${typeBadge}</div>
-    </div>
+    <div><div class="dp-ind-name">${_dpEsc(ind.indicator_name||ind.name||'Indikator')}</div><div style="margin-top:3px">${typeBadge}</div></div>
     <span class="dp-ind-pct-badge ${badgeCls}">${pct}%</span>
   </div>
   <div class="dp-ind-target-row">
@@ -2539,10 +2522,8 @@ function renderDpIndicatorsCard(proj) {
     <span class="dp-ind-sep">/</span>
     <span class="dp-ind-target-val">${target} ${_dpEsc(unit)} (target)</span>
   </div>
-  <div class="dp-ind-bar-track">
-    <div class="dp-ind-bar-fill" style="width:${pct}%;background:${color}"></div>
-  </div>
-  ${lastDate ? `<div style="margin-top:5px;font-size:10px;color:#94a3b8">Update: ${lastDate}</div>` : ''}
+  <div class="dp-ind-bar-track"><div class="dp-ind-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+  ${lastDate?`<div style="margin-top:5px;font-size:10px;color:#94a3b8">Update: ${lastDate}</div>`:''}
 </div>`;
   }).join('');
 
@@ -2552,63 +2533,171 @@ function renderDpIndicatorsCard(proj) {
     <div class="dp-card-title"><span class="dp-card-title-icon">📊</span> Capaian Indikator</div>
     <span class="dp-card-badge">${inds.length} indikator</span>
   </div>
-  <div class="dp-ind-list">${inds.length ? rows : '<div class="empty-state">📊 Belum ada indikator kinerja</div>'}</div>
+  <div class="dp-ind-list dp-scrollable">${inds.length?rows:'<div class="empty-state">📊 Belum ada indikator kinerja</div>'}</div>
 </div>`;
 }
 
-// ── Card: Refleksi ──
-function renderDpReflectionCard(reflections) {
-  const refs = reflections || projectReflections || [];
-  const rows = refs.map(r => `
+// ── Card: Refleksi & Pembelajaran ────────────────────────────
+function renderDpReflectionCard(reflections){
+  const refs=Array.isArray(reflections)?reflections:(Array.isArray(projectReflections)?projectReflections:[]);
+  const typeColor={success:'#22c55e',challenge:'#f97316',recommendation:'#0ea5e9',lesson:'#7c3aed'};
+  const typeLabel={success:'Success',challenge:'Challenge',recommendation:'Rekomendasi',lesson:'Lesson Learned'};
+
+  const rows=refs.map(r=>{
+    const d=r.reflection_date||r.created_at;
+    const dt=d?new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'-';
+    const t=(r.type||'lesson').toLowerCase();
+    const col=typeColor[t]||'#7c3aed';
+    const lbl=typeLabel[t]||'Lesson Learned';
+    return `
 <div class="dp-reflection-item">
-  <div class="dp-reflection-date">${r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}) : ''}${r.author ? ' · ' + _dpEsc(r.author) : ''}</div>
-  <div class="dp-reflection-text">${_dpEsc(r.content || r.note || r.text || '')}</div>
-</div>`).join('');
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px">
+    <span style="font-size:10px;color:#64748b">${dt}</span>
+    <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${col}15;color:${col};font-weight:700;text-transform:uppercase">${lbl}</span>
+  </div>
+  ${r.title?`<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${_dpEsc(r.title)}</div>`:''}
+  ${r.what_happened?`<div style="font-size:12px;color:#334155;margin-bottom:3px;line-height:1.5">${_dpEsc(r.what_happened)}</div>`:''}
+  ${r.lesson_learned?`<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${_dpEsc(r.lesson_learned)}</div>`:''}
+  ${r.next_steps?`<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${_dpEsc(r.next_steps)}</div>`:''}
+</div>`;
+  }).join('');
 
   return `
 <div class="dp-card">
   <div class="dp-card-header">
     <div class="dp-card-title"><span class="dp-card-title-icon">💡</span> Refleksi & Pembelajaran</div>
-    <span class="dp-card-badge">${refs.length} catatan</span>
+    <span class="dp-card-badge" id="dp-reflection-count">${refs.length} catatan</span>
   </div>
-  ${refs.length ? `<div class="dp-reflection-list">${rows}</div>` : '<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>'}
-  <div id="dp-reflection-add-area" style="margin-top:12px"></div>
+  <div id="dp-reflection-list" class="dp-reflection-list">${refs.length?rows:'<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>'}</div>
+  <div id="dp-reflection-add-area"></div>
 </div>`;
 }
 
-// ── MAIN: Render seluruh halaman detail (dipanggil dari renderDetailHeader) ──
-function renderProjectDetailPageV3(proj, activities, reflections) {
-  const container = document.getElementById('detail-content');
-  if (!container) {
-    console.warn('[DP v3] Container #detail-content tidak ditemukan.');
-    return false;
-  }
+// ── Card: Dokumen Proyek (query Supabase per project) ─────────
+function renderDpDocumentsCard(proj){
+  const projId=proj&&proj.id;
+  const projName=proj&&proj.name;
+  return `
+<div class="dp-card" id="dp-docs-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📁</span> Dokumen Proyek</div>
+    <span class="dp-card-badge" id="dp-docs-count">—</span>
+  </div>
+  <div id="dp-docs-list" class="dp-scrollable" style="min-height:60px">
+    <div class="empty-state" style="padding:20px 0">Memuat dokumen...</div>
+  </div>
+</div>`;
+}
 
-  container.innerHTML = `
-${renderDetailTopbarV3(proj)}
+async function _dpLoadDocuments(proj){
+  const listEl=document.getElementById('dp-docs-list');
+  const countEl=document.getElementById('dp-docs-count');
+  if(!listEl)return;
+  try{
+    const c=window.client||client;
+    // query by project_id first, fallback to project_name match
+    let data=null,error=null;
+    if(proj.id){
+      ({data,error}=await c.from('project_documents').select('*').eq('project_id',proj.id).order('created_at',{ascending:false}));
+    }
+    if((!data||!data.length)&&proj.name){
+      ({data,error}=await c.from('project_documents').select('*').eq('project_name',proj.name).order('created_at',{ascending:false}));
+    }
+    if(error||!data){
+      listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Belum ada dokumen atau tabel belum tersedia</div>';
+      if(countEl)countEl.textContent='0 dokumen';
+      return;
+    }
+    if(countEl)countEl.textContent=data.length+' dokumen';
+    if(!data.length){listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Belum ada dokumen untuk proyek ini</div>';return;}
+    const extIcon=name=>{const e=(name||'').split('.').pop().toLowerCase();return{pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',png:'🖼️',jpg:'🖼️',jpeg:'🖼️',ppt:'📑',pptx:'📑',zip:'📦'}[e]||'📎';};
+    listEl.innerHTML=data.map(doc=>`
+<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;background:#f8fafc;border:1px solid #f1f5f9;margin-bottom:6px">
+  <span style="font-size:18px;flex-shrink:0">${extIcon(doc.file_name||doc.name||'')}</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_dpEsc(doc.file_name||doc.name||'Dokumen')}</div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:1px">${doc.created_at?new Date(doc.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):''} ${doc.uploaded_by?'· '+_dpEsc(doc.uploaded_by):''}</div>
+  </div>
+  ${doc.file_url||doc.url?`<a href="${_dpEsc(doc.file_url||doc.url)}" target="_blank" rel="noopener" style="font-size:11px;font-weight:600;color:#2563eb;text-decoration:none;flex-shrink:0">Buka ↗</a>`:''}
+</div>`).join('');
+  }catch(e){listEl.innerHTML='<div class="empty-state" style="padding:20px 0">Error memuat dokumen: '+_dpEsc(e.message)+'</div>';}
+}
+
+// ── Hook: renderProjectReflectionsPanel override ──────────────
+// After original loadProjectReflections saves to projectReflections,
+// we also re-render the dp-reflection-list inside the new card.
+(function(){
+  const _origRPRP=window.renderProjectReflectionsPanel;
+  window.renderProjectReflectionsPanel=function(){
+    if(typeof _origRPRP==='function')_origRPRP();
+    // Re-render in new card
+    const listEl=document.getElementById('dp-reflection-list');
+    const countEl=document.getElementById('dp-reflection-count');
+    if(!listEl)return;
+    const refs=Array.isArray(projectReflections)?projectReflections:[];
+    if(countEl)countEl.textContent=refs.length+' catatan';
+    const typeColor={success:'#22c55e',challenge:'#f97316',recommendation:'#0ea5e9',lesson:'#7c3aed'};
+    const typeLabel={success:'Success',challenge:'Challenge',recommendation:'Rekomendasi',lesson:'Lesson Learned'};
+    if(!refs.length){listEl.innerHTML='<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>';return;}
+    listEl.innerHTML=refs.map(r=>{
+      const d=r.reflection_date||r.created_at;
+      const dt=d?new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'-';
+      const t=(r.type||'lesson').toLowerCase();
+      const col=typeColor[t]||'#7c3aed';
+      const lbl=typeLabel[t]||'Lesson Learned';
+      return `<div class="dp-reflection-item">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;flex-wrap:wrap;gap:4px">
+          <span style="font-size:10px;color:#64748b">${dt}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${col}15;color:${col};font-weight:700;text-transform:uppercase">${lbl}</span>
+        </div>
+        ${r.title?`<div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:4px">${_dpEsc(r.title)}</div>`:''}
+        ${r.what_happened?`<div style="font-size:12px;color:#334155;margin-bottom:3px;line-height:1.5">${_dpEsc(r.what_happened)}</div>`:''}
+        ${r.lesson_learned?`<div style="font-size:12px;color:#1d4ed8;margin-bottom:3px"><strong>Pelajaran:</strong> ${_dpEsc(r.lesson_learned)}</div>`:''}
+        ${r.next_steps?`<div style="font-size:12px;color:#15803d"><strong>Ke depan:</strong> ${_dpEsc(r.next_steps)}</div>`:''}
+      </div>`;
+    }).join('');
+  };
+})();
+
+// ── MAIN: Render halaman detail lengkap ───────────────────────
+async function renderProjectDetailPageV4(proj, activities, reflections){
+  const container=document.getElementById('detail-content');
+  if(!container){console.warn('[DP v4] #detail-content tidak ditemukan');return false;}
+
+  container.innerHTML=`
+${renderDetailTopbarV4(proj)}
 <div class="dp-content-grid">
   <div class="dp-left-col">
     ${renderDpInfoCard(proj)}
-    ${renderDpActivitiesCard(activities, proj)}
+    ${renderDpActivitiesCard(activities,proj)}
     ${renderDpReflectionCard(reflections)}
   </div>
   <div class="dp-right-col">
     ${renderDpProgressCard(proj)}
     ${renderDpIndicatorsCard(proj)}
+    ${renderDpDocumentsCard(proj)}
   </div>
 </div>`;
+
+  // Load documents asynchronously
+  _dpLoadDocuments(proj);
+
+  // Re-render reflections from global if available
+  if(Array.isArray(projectReflections)&&projectReflections.length){
+    window.renderProjectReflectionsPanel&&window.renderProjectReflectionsPanel();
+  }
+
   return true;
 }
 
-// ── Override renderDetailHeader ──
-(function() {
-  const _origRenderDetailHeader = typeof renderDetailHeader === 'function' ? renderDetailHeader : null;
-  window.renderDetailHeader = function(proj) {
-    const ok = renderProjectDetailPageV3(proj, allActivities, projectReflections);
-    if (!ok && _origRenderDetailHeader) {
-      _origRenderDetailHeader(proj);
-    }
+// ── Override renderDetailHeader ───────────────────────────────
+(function(){
+  const _orig=typeof renderDetailHeader==='function'?renderDetailHeader:null;
+  window.renderDetailHeader=function(proj){
+    renderProjectDetailPageV4(proj,allActivities,projectReflections).then(ok=>{
+      if(!ok&&_orig)_orig(proj);
+    });
   };
 })();
 
-console.log('[DP v3] Detail Proyek render patch loaded.');
+console.log('[DP v4] Detail Proyek render patch loaded — budget embedded, scroll, sub-aktivitas, refleksi, dokumen.');
