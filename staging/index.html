@@ -403,114 +403,141 @@
 
   <!-- TAB DETAIL PROYEK -->
   <div id="tab-detail" class="tab-content">
-    <div class="detail-header" id="detailHeader"></div>
-    <div class="detail-split">
 
-      <!-- PANEL KIRI: Aktivitas -->
-      <div class="detail-panel">
-        <div class="panel-titlebar">
-          <span class="panel-title">📋 Aktivitas Pelaksanaan</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="panel-count" id="activityCount">0 aktivitas</span>
-            <button class="btn-primary btn-sm" id="addActivityBtnDetail">＋ Tambah</button>
-          </div>
+  <!-- Header (diisi oleh renderDetailHeader) -->
+  <div class="detail-header" id="detailHeader"></div>
+
+  <!-- Grid bawah 2 kolom: Aktivitas (kiri lebar) & Indikator (kanan) -->
+  <div class="detail-full-grid">
+
+    <!-- PANEL KIRI: Aktivitas Pelaksanaan -->
+    <div class="dp-card" style="margin-bottom:0">
+      <div class="dp-card-header">
+        <div class="dp-card-title">
+          <i class="fa-solid fa-list-check"></i> Aktivitas Pelaksanaan
+          <span class="panel-count" id="activityCount" style="font-size:11px;background:#f1f5f9;color:#64748b;border-radius:20px;padding:2px 9px;font-weight:700">0 aktivitas</span>
         </div>
+        <button class="btn-primary btn-sm" id="addActivityBtnDetail" style="display:inline-flex;align-items:center;gap:5px">
+          <i class="fa-solid fa-plus" style="font-size:10px"></i> Tambah
+        </button>
+      </div>
+      <div class="dp-card-body" style="padding:0">
         <div class="panel-scroll-wrap" id="actScrollWrap">
-          <div class="panel-scroll" id="actScrollArea">
+          <div class="panel-scroll" id="actScrollArea" style="padding:12px 16px">
             <div class="activity-list" id="activityListDetail"></div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- PANEL KANAN: Update Indikator -->
-      <div class="detail-panel">
-        <div class="panel-titlebar">
-          <span class="panel-title">📊 Update Capaian Indikator</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="panel-count" id="indCount">0 indikator</span>
-            <button class="btn-secondary btn-sm" id="editProjectBtn">✏️ Edit Proyek</button>
-          </div>
+    <!-- PANEL KANAN: Capaian Indikator -->
+    <div class="dp-card" style="margin-bottom:0">
+      <div class="dp-card-header">
+        <div class="dp-card-title">
+          <i class="fa-solid fa-chart-bar"></i> Capaian Indikator
+          <span class="panel-count" id="indCount" style="font-size:11px;background:#f1f5f9;color:#64748b;border-radius:20px;padding:2px 9px;font-weight:700">0 indikator</span>
         </div>
+        <button class="btn-secondary btn-sm" id="editProjectBtn" style="display:inline-flex;align-items:center;gap:5px">
+          <i class="fa-solid fa-pen-to-square" style="font-size:10px"></i> Edit
+        </button>
+      </div>
+      <div class="dp-card-body" style="padding:0">
         <div class="panel-scroll-wrap" id="indScrollWrap">
-          <div class="panel-scroll" id="indScrollArea">
+          <div class="panel-scroll" id="indScrollArea" style="padding:12px 16px">
             <div class="indicator-update-list" id="indicatorUpdateList"></div>
           </div>
         </div>
         <div style="padding:12px 14px;border-top:1px solid #f1f5f9;flex-shrink:0">
           <div id="indUpdateMsg" class="form-msg hidden"></div>
-          <div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px 0;line-height:1.5">
-            💡 Gunakan tombol <strong style="color:#2563eb">💾 Simpan Update</strong><br>
-            pada masing-masing indikator di atas
+          <div style="font-size:11px;color:#94a3b8;text-align:center;padding:6px 0;line-height:1.5">
+            💡 Gunakan tombol <strong style="color:#2563eb">Simpan Update</strong> pada masing-masing indikator
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- PANEL: Refleksi & Pembelajaran Proyek (Sprint 3) -->
-<div class="detail-panel" id="projectReflectionPanel">
-  <div class="panel-titlebar">
-    <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
-    <div class="panel-count" id="pr-reflection-count">0 catatan</div>
-  </div>
-  <div class="panel-scroll-wrap">
-    <div class="panel-scroll">
-      <!-- List refleksi -->
-      <div id="pr-reflection-list" class="activity-list">
-        <div class="empty-state" style="padding:18px 12px">
-          Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
+  </div><!-- /detail-full-grid -->
+
+  <!-- Grid bawah 2 kolom: Refleksi (kiri) & Dokumen (kanan) -->
+  <div class="detail-full-grid" style="margin-top:0">
+
+    <!-- Kartu Refleksi & Pembelajaran -->
+    <div class="dp-card" id="projectReflectionPanel" style="margin-bottom:0">
+      <div class="dp-card-header">
+        <div class="dp-card-title">
+          <i class="fa-solid fa-lightbulb" style="color:#f59e0b"></i> Refleksi &amp; Pembelajaran
+          <span class="panel-count" id="pr-reflection-count" style="font-size:11px;background:#f1f5f9;color:#64748b;border-radius:20px;padding:2px 9px;font-weight:700">0 catatan</span>
         </div>
       </div>
-
-      <!-- Form tambah refleksi -->
-      <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:10px">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <input type="date" id="pr-reflection-date"
-            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
-          <select id="pr-reflection-type"
-            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
-            <option value="lesson">Lesson Learned</option>
-            <option value="success">Success</option>
-            <option value="challenge">Challenge</option>
-            <option value="recommendation">Rekomendasi</option>
-          </select>
-          <input type="text" id="pr-reflection-title" placeholder="Judul singkat (opsional)"
-            style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+      <div class="dp-card-body">
+        <!-- List refleksi -->
+        <div id="pr-reflection-list" class="activity-list" style="max-height:320px;overflow-y:auto;margin-bottom:16px">
+          <div class="empty-state" style="padding:18px 12px">
+            Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
+          </div>
         </div>
 
-        <textarea id="pr-what-happened" rows="2"
-          placeholder="Apa yang terjadi? (konteks singkat)"
-          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
-
-        <div style="display:flex;gap:8px;margin-bottom:6px">
-          <textarea id="pr-what-worked" rows="2"
-            placeholder="Apa yang berjalan baik?"
-            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
-          <textarea id="pr-what-didnt" rows="2"
-            placeholder="Apa yang tidak berjalan?"
-            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
-        </div>
-
-        <textarea id="pr-lesson" rows="2"
-          placeholder="Pelajaran utama / insight kunci"
-          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
-
-        <textarea id="pr-next-steps" rows="2"
-          placeholder="Apa yang akan dilakukan berbeda ke depan?"
-          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
-
-        <div id="pr-reflection-msg" class="form-msg hidden" style="margin-bottom:6px"></div>
-
-        <div style="display:flex;justify-content:flex-end">
-          <button class="btn-primary btn-sm" onclick="saveProjectReflection()">
-            Simpan Refleksi
-          </button>
+        <!-- Form tambah refleksi -->
+        <div style="border-top:1px solid #f1f5f9;padding-top:14px">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+            <input type="date" id="pr-reflection-date"
+              style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+            <select id="pr-reflection-type"
+              style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+              <option value="lesson">Lesson Learned</option>
+              <option value="success">Success</option>
+              <option value="challenge">Challenge</option>
+              <option value="recommendation">Rekomendasi</option>
+            </select>
+            <input type="text" id="pr-reflection-title" placeholder="Judul singkat (opsional)"
+              style="flex:1;min-width:120px;font-size:12px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+          </div>
+          <textarea id="pr-what-happened" rows="2" placeholder="Apa yang terjadi? (konteks singkat)"
+            style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical;box-sizing:border-box"></textarea>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <textarea id="pr-what-worked" rows="2" placeholder="Apa yang berjalan baik?"
+              style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+            <textarea id="pr-what-didnt" rows="2" placeholder="Apa yang tidak berjalan?"
+              style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+          </div>
+          <textarea id="pr-lesson" rows="2" placeholder="Pelajaran utama / insight kunci"
+            style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical;box-sizing:border-box"></textarea>
+          <textarea id="pr-next-steps" rows="2" placeholder="Apa yang akan dilakukan berbeda ke depan?"
+            style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:8px;resize:vertical;box-sizing:border-box"></textarea>
+          <div id="pr-reflection-msg" class="form-msg hidden" style="margin-bottom:6px"></div>
+          <div style="display:flex;justify-content:flex-end">
+            <button class="btn-primary btn-sm" onclick="saveProjectReflection()" style="display:inline-flex;align-items:center;gap:5px">
+              <i class="fa-solid fa-floppy-disk" style="font-size:11px"></i> Simpan Refleksi
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
+    <!-- Kartu Dokumen (placeholder konsisten) -->
+    <div class="dp-card" style="margin-bottom:0">
+      <div class="dp-card-header">
+        <div class="dp-card-title">
+          <i class="fa-solid fa-folder-open" style="color:#0ea5e9"></i> Dokumen Proyek
+        </div>
+        <button class="btn-secondary btn-sm" onclick="switchTab('documents')" style="font-size:11px;display:inline-flex;align-items:center;gap:4px">
+          <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i> Lihat Semua
+        </button>
+      </div>
+      <div class="dp-card-body">
+        <div id="detailDocList" style="max-height:340px;overflow-y:auto">
+          <div class="empty-state" style="padding:28px 12px">
+            <div style="font-size:28px;margin-bottom:8px">📄</div>
+            <div style="font-weight:600;color:#475569;margin-bottom:4px">Belum ada dokumen</div>
+            <small style="color:#94a3b8">Klik "Lihat Semua" untuk mengelola dokumen proyek</small>
+          </div>
+        </div>
+      </div>
     </div>
-  </div><!-- /tab-detail -->
+
+  </div><!-- /detail-full-grid 2 -->
+
+</div><!-- /tab-detail -->
 
 <!-- ===== TAB PENERIMA MANFAAT ===== -->
 <div class="tab-content" id="tab-beneficiary">
