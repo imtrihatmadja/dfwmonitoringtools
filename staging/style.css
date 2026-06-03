@@ -1754,3 +1754,88 @@ body {
 @media (max-width: 480px) {
   .dp-act-actions { gap: 2px; }
 }
+
+
+/* ================================================================
+   PATCH v4.2 — Doc action buttons + Indicator update form
+================================================================ */
+
+/* ── Document row ── */
+.dp-doc-row {
+  border: 1px solid #e8edf4;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  margin-bottom: 7px;
+  transition: box-shadow .15s, border-color .15s;
+}
+.dp-doc-row:hover { box-shadow: 0 2px 8px rgba(15,23,42,.07); border-color: #cbd5e1; }
+
+.dp-doc-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+  flex-wrap: wrap;
+}
+
+.dp-doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  transition: background .15s, box-shadow .15s;
+  line-height: 1;
+}
+.dp-doc-btn.preview {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.dp-doc-btn.preview:hover { background: #dbeafe; }
+
+.dp-doc-btn.drive {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.dp-doc-btn.drive:hover { background: #dcfce7; }
+
+.dp-doc-btn.open {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.dp-doc-btn.open:hover { background: #f1f5f9; }
+
+.dp-doc-btn.delete {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+.dp-doc-btn.delete:hover { background: #fecaca; }
+
+/* ── Preview overlay ── */
+#dp-preview-overlay { animation: dp-fadeIn .18s ease; }
+
+/* ── Indicator update form inside card ── */
+.dp-ind-item input[type="number"],
+.dp-ind-item textarea {
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.dp-ind-item input[type="number"]:focus,
+.dp-ind-item textarea:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+}
+
+/* ── Activity body section labels ── */
+.act-note-section { }
+.act-note-title { }
