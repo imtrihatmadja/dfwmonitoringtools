@@ -2411,80 +2411,19 @@ function renderDpProgressCard(proj){
 
 // ── Card: Aktivitas (scrollable, sub-aktivitas expand on click) ─
 function renderDpActivitiesCard(activities, proj){
-  const acts=activities||[];
-  const projName=_dpEsc((proj&&proj.name)||'');
+  // Gunakan renderer lama (renderActivityListDetail) supaya struktur kartu &
+  // tombol tetap 100% sama (termasuk tombol Sub-Aktivitas, notes, dll).
+  try{
+    if(typeof renderActivityListDetail === 'function'){
+      renderActivityListDetail();
+    }
+  }catch(e){console.warn('[DP] renderActivityListDetail error', e);}
 
-  const actRows=acts.map(act=>{
-    const pct=Number(act.progress)||0;
-    const statusKey=(act.status||'').toLowerCase().replace(/\s+/g,'-');
-    const isDone=statusKey==='selesai';
-    const picText=act.pic?`👤 ${_dpEsc(act.pic)}`:'';
-    const dueText=act.due_date?`📅 ${new Date(act.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}`:'';
-    let statusBadge='';
-    if(isDone)                             statusBadge=`<span class="badge badge-selesai" style="font-size:10px">✓ Selesai</span>`;
-    else if(statusKey==='sedang-berjalan') statusBadge=`<span class="badge badge-sedang-berjalan" style="font-size:10px">▶ Berjalan</span>`;
-    else if(statusKey==='tertunda')        statusBadge=`<span class="badge badge-tertunda" style="font-size:10px">⏸ Tertunda</span>`;
-    else                                   statusBadge=`<span class="badge badge-belum-mulai" style="font-size:10px">○ Belum Mulai</span>`;
+  // Ambil HTML dari container lama, lalu bungkus dalam card baru.
+  const legacyContainer = document.getElementById('activityListDetail');
+  const legacyHtml = legacyContainer ? legacyContainer.innerHTML : '<div class=\"empty-state\">Belum ada aktivitas</div>';
 
-    return `
-<div class="dp-act-item ${statusKey}" id="dp-act-${act.id}">
-  <div class="dp-act-row1" onclick="_dpToggleActBody('${act.id}')" style="cursor:pointer">
-    <div class="dp-act-title${isDone?' done':''}">${_dpEsc(act.title||act.name||'Aktivitas')}</div>
-    <div class="dp-act-right">
-      <span class="dp-act-pct" style="color:${progressColor(pct)}">${pct}%</span>
-      <div class="dp-act-actions" onclick="event.stopPropagation()">
-        <button class="dp-act-btn" onclick="openActModal('${act.id}')" title="Edit">✏️</button>
-        <button class="dp-act-btn" onclick="openSubActivityModal&&openSubActivityModal('${act.id}')" title="Sub-Aktivitas" style="font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-weight:600"><i class='fa-solid fa-clone' style='margin-right:3px'></i>Sub</button>
-        <button class="dp-act-btn del" onclick="typeof deleteActivity==='function'&&deleteActivity('${act.id}')" title="Hapus">🗑</button>
-      </div>
-    </div>
-  </div>
-  <div class="dp-act-bar-track"><div class="dp-act-bar-fill" style="width:${pct}%"></div></div>
-  <div class="dp-act-row2">
-    <div class="dp-act-meta">${picText}${dueText?`<span>${dueText}</span>`:''}</div>
-    ${statusBadge}
-  </div>
-  <!-- Expand body: Deskripsi + Tantangan & Hambatan + Sub-Aktivitas -->
-  <div class="dp-act-body" id="dp-actbody-${act.id}" style="display:none">
-    ${act.description?`<p style="font-size:12px;color:#475569;margin:0 0 10px;line-height:1.6">${_dpEsc(act.description)}</p>`:''}
-
-    <!-- Tantangan & Hambatan -->
-    <div class="act-note-section" style="margin-bottom:12px">
-      <div class="act-note-title" style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px">
-        ⚠️ Tantangan & Hambatan
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
-        <textarea id="inline-note-${act.id}" rows="2"
-          placeholder="Tulis catatan pelaksanaan, kendala, atau temuan lapangan…"
-          style="flex:1;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;resize:vertical;color:#0f172a;line-height:1.5"></textarea>
-        <button class="btn-upload" onclick="saveInlineNote('${act.id}')"
-          style="flex-shrink:0;padding:7px 11px;font-size:14px;font-weight:700;border-radius:8px"
-          title="Simpan catatan">＋</button>
-      </div>
-      <div class="act-note-list" id="notelist-${act.id}">${renderActNotes(notes)}</div>
-    </div>
-
-    <!-- Sub-Aktivitas -->
-    <div style="margin-top:4px">
-      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px">
-        🔀 Sub-Aktivitas
-      </div>
-      <div id="dp-sub-list-${act.id}">
-        <div style="font-size:11px;color:#94a3b8;font-style:italic">Memuat sub-aktivitas...</div>
-      </div>
-    </div>
-  </div>
-</div>`;
-  }).join('');
-
-  return `
-<div class="dp-card">
-  <div class="dp-card-header">
-    <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Aktivitas Pelaksanaan</div>
-    <span class="dp-card-badge">${acts.length} aktivitas</span>
-  </div>
-  <div class="dp-act-list dp-scrollable">${acts.length?actRows:'<div class="empty-state">📋 Belum ada aktivitas pelaksanaan</div>'}</div>
-</div>`;
+  return `\n<div class=\"dp-card\">\n  <div class=\"dp-card-header\">\n    <div class=\"dp-card-title\"><span class=\"dp-card-title-icon\">📋</span> Aktivitas Pelaksanaan</div>\n    <span class=\"dp-card-badge\">${activities && activities.length ? activities.length : (allActivities ? allActivities.length : 0)} aktivitas</span>\n  </div>\n  <div class=\"dp-act-list dp-scrollable dp-act-legacy\">${legacyHtml}</div>\n</div>`;
 }
 
 // ── Toggle body aktivitas + load sub-aktivitas ─────────────────
