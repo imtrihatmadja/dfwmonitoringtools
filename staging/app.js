@@ -1158,20 +1158,17 @@ function renderDetailHeader(proj) {
   const indDone = inds.filter(ind => {
     const actual = getLatestActual(ind || {});
     const target = Number(ind?.target) || 0;
-    const pct = target > 0 ? Math.round(actual / target * 100) : 0;
-    return pct >= 100;
+    return target > 0 ? Math.round(actual / target * 100) >= 100 : false;
   }).length;
 
   const cls = (safeProj.status || 'aktif').toLowerCase().replace(/\s+/g, '-');
   const avgInd = inds.length
-    ? Math.round(
-        inds.reduce((a, ind) => {
-          const actual = getLatestActual(ind || {});
-          const target = Number(ind?.target) || 0;
-          const pct = target > 0 ? Math.round(actual / target * 100) : 0;
-          return a + Math.min(pct, 100);
-        }, 0) / inds.length
-      )
+    ? Math.round(inds.reduce((a, ind) => {
+        const actual = getLatestActual(ind || {});
+        const target = Number(ind?.target) || 0;
+        const pct = target > 0 ? Math.round(actual / target * 100) : 0;
+        return a + Math.min(pct, 100);
+      }, 0) / inds.length)
     : 0;
 
   const overall = calcOverallProgress(safeProj || {});
@@ -1183,112 +1180,140 @@ function renderDetailHeader(proj) {
     ? new Date(safeProj.updated_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' })
     : '-';
 
+  const budgetApproved = Number(safeProj.budget_approved) || 0;
+  const budgetActual  = Number(safeProj.budget_actual) || 0;
+  const budgetPct = budgetApproved > 0 ? Math.min(Math.round(budgetActual / budgetApproved * 100), 999) : 0;
+
   const detailHeaderEl = document.getElementById('detailHeader');
   if (!detailHeaderEl) return;
 
   detailHeaderEl.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
+    <!-- Navigasi atas -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')"
+        style="font-size:12px;display:inline-flex;align-items:center;gap:5px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg> Kembali
+      </button>
       <span class="badge badge-${cls}">${safeProj.status || 'Aktif'}</span>
-      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()" style="margin-left:auto">✏️ Edit Proyek</button>
-      <button class="btn-remove" onclick="deleteProject('${safeProj.id || ''}','${String(safeProj.name || '').replace(/'/g, "\'")}')" title="Arsipkan proyek">🗑</button>
+      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()"
+        style="margin-left:auto;display:inline-flex;align-items:center;gap:5px">
+        <i class="fa-solid fa-pen-to-square" style="font-size:11px"></i> Edit Proyek
+      </button>
+      <button class="btn-remove"
+        onclick="deleteProject('${safeProj.id || ''}','${String(safeProj.name || '').replace(/'/g, "\\'")}')"
+        title="Arsipkan proyek"><i class="fa-solid fa-trash-can"></i></button>
     </div>
 
-    <div class="detail-header-grid">
-      <div class="detail-card detail-card-left">
-        <div class="detail-project-name">${safeProj.name || '-'}</div>
-        <div class="detail-meta" style="margin-top:6px;margin-bottom:10px">
-          <span>📍 ${safeProj.location || '-'}</span>
-          <span>👤 ${safeProj.owner || '-'}</span>
-          ${safeProj.donor ? `<span>🏦 ${safeProj.donor}</span>` : ''}
-          ${safeProj.deadline ? `<span>📅 Deadline: ${safeProj.deadline}</span>` : ''}
-        </div>
+    <!-- Grid 2 kolom -->
+    <div class="detail-main-grid">
 
-        ${safeProj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${safeProj.description}</p>` : ''}
-
-        <div class="dh-goal-box">
-          <div class="dh-section-label dh-label-blue">🎯 Goal</div>
-          <div style="font-size:13px;color:#1e3a5f;line-height:1.6">${safeProj.goal || 'Belum ada goal proyek.'}</div>
-        </div>
-
-        <div class="dh-outcomes-box">
-          <div class="dh-section-label dh-label-purple">🏆 Outcomes</div>
-          ${outcomes.length ? `
-            <ol style="margin:6px 0 0;padding-left:18px">
-              ${outcomes.map(o => `
-                <li style="font-size:13px;color:#3b0764;line-height:1.5;margin-bottom:5px">
-                  ${o.outcome_text || o.text || '-'}
-                </li>
-              `).join('')}
-            </ol>
-          ` : `<div style="font-size:13px;color:#64748b;line-height:1.6">Belum ada outcome proyek.</div>`}
+      <!-- KIRI: Info Proyek -->
+      <div>
+        <div class="dp-card">
+          <div class="dp-card-header">
+            <div class="dp-card-title"><i class="fa-solid fa-folder-open"></i> Informasi Proyek</div>
+          </div>
+          <div class="dp-card-body">
+            <div class="dp-project-name">${safeProj.name || '-'}</div>
+            <div class="dp-meta-row">
+              <div class="dp-meta-item"><i class="fa-solid fa-location-dot"></i> <span>${safeProj.location || '-'}</span></div>
+              <div class="dp-meta-item"><i class="fa-solid fa-user"></i> <strong>${safeProj.owner || '-'}</strong></div>
+              ${safeProj.donor ? `<div class="dp-meta-item"><i class="fa-solid fa-building-columns"></i> <span>${safeProj.donor}</span></div>` : ''}
+              ${safeProj.deadline ? `<div class="dp-meta-item"><i class="fa-regular fa-calendar-days"></i> <span>Deadline: <strong>${safeProj.deadline}</strong></span></div>` : ''}
+            </div>
+            ${safeProj.description ? `<p style="font-size:12.5px;color:#64748b;margin:0 0 12px;line-height:1.6;padding:10px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid #cbd5e1">${safeProj.description}</p>` : ''}
+            <div class="dp-goal-block">
+              <div class="dp-block-label blue">🎯 Goal</div>
+              <div class="dp-goal-text">${safeProj.goal || 'Belum ada goal proyek.'}</div>
+            </div>
+            ${outcomes.length ? `
+            <div class="dp-outcomes-block">
+              <div class="dp-block-label purple">📌 Outcomes (${outcomes.length})</div>
+              <ol class="dp-outcomes-list">
+                ${outcomes.map((o,i) => `<li>${o.outcome_text || o.text || '-'}</li>`).join('')}
+              </ol>
+            </div>` : ''}
+          </div>
         </div>
       </div>
 
-      <div class="detail-card detail-card-right">
-        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08;margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
-            <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
+      <!-- KANAN: Progress + Anggaran -->
+      <div>
+        <!-- Kartu Progress -->
+        <div class="dp-card">
+          <div class="dp-card-header">
+            <div class="dp-card-title"><i class="fa-solid fa-chart-line"></i> Progress Keseluruhan</div>
+            <span class="dp-status-badge" style="background:#${ovColor}18;color:#${ovColor};border:1px solid #${ovColor}40">${ovLabel}</span>
           </div>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-            <span style="font-size:36px;font-weight:800;color:${ovColor};line-height:1">${overall || 0}%</span>
-            <span style="font-size:11px;color:#94a3b8">rata-rata aktivitas &amp; indikator</span>
-          </div>
-          <div class="overall-progress-bar">
-            <div class="overall-progress-fill" style="width:${overall || 0}%;background:${ovColor}"></div>
-          </div>
-          <div class="overall-breakdown" style="margin-top:8px">
-            <div class="overall-breakdown-item">
-              <span class="overall-breakdown-dot" style="background:#6366f1"></span>
-              <span>Aktivitas</span>
-              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + '%' : '—'}</span>
+          <div class="dp-card-body">
+            <div class="dp-overall-header">
+              <div class="dp-overall-pct" style="color:#${ovColor}">
+                ${overall || 0}<span style="font-size:22px;font-weight:700">%</span>
+              </div>
+              <div style="font-size:11px;color:#94a3b8;text-align:right;line-height:1.5">
+                Rata-rata<br>aktivitas &amp; indikator
+              </div>
             </div>
-            <div class="overall-breakdown-sep">+</div>
-            <div class="overall-breakdown-item">
-              <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
-              <span>Indikator</span>
-              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + '%' : '—'}</span>
+            <div class="dp-progress-bar-thick">
+              <div class="dp-fill" style="width:${overall || 0}%;background:#${ovColor}"></div>
+            </div>
+            <div class="dp-metrics-grid">
+              <div class="dp-metric-box">
+                <div class="dp-metric-label">Total Ind.</div>
+                <div class="dp-metric-value">${inds.length}</div>
+              </div>
+              <div class="dp-metric-box">
+                <div class="dp-metric-label">Tercapai</div>
+                <div class="dp-metric-value" style="color:#22c55e">${indDone}</div>
+              </div>
+              <div class="dp-metric-box">
+                <div class="dp-metric-label">Avg. Ind.</div>
+                <div class="dp-metric-value" style="color:#${progressColor(avgInd||0)}">${avgInd||0}%</div>
+              </div>
+              <div class="dp-metric-box">
+                <div class="dp-metric-label">Update</div>
+                <div class="dp-metric-value small">${updatedAtLabel}</div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="detail-stats" style="margin-bottom:12px">
-          <div class="detail-stat"><div class="detail-stat-label">Total Indikator</div><div class="detail-stat-value">${inds.length}</div></div>
-          <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
-          <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
-          <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${updatedAtLabel}</div></div>
-        </div>
-
-        ${(Number(safeProj.budget_approved) > 0 || Number(safeProj.budget_actual) > 0) ? `
-          <div class="detail-budget-box">
-            <div class="detail-budget-title">💰 Anggaran Proyek</div>
-            <div class="detail-budget-row">
-              <span>Disetujui</span>
-              <strong>${formatRupiah(Number(safeProj.budget_approved) || 0)}</strong>
+        <!-- Kartu Anggaran -->
+        ${budgetApproved > 0 || budgetActual > 0 ? `
+        <div class="dp-card">
+          <div class="dp-card-header">
+            <div class="dp-card-title"><i class="fa-solid fa-coins" style="color:#f59e0b"></i> Anggaran Proyek</div>
+            <span style="font-size:14px;font-weight:800;color:#f59e0b">${budgetPct}%</span>
+          </div>
+          <div class="dp-card-body">
+            <div class="dp-budget-row">
+              <span class="dp-budget-label">Disetujui</span>
+              <span class="dp-budget-value">${formatRupiah(budgetApproved)}</span>
             </div>
-            <div class="detail-budget-row">
-              <span>Realisasi</span>
-              <strong style="color:#f59e0b">${formatRupiah(Number(safeProj.budget_actual) || 0)}
-                ${Number(safeProj.budget_approved) > 0 ? `<span class="budget-pct">${pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0)}%</span>` : ''}
-              </strong>
+            <div class="dp-budget-row">
+              <span class="dp-budget-label">Realisasi</span>
+              <span class="dp-budget-value" style="color:#f59e0b">
+                ${formatRupiah(budgetActual)}<span class="dp-budget-pct">${budgetPct}%</span>
+              </span>
             </div>
-            <div class="progress-bar" style="height:6px;margin:6px 0 4px">
-              <div class="progress-fill" style="width:${Math.min(pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0),100)}%;background:#f59e0b"></div>
+            <div class="dp-budget-bar">
+              <div class="dp-budget-bar-fill" style="width:${Math.min(budgetPct,100)}%"></div>
             </div>
             ${budgetUpdates.length ? `
-              <div class="detail-budget-history">
-                <div class="detail-budget-history-title">Riwayat Update Realisasi</div>
-                ${[...budgetUpdates].reverse().slice(0,5).map(b => `
-                  <div class="mini-history-item">
-                    <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
-                    <span class="mini-history-note">${b.note || ''}</span>
-                    <span class="mini-history-date">${b.created_at ? new Date(b.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</span>
-                  </div>`).join('')}
-              </div>` : ''}
-          </div>` : ''}
+              <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 6px">Riwayat Realisasi</div>
+              ${[...budgetUpdates].reverse().slice(0,5).map(b => `
+              <div class="mini-history-item">
+                <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
+                <span class="mini-history-note">${b.note || ''}</span>
+                <span class="mini-history-date">${b.created_at ? new Date(b.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</span>
+              </div>`).join('')}` : ''}
+          </div>
+        </div>` : ''}
       </div>
-    </div>`;
+    </div>
+  `;
 }
 
 // ===================== INDICATOR UPDATE PANEL =====================
