@@ -1158,17 +1158,20 @@ function renderDetailHeader(proj) {
   const indDone = inds.filter(ind => {
     const actual = getLatestActual(ind || {});
     const target = Number(ind?.target) || 0;
-    return target > 0 ? Math.round(actual / target * 100) >= 100 : false;
+    const pct = target > 0 ? Math.round(actual / target * 100) : 0;
+    return pct >= 100;
   }).length;
 
   const cls = (safeProj.status || 'aktif').toLowerCase().replace(/\s+/g, '-');
   const avgInd = inds.length
-    ? Math.round(inds.reduce((a, ind) => {
-        const actual = getLatestActual(ind || {});
-        const target = Number(ind?.target) || 0;
-        const pct = target > 0 ? Math.round(actual / target * 100) : 0;
-        return a + Math.min(pct, 100);
-      }, 0) / inds.length)
+    ? Math.round(
+        inds.reduce((a, ind) => {
+          const actual = getLatestActual(ind || {});
+          const target = Number(ind?.target) || 0;
+          const pct = target > 0 ? Math.round(actual / target * 100) : 0;
+          return a + Math.min(pct, 100);
+        }, 0) / inds.length
+      )
     : 0;
 
   const overall = calcOverallProgress(safeProj || {});
@@ -1180,140 +1183,112 @@ function renderDetailHeader(proj) {
     ? new Date(safeProj.updated_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' })
     : '-';
 
-  const budgetApproved = Number(safeProj.budget_approved) || 0;
-  const budgetActual  = Number(safeProj.budget_actual) || 0;
-  const budgetPct = budgetApproved > 0 ? Math.min(Math.round(budgetActual / budgetApproved * 100), 999) : 0;
-
   const detailHeaderEl = document.getElementById('detailHeader');
   if (!detailHeaderEl) return;
 
   detailHeaderEl.innerHTML = `
-    <!-- Navigasi atas -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')"
-        style="font-size:12px;display:inline-flex;align-items:center;gap:5px">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg> Kembali
-      </button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="switchTab('dashboard')" style="font-size:12px">← Kembali</button>
       <span class="badge badge-${cls}">${safeProj.status || 'Aktif'}</span>
-      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()"
-        style="margin-left:auto;display:inline-flex;align-items:center;gap:5px">
-        <i class="fa-solid fa-pen-to-square" style="font-size:11px"></i> Edit Proyek
-      </button>
-      <button class="btn-remove"
-        onclick="deleteProject('${safeProj.id || ''}','${String(safeProj.name || '').replace(/'/g, "\\'")}')"
-        title="Arsipkan proyek"><i class="fa-solid fa-trash-can"></i></button>
+      <button class="btn-secondary btn-sm" onclick="openEditProjectModal()" style="margin-left:auto">✏️ Edit Proyek</button>
+      <button class="btn-remove" onclick="deleteProject('${safeProj.id || ''}','${String(safeProj.name || '').replace(/'/g, "\'")}')" title="Arsipkan proyek">🗑</button>
     </div>
 
-    <!-- Grid 2 kolom -->
-    <div class="detail-main-grid">
+    <div class="detail-header-grid">
+      <div class="detail-card detail-card-left">
+        <div class="detail-project-name">${safeProj.name || '-'}</div>
+        <div class="detail-meta" style="margin-top:6px;margin-bottom:10px">
+          <span>📍 ${safeProj.location || '-'}</span>
+          <span>👤 ${safeProj.owner || '-'}</span>
+          ${safeProj.donor ? `<span>🏦 ${safeProj.donor}</span>` : ''}
+          ${safeProj.deadline ? `<span>📅 Deadline: ${safeProj.deadline}</span>` : ''}
+        </div>
 
-      <!-- KIRI: Info Proyek -->
-      <div>
-        <div class="dp-card">
-          <div class="dp-card-header">
-            <div class="dp-card-title"><i class="fa-solid fa-folder-open"></i> Informasi Proyek</div>
-          </div>
-          <div class="dp-card-body">
-            <div class="dp-project-name">${safeProj.name || '-'}</div>
-            <div class="dp-meta-row">
-              <div class="dp-meta-item"><i class="fa-solid fa-location-dot"></i> <span>${safeProj.location || '-'}</span></div>
-              <div class="dp-meta-item"><i class="fa-solid fa-user"></i> <strong>${safeProj.owner || '-'}</strong></div>
-              ${safeProj.donor ? `<div class="dp-meta-item"><i class="fa-solid fa-building-columns"></i> <span>${safeProj.donor}</span></div>` : ''}
-              ${safeProj.deadline ? `<div class="dp-meta-item"><i class="fa-regular fa-calendar-days"></i> <span>Deadline: <strong>${safeProj.deadline}</strong></span></div>` : ''}
-            </div>
-            ${safeProj.description ? `<p style="font-size:12.5px;color:#64748b;margin:0 0 12px;line-height:1.6;padding:10px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid #cbd5e1">${safeProj.description}</p>` : ''}
-            <div class="dp-goal-block">
-              <div class="dp-block-label blue">🎯 Goal</div>
-              <div class="dp-goal-text">${safeProj.goal || 'Belum ada goal proyek.'}</div>
-            </div>
-            ${outcomes.length ? `
-            <div class="dp-outcomes-block">
-              <div class="dp-block-label purple">📌 Outcomes (${outcomes.length})</div>
-              <ol class="dp-outcomes-list">
-                ${outcomes.map((o,i) => `<li>${o.outcome_text || o.text || '-'}</li>`).join('')}
-              </ol>
-            </div>` : ''}
-          </div>
+        ${safeProj.description ? `<p style="font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.5">${safeProj.description}</p>` : ''}
+
+        <div class="dh-goal-box">
+          <div class="dh-section-label dh-label-blue">🎯 Goal</div>
+          <div style="font-size:13px;color:#1e3a5f;line-height:1.6">${safeProj.goal || 'Belum ada goal proyek.'}</div>
+        </div>
+
+        <div class="dh-outcomes-box">
+          <div class="dh-section-label dh-label-purple">🏆 Outcomes</div>
+          ${outcomes.length ? `
+            <ol style="margin:6px 0 0;padding-left:18px">
+              ${outcomes.map(o => `
+                <li style="font-size:13px;color:#3b0764;line-height:1.5;margin-bottom:5px">
+                  ${o.outcome_text || o.text || '-'}
+                </li>
+              `).join('')}
+            </ol>
+          ` : `<div style="font-size:13px;color:#64748b;line-height:1.6">Belum ada outcome proyek.</div>`}
         </div>
       </div>
 
-      <!-- KANAN: Progress + Anggaran -->
-      <div>
-        <!-- Kartu Progress -->
-        <div class="dp-card">
-          <div class="dp-card-header">
-            <div class="dp-card-title"><i class="fa-solid fa-chart-line"></i> Progress Keseluruhan</div>
-            <span class="dp-status-badge" style="background:#${ovColor}18;color:#${ovColor};border:1px solid #${ovColor}40">${ovLabel}</span>
+      <div class="detail-card detail-card-right">
+        <div class="overall-progress-box" style="border-color:${ovColor}20;background:${ovColor}08;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:#475569">📊 Progress Keseluruhan</span>
+            <span class="overall-progress-label" style="background:${ovColor}18;color:${ovColor}">${ovLabel}</span>
           </div>
-          <div class="dp-card-body">
-            <div class="dp-overall-header">
-              <div class="dp-overall-pct" style="color:#${ovColor}">
-                ${overall || 0}<span style="font-size:22px;font-weight:700">%</span>
-              </div>
-              <div style="font-size:11px;color:#94a3b8;text-align:right;line-height:1.5">
-                Rata-rata<br>aktivitas &amp; indikator
-              </div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:36px;font-weight:800;color:${ovColor};line-height:1">${overall || 0}%</span>
+            <span style="font-size:11px;color:#94a3b8">rata-rata aktivitas &amp; indikator</span>
+          </div>
+          <div class="overall-progress-bar">
+            <div class="overall-progress-fill" style="width:${overall || 0}%;background:${ovColor}"></div>
+          </div>
+          <div class="overall-breakdown" style="margin-top:8px">
+            <div class="overall-breakdown-item">
+              <span class="overall-breakdown-dot" style="background:#6366f1"></span>
+              <span>Aktivitas</span>
+              <span style="font-weight:700;color:#6366f1">${avgActPct !== null ? avgActPct + '%' : '—'}</span>
             </div>
-            <div class="dp-progress-bar-thick">
-              <div class="dp-fill" style="width:${overall || 0}%;background:#${ovColor}"></div>
-            </div>
-            <div class="dp-metrics-grid">
-              <div class="dp-metric-box">
-                <div class="dp-metric-label">Total Ind.</div>
-                <div class="dp-metric-value">${inds.length}</div>
-              </div>
-              <div class="dp-metric-box">
-                <div class="dp-metric-label">Tercapai</div>
-                <div class="dp-metric-value" style="color:#22c55e">${indDone}</div>
-              </div>
-              <div class="dp-metric-box">
-                <div class="dp-metric-label">Avg. Ind.</div>
-                <div class="dp-metric-value" style="color:#${progressColor(avgInd||0)}">${avgInd||0}%</div>
-              </div>
-              <div class="dp-metric-box">
-                <div class="dp-metric-label">Update</div>
-                <div class="dp-metric-value small">${updatedAtLabel}</div>
-              </div>
+            <div class="overall-breakdown-sep">+</div>
+            <div class="overall-breakdown-item">
+              <span class="overall-breakdown-dot" style="background:#0ea5e9"></span>
+              <span>Indikator</span>
+              <span style="font-weight:700;color:#0ea5e9">${avgIndPct !== null ? avgIndPct + '%' : '—'}</span>
             </div>
           </div>
         </div>
 
-        <!-- Kartu Anggaran -->
-        ${budgetApproved > 0 || budgetActual > 0 ? `
-        <div class="dp-card">
-          <div class="dp-card-header">
-            <div class="dp-card-title"><i class="fa-solid fa-coins" style="color:#f59e0b"></i> Anggaran Proyek</div>
-            <span style="font-size:14px;font-weight:800;color:#f59e0b">${budgetPct}%</span>
-          </div>
-          <div class="dp-card-body">
-            <div class="dp-budget-row">
-              <span class="dp-budget-label">Disetujui</span>
-              <span class="dp-budget-value">${formatRupiah(budgetApproved)}</span>
+        <div class="detail-stats" style="margin-bottom:12px">
+          <div class="detail-stat"><div class="detail-stat-label">Total Indikator</div><div class="detail-stat-value">${inds.length}</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Indikator Tercapai</div><div class="detail-stat-value" style="color:#22c55e">${indDone}/${inds.length}</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Avg. Indikator</div><div class="detail-stat-value" style="color:${progressColor(avgInd)}">${avgInd}%</div></div>
+          <div class="detail-stat"><div class="detail-stat-label">Update Terakhir</div><div class="detail-stat-value" style="font-size:13px">${updatedAtLabel}</div></div>
+        </div>
+
+        ${(Number(safeProj.budget_approved) > 0 || Number(safeProj.budget_actual) > 0) ? `
+          <div class="detail-budget-box">
+            <div class="detail-budget-title">💰 Anggaran Proyek</div>
+            <div class="detail-budget-row">
+              <span>Disetujui</span>
+              <strong>${formatRupiah(Number(safeProj.budget_approved) || 0)}</strong>
             </div>
-            <div class="dp-budget-row">
-              <span class="dp-budget-label">Realisasi</span>
-              <span class="dp-budget-value" style="color:#f59e0b">
-                ${formatRupiah(budgetActual)}<span class="dp-budget-pct">${budgetPct}%</span>
-              </span>
+            <div class="detail-budget-row">
+              <span>Realisasi</span>
+              <strong style="color:#f59e0b">${formatRupiah(Number(safeProj.budget_actual) || 0)}
+                ${Number(safeProj.budget_approved) > 0 ? `<span class="budget-pct">${pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0)}%</span>` : ''}
+              </strong>
             </div>
-            <div class="dp-budget-bar">
-              <div class="dp-budget-bar-fill" style="width:${Math.min(budgetPct,100)}%"></div>
+            <div class="progress-bar" style="height:6px;margin:6px 0 4px">
+              <div class="progress-fill" style="width:${Math.min(pctBudget(Number(safeProj.budget_approved) || 0, Number(safeProj.budget_actual) || 0),100)}%;background:#f59e0b"></div>
             </div>
             ${budgetUpdates.length ? `
-              <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 6px">Riwayat Realisasi</div>
-              ${[...budgetUpdates].reverse().slice(0,5).map(b => `
-              <div class="mini-history-item">
-                <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
-                <span class="mini-history-note">${b.note || ''}</span>
-                <span class="mini-history-date">${b.created_at ? new Date(b.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</span>
-              </div>`).join('')}` : ''}
-          </div>
-        </div>` : ''}
+              <div class="detail-budget-history">
+                <div class="detail-budget-history-title">Riwayat Update Realisasi</div>
+                ${[...budgetUpdates].reverse().slice(0,5).map(b => `
+                  <div class="mini-history-item">
+                    <span class="mini-history-val">${formatRupiah(b.actual_value)}</span>
+                    <span class="mini-history-note">${b.note || ''}</span>
+                    <span class="mini-history-date">${b.created_at ? new Date(b.created_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</span>
+                  </div>`).join('')}
+              </div>` : ''}
+          </div>` : ''}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 // ===================== INDICATOR UPDATE PANEL =====================
@@ -2276,3 +2251,364 @@ function renderStaffTable() {
       '</tr>';
   }).join("");
 }
+
+
+/* ================================================================
+   DETAIL PROYEK — RENDER PATCH v3
+   Di-inject di akhir app-2.js
+================================================================ */
+
+// ── Helpers ──
+function _dpEsc(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _dpIndBadgeClass(pct) {
+  if (pct >= 85) return 'green';
+  if (pct >= 60) return 'blue';
+  if (pct >= 35) return 'yellow';
+  return 'red';
+}
+function _dpStatusClass(label) {
+  if (!label) return 'baik';
+  const l = label.toLowerCase();
+  if (l.includes('sangat')) return 'sangat-baik';
+  if (l.includes('baik'))   return 'baik';
+  if (l.includes('sedang')) return 'sedang';
+  return 'perlu';
+}
+
+// ── Sticky Topbar ──
+function renderDetailTopbarV3(proj) {
+  const name = _dpEsc(proj.name || 'Proyek');
+  return `
+<div class="detail-topbar" id="dp-topbar">
+  <div class="detail-topbar-left">
+    <span class="detail-topbar-breadcrumb">Detail Proyek</span>
+    <span class="detail-topbar-name" title="${name}">${name}</span>
+  </div>
+  <div class="detail-topbar-right">
+    <span class="realtime-badge">
+      <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:5px;animation:pulse 2s infinite"></span>
+      Realtime ON
+    </span>
+    <button class="btn-refresh-sm" onclick="loadProjectDetail && loadProjectDetail(currentProject)">
+      🔄 Refresh
+    </button>
+    <button class="btn-print" onclick="window.print()">
+      🖨️ Print Laporan
+    </button>
+    <span id="auth-user-badge" class="realtime-badge" style="display:none;background:#eff6ff;color:#2563eb;border-color:#bfdbfe;"></span>
+    <button id="auth-login-btn" class="btn-secondary btn-sm" onclick="signInWithGoogle()" style="display:none">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:14px;height:14px;vertical-align:middle;margin-right:4px">Login Google
+    </button>
+    <button id="auth-logout-btn" class="btn-secondary btn-sm" onclick="signOutGoogle()" style="display:none">Logout</button>
+    <button class="btn-back-sm" onclick="switchTab('dashboard')">← Kembali</button>
+  </div>
+</div>`;
+}
+
+// ── Card: Informasi Proyek ──
+function renderDpInfoCard(proj) {
+  const s = proj || {};
+  const meta = [
+    { icon: '📍', label: 'Lokasi',  val: s.location || '-' },
+    { icon: '👤', label: 'PIC',     val: s.pic || s.owner || '-' },
+    { icon: '💰', label: 'Pendana', val: s.donor || '-' },
+    { icon: '📅', label: 'Deadline',val: s.deadline ? new Date(s.deadline).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '-' },
+  ];
+  const metaHtml = meta.map(m => `
+    <div class="dp-meta-item">
+      <span class="dp-meta-icon">${m.icon}</span>
+      <div class="dp-meta-content">
+        <div class="dp-meta-label">${m.label}</div>
+        <div class="dp-meta-value">${_dpEsc(m.val)}</div>
+      </div>
+    </div>`).join('');
+
+  const goalText = _dpEsc(s.goal || s.description || 'Belum ada goal proyek.');
+  const goalHtml = `
+    <div class="dp-goal-block">
+      <span class="dp-block-label blue">🎯 Goal</span>
+      <div class="dp-block-text">${goalText}</div>
+    </div>`;
+
+  const outcomesArr = Array.isArray(s.project_outcomes) ? s.project_outcomes
+                    : Array.isArray(s.outcomes) ? s.outcomes : [];
+  let outcomesHtml = '';
+  if (outcomesArr.length) {
+    const items = outcomesArr.map((o, i) => `
+      <li>
+        <span class="dp-outcome-num">${i + 1}</span>
+        <span>${_dpEsc(typeof o === 'string' ? o : (o.outcome_text || o.text || o.description || JSON.stringify(o)))}</span>
+      </li>`).join('');
+    outcomesHtml = `
+      <div class="dp-outcome-block">
+        <span class="dp-block-label purple">🏆 Outcomes</span>
+        <ul class="dp-outcome-list">${items}</ul>
+      </div>`;
+  }
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Informasi Proyek</div>
+    <span class="badge badge-${(s.status||'aktif').toLowerCase().replace(/\s+/g,'-')}">${s.status || 'Aktif'}</span>
+  </div>
+  <div class="dp-meta-grid">${metaHtml}</div>
+  ${goalHtml}
+  ${outcomesHtml}
+</div>`;
+}
+
+// ── Card: Progress Keseluruhan ──
+function renderDpProgressCard(proj) {
+  const pct      = calcOverallProgress(proj);
+  const color    = progressColor(pct);
+  const label    = progressLabel(pct);
+  const statusCls = _dpStatusClass(label);
+  const inds     = (proj.project_indicators || []);
+  const totalInd = inds.length;
+  const tercapai = inds.filter(ind => {
+    const actual = getLatestActual(ind);
+    return ind.target > 0 ? Math.round(actual / ind.target * 100) >= 100 : false;
+  }).length;
+  const avgInd = calcAvgIndikator(proj);
+  const lastUpdate = inds.reduce((latest, ind) => {
+    const upds = ind.indicator_updates || [];
+    if (!upds.length) return latest;
+    const d = new Date(upds[upds.length-1].updated_at || 0);
+    return d > latest ? d : latest;
+  }, new Date(0));
+  const lastUpdateStr = lastUpdate.getTime() > 0
+    ? lastUpdate.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
+    : '-';
+
+  // Budget sub-card HTML (embedded in right col)
+  const budgetHtml = renderDpBudgetCard(proj);
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📊</span> Progress Keseluruhan</div>
+  </div>
+  <div class="dp-progress-hero">
+    <div class="dp-progress-pct" style="color:${color}">${pct}%</div>
+    <span class="dp-status-badge ${statusCls}">${label}</span>
+  </div>
+  <div class="dp-progress-bar-wrap">
+    <div class="dp-progress-bar-track">
+      <div class="dp-progress-bar-fill" style="width:${pct}%;background:${color}"></div>
+    </div>
+    <div class="dp-progress-sub-label"><span>0%</span><span>Target 100%</span></div>
+  </div>
+  <div class="dp-metrics-grid">
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Total Indikator</div>
+      <div class="dp-metric-value">${totalInd}</div>
+      <div class="dp-metric-sub">indikator</div>
+    </div>
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Indikator Tercapai</div>
+      <div class="dp-metric-value" style="color:#22c55e">${tercapai}</div>
+      <div class="dp-metric-sub">dari ${totalInd}</div>
+    </div>
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Avg. Indikator</div>
+      <div class="dp-metric-value">${avgInd !== null ? avgInd + '%' : '-'}</div>
+      <div class="dp-metric-sub">rata-rata</div>
+    </div>
+    <div class="dp-metric-item">
+      <div class="dp-metric-label">Update Terakhir</div>
+      <div class="dp-metric-value" style="font-size:13px">${lastUpdateStr}</div>
+      <div class="dp-metric-sub">terakhir update</div>
+    </div>
+  </div>
+</div>
+${budgetHtml}`;
+}
+
+// ── Card: Anggaran ──
+function renderDpBudgetCard(proj) {
+  const approved = Number(proj.budget_approved) || 0;
+  const actual   = Number(proj.budget_actual)   || 0;
+  if (!approved && !actual) return '';
+  const pct = approved > 0 ? Math.min(Math.round(actual / approved * 100), 100) : 0;
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">💵</span> Anggaran Proyek</div>
+    <span class="dp-budget-pct-badge">${pct}% terserap</span>
+  </div>
+  <div class="dp-budget-amounts">
+    <div>
+      <div class="dp-meta-label">Total Anggaran</div>
+      <div class="dp-budget-total">${formatRupiah(approved)}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="dp-meta-label">Realisasi</div>
+      <div class="dp-budget-actual">${formatRupiah(actual)}</div>
+    </div>
+  </div>
+  <div class="dp-budget-bar-track">
+    <div class="dp-budget-bar-fill" style="width:${pct}%"></div>
+  </div>
+  <div class="dp-budget-labels">
+    <span>Rp 0</span><span>${formatRupiah(approved)}</span>
+  </div>
+</div>`;
+}
+
+// ── Card: Aktivitas ──
+function renderDpActivitiesCard(activities, proj) {
+  const acts = activities || [];
+  const actRows = acts.map(act => {
+    const pct = Number(act.progress) || 0;
+    const statusKey = (act.status || '').toLowerCase().replace(/\s+/g,'-');
+    const isDone = statusKey === 'selesai';
+    const picText  = act.pic      ? `👤 ${_dpEsc(act.pic)}` : '';
+    const dueText  = act.due_date ? `📅 ${new Date(act.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}` : '';
+    let statusBadge = '';
+    if (isDone)                         statusBadge = `<span class="badge badge-selesai" style="font-size:10px">✓ Selesai</span>`;
+    else if (statusKey==='sedang-berjalan') statusBadge = `<span class="badge badge-sedang-berjalan" style="font-size:10px">▶ Berjalan</span>`;
+    else if (statusKey==='tertunda')    statusBadge = `<span class="badge badge-tertunda" style="font-size:10px">⏸ Tertunda</span>`;
+    else                                statusBadge = `<span class="badge badge-belum-mulai" style="font-size:10px">○ Belum Mulai</span>`;
+
+    return `
+<div class="dp-act-item ${statusKey}">
+  <div class="dp-act-row1">
+    <div class="dp-act-title${isDone?' done':''}">${_dpEsc(act.title || act.name || 'Aktivitas')}</div>
+    <div class="dp-act-right">
+      <span class="dp-act-pct" style="color:${progressColor(pct)}">${pct}%</span>
+      <div class="dp-act-actions">
+        <button class="dp-act-btn" onclick="openActModal('${act.id}')" title="Edit">✏️</button>
+        <button class="dp-act-btn" onclick="typeof viewActDetail==='function'&&viewActDetail('${act.id}')" title="Lihat">👁</button>
+        <button class="dp-act-btn del" onclick="typeof deleteActivity==='function'&&deleteActivity('${act.id}')" title="Hapus">🗑</button>
+      </div>
+    </div>
+  </div>
+  <div class="dp-act-bar-track">
+    <div class="dp-act-bar-fill" style="width:${pct}%"></div>
+  </div>
+  <div class="dp-act-row2">
+    <div class="dp-act-meta">${picText}${dueText?`<span>${dueText}</span>`:''}</div>
+    ${statusBadge}
+  </div>
+</div>`;
+  }).join('');
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📋</span> Aktivitas Pelaksanaan</div>
+    <span class="dp-card-badge">${acts.length} aktivitas</span>
+  </div>
+  <div class="dp-act-list">${acts.length ? actRows : '<div class="empty-state">📋 Belum ada aktivitas pelaksanaan</div>'}</div>
+</div>`;
+}
+
+// ── Card: Capaian Indikator ──
+function renderDpIndicatorsCard(proj) {
+  const inds = (proj.project_indicators || []);
+  const rows = inds.map(ind => {
+    const actual = getLatestActual(ind);
+    const target = Number(ind.target) || 0;
+    const unit   = ind.unit || '';
+    const pct    = target > 0 ? Math.min(Math.round(actual / target * 100), 100) : 0;
+    const badgeCls = _dpIndBadgeClass(pct);
+    const color  = progressColor(pct);
+    const lastUpd = (ind.indicator_updates || []);
+    const lastDate = lastUpd.length
+      ? new Date(lastUpd[lastUpd.length-1].updated_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})
+      : null;
+    const typeLabel = ind.type === 'outcome' ? 'Outcome' : ind.type === 'impact' ? 'Impact' : 'Output';
+    const typeBadge = `<span class="badge badge-${ind.type||'output'}" style="font-size:9px">${typeLabel}</span>`;
+
+    return `
+<div class="dp-ind-item">
+  <div class="dp-ind-header">
+    <div>
+      <div class="dp-ind-name">${_dpEsc(ind.indicator_name || ind.name || 'Indikator')}</div>
+      <div style="margin-top:3px">${typeBadge}</div>
+    </div>
+    <span class="dp-ind-pct-badge ${badgeCls}">${pct}%</span>
+  </div>
+  <div class="dp-ind-target-row">
+    <span class="dp-ind-actual">${actual}</span>
+    <span class="dp-ind-unit">${_dpEsc(unit)}</span>
+    <span class="dp-ind-sep">/</span>
+    <span class="dp-ind-target-val">${target} ${_dpEsc(unit)} (target)</span>
+  </div>
+  <div class="dp-ind-bar-track">
+    <div class="dp-ind-bar-fill" style="width:${pct}%;background:${color}"></div>
+  </div>
+  ${lastDate ? `<div style="margin-top:5px;font-size:10px;color:#94a3b8">Update: ${lastDate}</div>` : ''}
+</div>`;
+  }).join('');
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">📊</span> Capaian Indikator</div>
+    <span class="dp-card-badge">${inds.length} indikator</span>
+  </div>
+  <div class="dp-ind-list">${inds.length ? rows : '<div class="empty-state">📊 Belum ada indikator kinerja</div>'}</div>
+</div>`;
+}
+
+// ── Card: Refleksi ──
+function renderDpReflectionCard(reflections) {
+  const refs = reflections || projectReflections || [];
+  const rows = refs.map(r => `
+<div class="dp-reflection-item">
+  <div class="dp-reflection-date">${r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}) : ''}${r.author ? ' · ' + _dpEsc(r.author) : ''}</div>
+  <div class="dp-reflection-text">${_dpEsc(r.content || r.note || r.text || '')}</div>
+</div>`).join('');
+
+  return `
+<div class="dp-card">
+  <div class="dp-card-header">
+    <div class="dp-card-title"><span class="dp-card-title-icon">💡</span> Refleksi & Pembelajaran</div>
+    <span class="dp-card-badge">${refs.length} catatan</span>
+  </div>
+  ${refs.length ? `<div class="dp-reflection-list">${rows}</div>` : '<div class="empty-state" style="padding:16px 0">Belum ada catatan refleksi</div>'}
+  <div id="dp-reflection-add-area" style="margin-top:12px"></div>
+</div>`;
+}
+
+// ── MAIN: Render seluruh halaman detail (dipanggil dari renderDetailHeader) ──
+function renderProjectDetailPageV3(proj, activities, reflections) {
+  const container = document.getElementById('detail-content');
+  if (!container) {
+    console.warn('[DP v3] Container #detail-content tidak ditemukan.');
+    return false;
+  }
+
+  container.innerHTML = `
+${renderDetailTopbarV3(proj)}
+<div class="dp-content-grid">
+  <div class="dp-left-col">
+    ${renderDpInfoCard(proj)}
+    ${renderDpActivitiesCard(activities, proj)}
+    ${renderDpReflectionCard(reflections)}
+  </div>
+  <div class="dp-right-col">
+    ${renderDpProgressCard(proj)}
+    ${renderDpIndicatorsCard(proj)}
+  </div>
+</div>`;
+  return true;
+}
+
+// ── Override renderDetailHeader ──
+(function() {
+  const _origRenderDetailHeader = typeof renderDetailHeader === 'function' ? renderDetailHeader : null;
+  window.renderDetailHeader = function(proj) {
+    const ok = renderProjectDetailPageV3(proj, allActivities, projectReflections);
+    if (!ok && _origRenderDetailHeader) {
+      _origRenderDetailHeader(proj);
+    }
+  };
+})();
+
+console.log('[DP v3] Detail Proyek render patch loaded.');

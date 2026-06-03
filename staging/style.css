@@ -1521,57 +1521,136 @@ body {
   .realtime-badge { font-size: 10px; padding: 4px 8px 4px 6px; }
 }
 
+
 /* ================================================================
-   DETAIL PROYEK — REDESIGN KOMPREHENSIF
-   ================================================================ */
+   DETAIL PROYEK — REDESIGN v3
+   Layout: Sticky Topbar + 2-Column Grid
+================================================================ */
 
-/* ── Tombol Print biru ── */
-#topbarPrintBtn {
-  background: #2563eb !important;
-  color: #fff !important;
-  border: none !important;
-  padding: 7px 16px !important;
-  border-radius: 8px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  display: inline-flex !important;
+/* ── Pulse animation ── */
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:.5; transform:scale(1.3); }
+}
+
+/* ── Sticky Detail Topbar ── */
+.detail-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 1px 6px rgba(15,23,42,.07);
 }
-#topbarPrintBtn:hover { background: #1d4ed8 !important; }
+.detail-topbar-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.detail-topbar-breadcrumb {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin-bottom: 1px;
+}
+.detail-topbar-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 480px;
+}
+.detail-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.btn-print {
+  background: #2563eb;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  cursor: pointer;
+  transition: background .18s;
+}
+.btn-print:hover { background: #1d4ed8; }
+.btn-refresh-sm {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background .18s;
+}
+.btn-refresh-sm:hover { background: #e2e8f0; }
+.btn-back-sm {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background .18s;
+}
+.btn-back-sm:hover { background: #e2e8f0; }
 
-/* ── Layout Utama Detail: 2 kolom ── */
-.detail-main-grid {
+/* ── 2-Column Content Grid ── */
+.dp-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  gap: 18px;
-  margin-bottom: 18px;
+  gap: 16px;
+  padding: 20px 24px 32px;
   align-items: start;
 }
-.detail-full-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  gap: 18px;
-  margin-bottom: 18px;
-  align-items: start;
-}
+.dp-left-col  { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dp-right-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-/* ── Kartu generik Detail ── */
+/* ── Base Card ── */
 .dp-card {
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e8edf4;
   border-radius: 14px;
-  box-shadow: 0 1px 6px rgba(0,0,0,.05);
-  overflow: hidden;
-  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(15,23,42,.05);
+  padding: 18px 20px;
+  transition: box-shadow .18s;
 }
-.dp-card:last-child { margin-bottom: 0; }
+.dp-card:hover { box-shadow: 0 4px 18px rgba(15,23,42,.09); }
+
 .dp-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 14px 18px 12px;
-  border-bottom: 1px solid #f1f5f9;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 8px;
 }
 .dp-card-title {
   font-size: 13px;
@@ -1581,157 +1660,334 @@ body {
   align-items: center;
   gap: 7px;
 }
-.dp-card-title i { color: #2563eb; font-size: 13px; }
-.dp-card-body { padding: 16px 18px; }
-
-/* ── Kartu Informasi Proyek ── */
-.dp-project-name {
-  font-size: 19px;
-  font-weight: 800;
-  color: #0f172a;
-  line-height: 1.25;
-  margin-bottom: 10px;
+.dp-card-title-icon { font-size: 15px; line-height: 1; flex-shrink: 0; }
+.dp-card-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #64748b;
+  white-space: nowrap;
 }
-.dp-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
+
+/* ── Informasi Proyek Card ── */
+.dp-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
   margin-bottom: 14px;
 }
 .dp-meta-item {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: #475569;
+  align-items: flex-start;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 9px;
+  padding: 9px 10px;
 }
-.dp-meta-item i { font-size: 11px; color: #94a3b8; width: 14px; text-align: center; }
-.dp-meta-item strong { color: #1e293b; }
+.dp-meta-icon { font-size: 14px; line-height: 1.3; flex-shrink: 0; opacity: .8; }
+.dp-meta-content { min-width: 0; }
+.dp-meta-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 2px;
+}
+.dp-meta-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow-wrap: break-word;
+}
 
-/* ── Blok GOAL (biru) dan OUTCOMES (ungu) ── */
+/* Goal & Outcome blocks */
 .dp-goal-block {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
-  border-left: 3px solid #2563eb;
+  border-left: 4px solid #3b82f6;
   border-radius: 10px;
-  padding: 11px 14px;
+  padding: 12px 14px;
   margin-bottom: 10px;
 }
-.dp-outcomes-block {
+.dp-outcome-block {
   background: #faf5ff;
   border: 1px solid #e9d5ff;
-  border-left: 3px solid #7c3aed;
+  border-left: 4px solid #7c3aed;
   border-radius: 10px;
-  padding: 11px 14px;
+  padding: 12px 14px;
 }
 .dp-block-label {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .6px;
+  letter-spacing: .5px;
   text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+.dp-block-label.blue   { background: #dbeafe; color: #1d4ed8; }
+.dp-block-label.purple { background: #f3e8ff; color: #6d28d9; }
+.dp-block-text { font-size: 12px; color: #374151; line-height: 1.65; }
+.dp-outcome-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.dp-outcome-list li {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 12px; color: #374151; line-height: 1.5;
+}
+.dp-outcome-num {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #7c3aed; color: #fff;
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+
+/* ── Progress Keseluruhan Card ── */
+.dp-progress-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dp-progress-pct {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+.dp-status-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.dp-status-badge.sangat-baik { background: #d1fae5; color: #065f46; }
+.dp-status-badge.baik        { background: #dcfce7; color: #15803d; }
+.dp-status-badge.sedang      { background: #fef9c3; color: #854d0e; }
+.dp-status-badge.perlu       { background: #fee2e2; color: #dc2626; }
+
+.dp-progress-bar-wrap { margin-bottom: 16px; }
+.dp-progress-bar-track {
+  height: 13px;
+  background: #f1f5f9;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.dp-progress-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+}
+.dp-progress-sub-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+  font-weight: 600;
+}
+.dp-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  gap: 8px;
+}
+.dp-metric-item {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.dp-metric-label {
+  font-size: 10px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px;
+}
+.dp-metric-value {
+  font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.1;
+}
+.dp-metric-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+
+/* ── Budget Card ── */
+.dp-budget-amounts {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dp-budget-total  { font-size: 15px; font-weight: 700; color: #0f172a; }
+.dp-budget-actual { font-size: 13px; font-weight: 600; color: #b45309; }
+.dp-budget-pct-badge {
+  background: #fef3c7; color: #b45309;
+  border: 1px solid #fde68a;
+  border-radius: 20px; padding: 2px 9px;
+  font-size: 11px; font-weight: 800;
+}
+.dp-budget-bar-track {
+  height: 11px; background: #f1f5f9;
+  border-radius: 99px; overflow: hidden; margin-bottom: 6px;
+}
+.dp-budget-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg,#f59e0b,#f97316);
+  border-radius: 99px; transition: width .5s;
+}
+.dp-budget-labels {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: #94a3b8; font-weight: 600;
+}
+
+/* ── Aktivitas Card ── */
+.dp-act-list { display: flex; flex-direction: column; gap: 9px; }
+.dp-act-item {
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: #fafbfc;
+  transition: border-color .15s, background .15s;
+}
+.dp-act-item:hover { border-color: #e2e8f0; background: #fff; }
+.dp-act-item.selesai { border-left: 3px solid #22c55e; }
+.dp-act-item.sedang-berjalan { border-left: 3px solid #3b82f6; }
+.dp-act-item.tertunda { border-left: 3px solid #f59e0b; }
+.dp-act-item.belum-mulai { border-left: 3px solid #cbd5e1; }
+
+.dp-act-row1 {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
   margin-bottom: 7px;
 }
-.dp-block-label.blue { background: #dbeafe; color: #1d4ed8; }
-.dp-block-label.purple { background: #f3e8ff; color: #7c3aed; }
-.dp-goal-text { font-size: 12.5px; color: #1e3a5f; line-height: 1.6; }
-.dp-outcomes-list { margin: 0; padding-left: 16px; list-style: decimal; }
-.dp-outcomes-list li { font-size: 12.5px; color: #3b0764; line-height: 1.55; margin-bottom: 4px; }
-
-/* ── Kartu Progress Keseluruhan ── */
-.dp-overall-pct { font-size: 48px; font-weight: 900; line-height: 1; letter-spacing: -1px; }
-.dp-overall-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-.dp-status-badge {
-  font-size: 11px; font-weight: 700; padding: 4px 11px;
-  border-radius: 999px; text-transform: uppercase; letter-spacing: .4px;
-  white-space: nowrap; flex-shrink: 0;
+.dp-act-title {
+  font-size: 13px; font-weight: 600; color: #0f172a;
+  flex: 1; overflow-wrap: break-word;
 }
-.dp-progress-bar-thick { height: 12px; background: #f1f5f9; border-radius: 8px; overflow: hidden; margin: 10px 0 14px; }
-.dp-progress-bar-thick .dp-fill { height: 100%; border-radius: 8px; transition: width .6s cubic-bezier(.4,0,.2,1); }
-.dp-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.dp-metric-box {
-  background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 10px; padding: 10px 8px; text-align: center;
-}
-.dp-metric-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-.dp-metric-value { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1; }
-.dp-metric-value.small { font-size: 12px; font-weight: 700; }
-
-/* ── Kartu Anggaran ── */
-.dp-budget-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-.dp-budget-label { font-size: 12px; color: #64748b; font-weight: 600; }
-.dp-budget-value { font-size: 14px; font-weight: 800; color: #0f172a; }
-.dp-budget-pct { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #fef3c7; color: #b45309; margin-left: 6px; }
-.dp-budget-bar { height: 10px; background: #f1f5f9; border-radius: 8px; overflow: hidden; margin: 10px 0 12px; }
-.dp-budget-bar-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444); border-radius: 8px; transition: width .5s; }
-
-/* ── Aktivitas dalam kartu ── */
-.dp-activity-item { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid #f1f5f9; }
-.dp-activity-item:last-child { border-bottom: none; }
-.dp-act-info { flex: 1; min-width: 0; }
-.dp-act-title { font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
 .dp-act-title.done { text-decoration: line-through; color: #94a3b8; }
-.dp-act-meta { display: flex; gap: 8px; font-size: 11px; color: #64748b; flex-wrap: wrap; }
-.dp-act-progress-wrap { min-width: 100px; }
-.dp-act-pct-row { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
-.dp-act-bar { height: 6px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
-.dp-act-bar-fill { height: 100%; border-radius: 4px; transition: width .3s; }
-.dp-act-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.dp-act-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.dp-act-pct  { font-size: 13px; font-weight: 800; color: #0f172a; min-width: 36px; text-align: right; }
+.dp-act-actions { display: flex; align-items: center; gap: 3px; }
 .dp-act-btn {
-  width: 28px; height: 28px; border-radius: 7px;
-  border: 1px solid #e2e8f0; background: #f8fafc;
-  color: #64748b; font-size: 11px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: all .15s;
+  background: none; border: none; cursor: pointer;
+  font-size: 13px; padding: 3px 5px; border-radius: 6px;
+  transition: background .15s; line-height: 1;
 }
-.dp-act-btn:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
-.dp-act-btn.danger:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.dp-act-btn:hover { background: #f1f5f9; }
+.dp-act-btn.del:hover { background: #fee2e2; }
 
-/* ── Kartu Capaian Indikator ── */
-.dp-ind-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
-.dp-ind-item:last-child { border-bottom: none; }
-.dp-ind-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
-.dp-ind-name { font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.35; flex: 1; }
-.dp-ind-pct-badge { font-size: 16px; font-weight: 900; padding: 4px 11px; border-radius: 999px; flex-shrink: 0; line-height: 1; }
-.dp-ind-target-actual { font-size: 12px; color: #64748b; margin-bottom: 6px; }
-.dp-ind-target-actual strong { color: #0f172a; font-size: 14px; }
-.dp-ind-bar { height: 7px; background: #f1f5f9; border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
-.dp-ind-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
-
-/* ── Kartu Refleksi ── */
-.dp-refleksi-item {
-  padding: 12px 14px; border: 1px solid #e2e8f0;
-  border-radius: 10px; margin-bottom: 10px; background: #fdfdff;
+.dp-act-bar-track {
+  height: 6px; background: #f1f5f9;
+  border-radius: 99px; overflow: hidden; margin-bottom: 7px;
 }
-.dp-refleksi-item:last-child { margin-bottom: 0; }
-.dp-refleksi-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-.dp-refleksi-date { font-size: 11px; color: #94a3b8; }
-.dp-refleksi-title { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 5px; }
-.dp-refleksi-text { font-size: 12px; color: #334155; line-height: 1.6; }
-.dp-refleksi-lesson { font-size: 12px; color: #1d4ed8; margin-top: 5px; }
-.dp-refleksi-next { font-size: 12px; color: #15803d; margin-top: 3px; }
+.dp-act-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg,#3b82f6,#6366f1);
+  border-radius: 99px; transition: width .4s;
+}
+.dp-act-item.selesai .dp-act-bar-fill { background: linear-gradient(90deg,#22c55e,#16a34a); }
+.dp-act-item.tertunda .dp-act-bar-fill { background: linear-gradient(90deg,#f59e0b,#f97316); }
 
-/* ── Kartu Dokumen ── */
-.dp-doc-item {
+.dp-act-row2 {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px; flex-wrap: wrap;
+}
+.dp-act-meta {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px; border: 1px solid #e2e8f0;
-  border-radius: 10px; margin-bottom: 8px; background: #fff;
+  font-size: 11px; color: #94a3b8;
 }
-.dp-doc-icon {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: #eff6ff; display: flex; align-items: center;
-  justify-content: center; font-size: 16px; flex-shrink: 0;
+
+/* ── Indikator Card ── */
+.dp-ind-list { display: flex; flex-direction: column; gap: 10px; }
+.dp-ind-item {
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fafbfc;
 }
-.dp-doc-name { font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dp-doc-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.dp-ind-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 8px; margin-bottom: 8px;
+}
+.dp-ind-name { font-size: 12px; font-weight: 600; color: #0f172a; line-height: 1.45; }
+
+.dp-ind-pct-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dp-ind-pct-badge.green  { background: #dcfce7; color: #15803d; }
+.dp-ind-pct-badge.blue   { background: #dbeafe; color: #1d4ed8; }
+.dp-ind-pct-badge.yellow { background: #fef9c3; color: #854d0e; }
+.dp-ind-pct-badge.red    { background: #fee2e2; color: #dc2626; }
+
+.dp-ind-target-row {
+  display: flex; align-items: baseline; gap: 4px;
+  font-size: 12px; margin-bottom: 7px;
+}
+.dp-ind-actual   { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1; }
+.dp-ind-unit     { font-size: 11px; color: #64748b; font-weight: 600; }
+.dp-ind-sep      { color: #cbd5e1; font-weight: 400; margin: 0 2px; }
+.dp-ind-target-val { font-size: 11px; color: #94a3b8; }
+
+.dp-ind-bar-track {
+  height: 6px; background: #f1f5f9;
+  border-radius: 99px; overflow: hidden;
+}
+.dp-ind-bar-fill {
+  height: 100%; border-radius: 99px; transition: width .4s;
+}
+
+/* ── Refleksi Card ── */
+.dp-reflection-list { display: flex; flex-direction: column; gap: 10px; }
+.dp-reflection-item {
+  border-left: 3px solid #e2e8f0;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 0 8px 8px 0;
+}
+.dp-reflection-date { font-size: 10px; color: #94a3b8; font-weight: 600; margin-bottom: 3px; }
+.dp-reflection-text { font-size: 12px; color: #374151; line-height: 1.6; }
+
+/* ── badge extras ── */
+.badge-sedang-berjalan { background: #dbeafe; color: #1d4ed8; }
+.badge-tertunda        { background: #fef9c3; color: #854d0e; }
+.badge-belum-mulai     { background: #f1f5f9; color: #64748b; }
+
+/* ── empty state ── */
+.empty-state {
+  text-align: center; color: #94a3b8;
+  font-size: 13px; padding: 30px 0;
+}
 
 /* ── Responsive ── */
-@media (max-width: 1200px) {
-  .detail-main-grid, .detail-full-grid { grid-template-columns: 1fr 1fr; }
-  .dp-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1024px) {
+  .dp-content-grid { grid-template-columns: 1fr; }
 }
-@media (max-width: 860px) {
-  .detail-main-grid, .detail-full-grid { grid-template-columns: 1fr; }
+@media (max-width: 768px) {
+  .detail-topbar { padding: 10px 14px; flex-wrap: wrap; }
+  .detail-topbar-name { font-size: 14px; max-width: 220px; }
+  .dp-content-grid { padding: 12px 14px 24px; gap: 12px; }
+  .dp-meta-grid { grid-template-columns: 1fr; }
+  .dp-metrics-grid { grid-template-columns: 1fr 1fr; }
+}
+@media print {
+  .detail-topbar { position: static; box-shadow: none; }
+  .dp-act-actions, .btn-print, .btn-refresh-sm, .btn-back-sm { display: none !important; }
+  .dp-card { box-shadow: none; border: 1px solid #e2e8f0; }
 }
