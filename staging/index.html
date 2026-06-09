@@ -51,125 +51,28 @@
       </div>
     </div>
   </div>
-
 </aside>
+
+  
 
 <!-- MAIN -->
 <div class="main">
 
   <!-- TOPBAR -->
-<div class="topbar">
-
-  <!-- KIRI: Toggle + Back + Title -->
-  <div class="topbar-left">
-    <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-
-    <!-- Back Button (hidden by default, shown via JS) -->
-    <button class="topbar-back-btn hidden" id="topbarBackBtn" onclick="history.back()" title="Kembali">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-    </button>
-
-    <div class="topbar-page-info">
-      <div class="page-title" id="pageTitle">Dashboard</div>
-      <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
-    </div>
-  </div>
-
-  <!-- TENGAH: KPI Quick View -->
-  <div class="topbar-kpi" id="topbarKpi">
-    <div class="kpi-pill">
-      <span class="kpi-icon">📁</span>
-      <span class="kpi-label">Total</span>
-      <span class="kpi-value" id="kpiTotal">—</span>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-pill">
-      <span class="kpi-icon kpi-dot green"></span>
-      <span class="kpi-label">Aktif</span>
-      <span class="kpi-value kpi-green" id="kpiActive">—</span>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-pill">
-      <span class="kpi-icon kpi-dot red"></span>
-      <span class="kpi-label">Terlambat</span>
-      <span class="kpi-value kpi-red" id="kpiLate">—</span>
-    </div>
-    <div class="kpi-divider"></div>
-    <div class="kpi-pill">
-      <span class="kpi-icon">📈</span>
-      <span class="kpi-label">Avg.</span>
-      <span class="kpi-value kpi-blue" id="kpiAvg">—</span>
-    </div>
-  </div>
-
-  <!-- KANAN: Status + Actions + Profile -->
-  <div class="topbar-right">
-
-    <!-- Realtime Pulse Badge -->
-    <span class="realtime-badge" id="realtimeBadge">
-      <span class="pulse-dot"></span>
-      Realtime ON
-    </span>
-
-    <!-- Refresh Button -->
-    <button class="topbar-icon-btn" id="refreshBtn" title="Refresh data"
-      onclick="if(typeof loadProjects==='function')loadProjects(); if(typeof loadIssues==='function')loadIssues();">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-    </button>
-
-    <!-- Print (hidden by default) -->
-    <button class="topbar-icon-btn" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan" style="display:none">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-    </button>
-
-    <!-- AUTH CONTROLS -->
-    <div class="auth-controls">
-      <!-- Login Google Button -->
-      <button id="auth-login-btn" type="button" class="btn-google" onclick="signInWithGoogle()">
-        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-        Login Google
-      </button>
-
-      <!-- User badge (shown when logged in) -->
-      <span id="auth-user-badge" style="display:none;"></span>
-
-      <!-- Profile Dropdown (shown when logged in) -->
-      <div class="profile-dropdown-wrap" id="profileDropdownWrap" style="display:none;">
-        <button class="profile-btn" onclick="toggleProfileDropdown()" id="profileBtn">
-          <div class="profile-avatar" id="profileAvatar">DFW</div>
-          <div class="profile-info">
-            <div class="profile-name" id="profileName">DFW Indonesia</div>
-            <div class="profile-role" id="profileRole">Program Director</div>
-          </div>
-          <svg class="profile-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="profile-dropdown" id="profileDropdown">
-          <div class="profile-dropdown-header">
-            <div class="profile-avatar lg" id="profileAvatarDd">DFW</div>
-            <div>
-              <div class="profile-dropdown-name" id="profileNameDd">DFW Indonesia</div>
-              <div class="profile-dropdown-email" id="profileEmailDd">program@dfw.id</div>
-            </div>
-          </div>
-          <div class="profile-dropdown-divider"></div>
-          <button class="profile-dropdown-item" onclick="openSettingsModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Pengaturan
-          </button>
-          <div class="profile-dropdown-divider"></div>
-          <button class="profile-dropdown-item danger" id="auth-logout-btn" onclick="signOutGoogle()" style="display:none;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Logout
-          </button>
-        </div>
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="sidebar-toggle-btn" type="button" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+      <div class="topbar-page-info">
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="page-subtitle" id="pageSubtitle">Selamat datang, pantau semua proyek Anda</div>
       </div>
     </div>
+    <div class="topbar-right">
+      <span class="realtime-badge">🟢 Realtime ON</span>
+      <button class="btn-secondary btn-sm" id="refreshBtn">Refresh</button>
+      <button class="btn-primary btn-sm" id="topbarPrintBtn" onclick="openPrintModal()" title="Cetak laporan proyek yang sedang dibuka" style="display:none">🖨️ Print Laporan</button>
+    </div>
   </div>
-
-</div>
-<!-- END TOPBAR -->
 
   <!-- TAB DASHBOARD -->
   <div id="tab-dashboard" class="tab-content active">
@@ -403,19 +306,10 @@
 
   <!-- TAB DETAIL PROYEK -->
   <div id="tab-detail" class="tab-content">
-
-  <!-- DP v4: Container utama yang di-render oleh renderProjectDetailPageV4 -->
-  <div id="detail-content"></div>
-
-  <!-- Hidden panels: DOM tetap ada agar JS loadActivities, renderIndicatorUpdatePanel,
-       loadProjectReflections, saveProjectReflection, openSubActivityModal bekerja normal -->
-  <div style="display:none" aria-hidden="true">
-
     <div class="detail-header" id="detailHeader"></div>
-
     <div class="detail-split">
 
-      <!-- PANEL KIRI: Aktivitas (disembunyikan, data diambil ke dp-act-list) -->
+      <!-- PANEL KIRI: Aktivitas -->
       <div class="detail-panel">
         <div class="panel-titlebar">
           <span class="panel-title">📋 Aktivitas Pelaksanaan</span>
@@ -454,59 +348,72 @@
         </div>
       </div>
 
-      <!-- PANEL: Refleksi & Pembelajaran (disembunyikan, data dirender ke dp-reflection-list) -->
-      <div class="detail-panel" id="projectReflectionPanel">
-        <div class="panel-titlebar">
-          <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
-          <div class="panel-count" id="pr-reflection-count">0 catatan</div>
-        </div>
-        <div class="panel-scroll-wrap">
-          <div class="panel-scroll">
-            <div id="pr-reflection-list" class="activity-list">
-              <div class="empty-state" style="padding:18px 12px">
-                Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
-              </div>
-            </div>
-            <!-- Form tambah refleksi — tetap aktif lewat saveProjectReflection() -->
-            <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:10px">
-              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-                <input type="date" id="pr-reflection-date"
-                  style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
-                <select id="pr-reflection-type"
-                  style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
-                  <option value="lesson">Lesson Learned</option>
-                  <option value="success">Success</option>
-                  <option value="challenge">Challenge</option>
-                  <option value="recommendation">Rekomendasi</option>
-                </select>
-                <input type="text" id="pr-reflection-title" placeholder="Judul singkat (opsional)"
-                  style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
-              </div>
-              <textarea id="pr-what-happened" rows="2" placeholder="Apa yang terjadi? (konteks singkat)"
-                style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
-              <div style="display:flex;gap:8px;margin-bottom:6px">
-                <textarea id="pr-what-worked" rows="2" placeholder="Apa yang berjalan baik?"
-                  style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
-                <textarea id="pr-what-didnt" rows="2" placeholder="Apa yang tidak berjalan?"
-                  style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
-              </div>
-              <textarea id="pr-lesson" rows="2" placeholder="Pelajaran utama / insight kunci"
-                style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
-              <textarea id="pr-next-steps" rows="2" placeholder="Apa yang akan dilakukan berbeda ke depan?"
-                style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
-              <div id="pr-reflection-msg" class="form-msg hidden" style="margin-bottom:6px"></div>
-              <div style="display:flex;justify-content:flex-end">
-                <button class="btn-primary btn-sm" onclick="saveProjectReflection()">Simpan Refleksi</button>
-              </div>
-            </div>
-          </div>
+      <!-- PANEL: Refleksi & Pembelajaran Proyek (Sprint 3) -->
+<div class="detail-panel" id="projectReflectionPanel">
+  <div class="panel-titlebar">
+    <div class="panel-title">Refleksi & Pembelajaran Proyek</div>
+    <div class="panel-count" id="pr-reflection-count">0 catatan</div>
+  </div>
+  <div class="panel-scroll-wrap">
+    <div class="panel-scroll">
+      <!-- List refleksi -->
+      <div id="pr-reflection-list" class="activity-list">
+        <div class="empty-state" style="padding:18px 12px">
+          Belum ada refleksi. Tambahkan catatan pembelajaran di bawah.
         </div>
       </div>
 
-    </div><!-- /detail-split -->
-  </div><!-- /hidden panels -->
+      <!-- Form tambah refleksi -->
+      <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:10px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <input type="date" id="pr-reflection-date"
+            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+          <select id="pr-reflection-type"
+            style="font-size:11px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+            <option value="lesson">Lesson Learned</option>
+            <option value="success">Success</option>
+            <option value="challenge">Challenge</option>
+            <option value="recommendation">Rekomendasi</option>
+          </select>
+          <input type="text" id="pr-reflection-title" placeholder="Judul singkat (opsional)"
+            style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:7px">
+        </div>
 
-</div><!-- /tab-detail -->
+        <textarea id="pr-what-happened" rows="2"
+          placeholder="Apa yang terjadi? (konteks singkat)"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <textarea id="pr-what-worked" rows="2"
+            placeholder="Apa yang berjalan baik?"
+            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+          <textarea id="pr-what-didnt" rows="2"
+            placeholder="Apa yang tidak berjalan?"
+            style="flex:1;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;resize:vertical"></textarea>
+        </div>
+
+        <textarea id="pr-lesson" rows="2"
+          placeholder="Pelajaran utama / insight kunci"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <textarea id="pr-next-steps" rows="2"
+          placeholder="Apa yang akan dilakukan berbeda ke depan?"
+          style="width:100%;font-size:12px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:6px;resize:vertical"></textarea>
+
+        <div id="pr-reflection-msg" class="form-msg hidden" style="margin-bottom:6px"></div>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn-primary btn-sm" onclick="saveProjectReflection()">
+            Simpan Refleksi
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    </div>
+  </div><!-- /tab-detail -->
 
 <!-- ===== TAB PENERIMA MANFAAT ===== -->
 <div class="tab-content" id="tab-beneficiary">
@@ -675,18 +582,17 @@
 
 <!-- ===== TAB: Staff & Beban Kerja ===== -->
 <div id="tab-staff" class="tab-content">
-<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
-  <div>
-    <div class="section-title" style="margin-bottom:4px;">Staff & Beban Kerja</div>
-    <div style="font-size:12px;color:#94a3b8;">Pantau beban tugas dan aktivitas per staff</div>
+  <div class="topbar">
+    <div>
+      <div class="page-title">👤 Staff & Beban Kerja</div>
+      <div class="page-subtitle">Pantau beban tugas dan aktivitas per staff</div>
+    </div>
+    <div class="topbar-right">
+      <span id="staffLastSync" class="realtime-badge">Last sync: —</span>
+      <button class="btn-primary" onclick="loadStaffWorkload()">↻ Refresh</button>
+    </div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <span id="staffLastSync" class="realtime-badge">Last sync: —</span>
-    <button class="btn-secondary btn-sm" onclick="loadStaffWorkload()">Refresh</button>
-  </div>
-</div>
-  
-    <div class="tab-content-inner" style="padding: 24px 28px;">
+  <div class="tab-content-inner" style="padding: 24px 28px;">
     <!-- Dashboard Cards -->
     <div class="stat-grid" style="margin-bottom: 24px; grid-template-columns: repeat(4, 1fr);">
       <div class="stat-card" style="border-left: 4px solid #2e7d32;">
@@ -984,10 +890,13 @@
     </div>
   </div>
 </div>
-  
+
+
+
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=400"></script>
-  <script src="app_sprint4.js?v=400"></script>
+  <script src="app.js"></script>
+  <script src="app_sprint4.js?v100"></script>
   <script src="issues.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="import.js"></script>
@@ -995,7 +904,6 @@
   <script src="documents.js"></script>
   <script src="impact.js"></script>
   <script src="print-report.js"></script>
-  
 <script>
 function toggleSidebar(){
   const s=document.getElementById('mainSidebar');
@@ -1009,96 +917,6 @@ function closeSidebar(){
   if(s) s.classList.remove('open');
   if(o) o.classList.remove('open');
 }
-
-/* ===== PROFILE DROPDOWN ===== */
-function toggleProfileDropdown() {
-  const wrap = document.getElementById('profileDropdownWrap');
-  if (!wrap) return;
-  wrap.classList.toggle('open');
-}
-
-// Tutup dropdown kalau klik di luar
-document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('profileDropdownWrap');
-  if (wrap && !wrap.contains(e.target)) {
-    wrap.classList.remove('open');
-  }
-});
-
-/* ===== SYNC KPI TOPBAR dari stat cards ===== */
-function syncTopbarKpi() {
-  const map = {
-    kpiTotal:  'totalProjects',
-    kpiActive: 'activeProjects',
-    kpiLate:   'lateProjects',
-    kpiAvg:    'avgProgress'
-  };
-  Object.entries(map).forEach(([kpiId, srcId]) => {
-    const src = document.getElementById(srcId);
-    const dst = document.getElementById(kpiId);
-    if (src && dst) {
-      dst.textContent = src.textContent || '—';
-      // Observe perubahan
-      new MutationObserver(() => {
-        dst.textContent = src.textContent || '—';
-      }).observe(src, { childList: true, subtree: true, characterData: true });
-    }
-  });
-}
-
-/* ===== SHOW/HIDE BACK BUTTON ===== */
-function updateBackBtn() {
-  const btn = document.getElementById('topbarBackBtn');
-  if (!btn) return;
-  // Tampilkan back button saat bukan di tab dashboard
-  const activeTab = document.querySelector('.tab-content.active');
-  const isDashboard = activeTab && activeTab.id === 'tab-dashboard';
-  btn.classList.toggle('hidden', isDashboard || history.length <= 1);
-}
-
-// Apply auth UI — update profile dropdown juga
-function applyAuthUI(user) {
-  const loginBtn   = document.getElementById('auth-login-btn');
-  const profileWrap = document.getElementById('profileDropdownWrap');
-  const logoutBtn  = document.getElementById('auth-logout-btn');
-
-  if (user) {
-    if (loginBtn)    loginBtn.style.display = 'none';
-    if (profileWrap) profileWrap.style.display = 'block';
-    if (logoutBtn)   logoutBtn.style.display = 'flex';
-
-    const name  = user.user_metadata?.full_name || user.email || 'User';
-    const email = user.email || '';
-    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,3);
-
-    ['profileAvatar','profileAvatarDd'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = initials;
-    });
-    ['profileName','profileNameDd'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = name;
-    });
-    const emailEl = document.getElementById('profileEmailDd');
-    if (emailEl) emailEl.textContent = email;
-
-    const roleEl = document.getElementById('profileRole');
-    if (roleEl) roleEl.textContent = 'Program Director';
-
-  } else {
-    if (loginBtn)    loginBtn.style.display = 'inline-flex';
-    if (profileWrap) profileWrap.style.display = 'none';
-    if (logoutBtn)   logoutBtn.style.display = 'none';
-  }
-}
-
-// Init on load
-document.addEventListener('DOMContentLoaded', function() {
-  syncTopbarKpi();
-  updateBackBtn();
-});
-
-
 </script>
 
   <!-- PRINT LANGUAGE MODAL -->
@@ -1447,10 +1265,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
     
     <!-- === MAIN APP === -->
-    <script src="app.js?v=400"></script>
-    <script src="app_sprint4.js?v=400"></script>
+    <script src="app.js?v=99"></script>
+    <script src="app_sprint4.js?v=99"></script>
 
 
-</div><!-- end .main -->
+
 </body>
 </html>
