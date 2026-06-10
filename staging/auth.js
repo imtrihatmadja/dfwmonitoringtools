@@ -1,14 +1,13 @@
 // =====================================================================
-// auth.js — Google OAuth + Role Guard (v6 — bulletproof)
+// auth.js — Google OAuth + Role Guard (v7 — own client, PKCE aware)
 //
-// PERUBAHAN UTAMA v6:
-// - Tidak ada CSS pointer-events. Guest mode dikontrol MURNI via
-//   capture listener saja — tidak ada CSS yang bisa "nyangkut"
-// - Selector capture listener diperluas (file-btn-delete, dll)
-// - Double-call race condition (onAuthStateChange + getSession) diatasi
-//   dengan flag _sessionProcessed
-// - fetchRole pakai fetch() langsung ke Supabase REST API dengan
-//   Authorization header — tidak bergantung pada client instance apapun
+// ROOT CAUSE FIX:
+// Supabase v2 pakai PKCE flow. Setelah redirect OAuth, URL mengandung
+// ?code=... yang harus di-exchange SEGERA saat client dibuat.
+// Solusi: auth.js membuat clientnya SENDIRI secepat supabase-js tersedia,
+// tidak menunggu window.client dari app.js.
+// Dua client dengan URL+key yang sama BERBAGI localStorage secara otomatis
+// di Supabase v2 — jadi tidak ada konflik session.
 // =====================================================================
 
 (function () {
@@ -26,26 +25,12 @@
 
   // ── State ─────────────────────────────────────────────────────────
   window.authUser = null;
-  let _isGuest    = true;   // internal state, sumber kebenaran tunggal
-  let _sessionProcessed = false; // cegah double-call race condition
+  let _isGuest          = true;
+  let _sessionProcessed = false;
+  let _authClient       = null; // client milik auth.js sendiri
 
-  // ── Inject CSS: HANYA untuk topbar styling, BUKAN untuk lock tombol ─
-  // Tombol dikunci murni via capture listener, bukan CSS.
-  // Ini menghilangkan risiko CSS "nyangkut" setelah login.
-  (function injectCSS() {
-    const s = document.createElement("style");
-    s.id = "auth-css";
-    s.textContent = `
-      #authTopbarArea button  { font-family: inherit; }
-      #authLoginBtn:hover     { border-color: #2563eb !important; box-shadow: 0 2px 8px rgba(37,99,235,.2) !important; }
-      #authLogoutBtn:hover    { background: #fee2e2 !important; color: #dc2626 !important; border-color: #fca5a5 !important; }
-    `;
-    document.head.appendChild(s);
-  })();
-
-  // ── Daftar selector tombol yang dilindungi ────────────────────────
-  // Semua kelas tombol aksi dari app.js + app_sprint4.js
-  const PROTECTED_SELECTOR =
+  // ── Capture listener — blokir klik saat guest ─────────────────────
+  const PROTECTED =
     "button.btn-primary, button.btn-edit, button.btn-remove, " +
     "button.btn-danger, button.btn-upload, button.btn-ind-update, " +
     "button.file-btn-delete, button.btn-sub-activity, " +
@@ -53,48 +38,33 @@
     "#addActivityBtnDetail, #actUploadAllBtn, #toStep2Btn, " +
     "#addIndicatorBtn, #addOutcomeBtn";
 
-  const EXEMPT_IDS = new Set([
-    "authLoginBtn", "authLogoutBtn", "authToastLoginBtn",
-    "refreshBtn",   "topbarPrintBtn"
+  const EXEMPT = new Set([
+    "authLoginBtn","authLogoutBtn","authToastLoginBtn",
+    "refreshBtn","topbarPrintBtn"
   ]);
 
-  // ── Capture listener (jalan sebelum app.js) ───────────────────────
-  document.addEventListener("click", function (e) {
-    if (!_isGuest) return;   // sudah login → langsung tembus
-
-    const target = e.target.closest(PROTECTED_SELECTOR);
-    if (!target) return;
-    if (EXEMPT_IDS.has(target.id)) return;
-    if (target.closest("#authTopbarArea")) return;
-
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    showLoginToast();
-  }, true); // capture phase
-
-  // ── [data-tab="input"] juga dikunci ──────────────────────────────
   document.addEventListener("click", function (e) {
     if (!_isGuest) return;
-    const target = e.target.closest("[data-tab='input']");
-    if (!target) return;
+    const t = e.target.closest(PROTECTED + ", [data-tab='input']");
+    if (!t) return;
+    if (EXEMPT.has(t.id)) return;
+    if (t.closest("#authTopbarArea")) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     showLoginToast();
   }, true);
 
-  // ── Set / clear guest mode ────────────────────────────────────────
+  // ── Guest mode ────────────────────────────────────────────────────
   function setGuest(on) {
     _isGuest = on;
-    // CSS class hanya untuk styling visual opsional (tidak mengunci)
     document.body.classList.toggle("auth-guest", on);
-    console.info("auth: setGuest →", on);
+    console.info("auth: guest mode →", on);
   }
 
-  // ── Toast "login diperlukan" ──────────────────────────────────────
+  // ── Toast ─────────────────────────────────────────────────────────
   function showLoginToast() {
     const old = document.getElementById("authLoginToast");
-    if (old) { old.remove(); }
-
+    if (old) old.remove();
     const t = document.createElement("div");
     t.id = "authLoginToast";
     t.innerHTML = `
@@ -113,12 +83,10 @@
           style="background:none;border:none;font-size:20px;color:#94a3b8;cursor:pointer;padding:0 2px;">×</button>
       </div>`;
     Object.assign(t.style, {
-      position: "fixed", bottom: "24px", left: "50%",
-      transform: "translateX(-50%)",
-      background: "#fff", border: "1.5px solid #e2e8f0",
-      borderRadius: "12px", padding: "14px 18px",
-      boxShadow: "0 8px 30px rgba(0,0,0,.18)",
-      zIndex: "99999", minWidth: "300px", maxWidth: "90vw",
+      position:"fixed", bottom:"24px", left:"50%", transform:"translateX(-50%)",
+      background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:"12px",
+      padding:"14px 18px", boxShadow:"0 8px 30px rgba(0,0,0,.18)",
+      zIndex:"99999", minWidth:"300px", maxWidth:"90vw",
     });
     document.body.appendChild(t);
     document.getElementById("authToastLoginBtn").onclick = signIn;
@@ -126,7 +94,7 @@
   }
 
   // ── Topbar ────────────────────────────────────────────────────────
-  function ensureTopbarArea() {
+  function ensureTopbar() {
     if (document.getElementById("authTopbarArea")) return;
     const tr = document.querySelector(".topbar-right");
     if (!tr) return;
@@ -137,7 +105,7 @@
   }
 
   function renderGuest() {
-    ensureTopbarArea();
+    ensureTopbar();
     const w = document.getElementById("authTopbarArea");
     if (!w) return;
     w.innerHTML = `
@@ -161,11 +129,11 @@
   }
 
   function renderLoggedIn(user) {
-    ensureTopbarArea();
+    ensureTopbar();
     const w = document.getElementById("authTopbarArea");
     if (!w) return;
     const ini = (user.name || user.email || "?").charAt(0).toUpperCase();
-    const clr = { admin:"#7c3aed", manager:"#0369a1", staff:"#15803d", viewer:"#64748b" }[user.role] || "#64748b";
+    const clr = {admin:"#7c3aed",manager:"#0369a1",staff:"#15803d",viewer:"#64748b"}[user.role]||"#64748b";
     w.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         ${user.avatar
@@ -173,7 +141,7 @@
           : `<span style="width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${ini}</span>`
         }
         <div style="line-height:1.3;">
-          <div style="font-size:12px;font-weight:700;color:#0f172a;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name || user.email}</div>
+          <div style="font-size:12px;font-weight:700;color:#0f172a;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name||user.email}</div>
           <div style="font-size:10px;font-weight:700;color:${clr};">${user.roleLabel}</div>
         </div>
         <button id="authLogoutBtn" title="Keluar"
@@ -191,7 +159,7 @@
     const rl = document.querySelector(".user-role");
     if (av) av.innerHTML = user.avatar
       ? `<img src="${user.avatar}" alt="" style="width:100%;height:100%;border-radius:8px;object-fit:cover;">`
-      : (user.name || user.email || "?").charAt(0).toUpperCase();
+      : (user.name||user.email||"?").charAt(0).toUpperCase();
     if (nm) nm.textContent = user.name || user.email;
     if (rl) rl.textContent = user.roleLabel;
   }
@@ -200,19 +168,18 @@
     const av = document.querySelector(".user-avatar");
     const nm = document.querySelector(".user-name");
     const rl = document.querySelector(".user-role");
-    if (av) av.textContent   = "DFW";
-    if (nm) nm.textContent   = "DFW Indonesia";
-    if (rl) rl.textContent   = "Mode Lihat";
+    if (av) av.textContent = "DFW";
+    if (nm) nm.textContent = "DFW Indonesia";
+    if (rl) rl.textContent = "Mode Lihat";
   }
 
-  // ── Sign In ───────────────────────────────────────────────────────
+  // ── Sign In / Out ─────────────────────────────────────────────────
   async function signIn() {
-    const cl = window.client;
-    if (!cl) { alert("Halaman belum siap, coba lagi."); return; }
+    if (!_authClient) { alert("Halaman belum siap, coba lagi."); return; }
     const btn = document.getElementById("authLoginBtn");
     if (btn) { btn.innerHTML = "⏳ Menghubungkan…"; btn.disabled = true; }
     try {
-      const { error } = await cl.auth.signInWithOAuth({
+      const { error } = await _authClient.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: window.location.origin + window.location.pathname },
       });
@@ -223,25 +190,20 @@
     }
   }
 
-  // ── Sign Out ──────────────────────────────────────────────────────
   async function signOut() {
     _sessionProcessed = false;
-    const cl = window.client;
-    if (cl) await cl.auth.signOut();
+    if (_authClient) await _authClient.auth.signOut();
   }
   window.authSignOut = signOut;
 
-  // ── fetchRole: pakai fetch() langsung ke REST API ─────────────────
-  // Tidak bergantung pada supabase-js client instance sama sekali.
-  // Authorization: Bearer <JWT> → Supabase treat sebagai authenticated role.
+  // ── fetchRole via REST API langsung ───────────────────────────────
   async function fetchRole(email, accessToken) {
     const url = `${SUPABASE_URL}/rest/v1/user_roles` +
       `?select=role,is_active,display_name` +
       `&email=eq.${encodeURIComponent(email.toLowerCase())}` +
       `&limit=1`;
 
-    console.info("auth: fetchRole →", url);
-
+    console.info("auth: fetchRole →", email);
     const res = await fetch(url, {
       headers: {
         "apikey":        SUPABASE_ANON_KEY,
@@ -249,94 +211,76 @@
         "Content-Type":  "application/json",
       },
     });
-
     if (!res.ok) {
-      console.warn("auth: fetchRole HTTP error →", res.status, await res.text());
+      const txt = await res.text();
+      console.warn("auth: fetchRole error →", res.status, txt);
       return null;
     }
-
     const rows = await res.json();
-    console.info("auth: fetchRole result →", rows);
-
-    if (!rows || rows.length === 0) {
-      console.warn("auth: email tidak ada di tabel user_roles →", email);
-      return null;
-    }
-    const row = rows[0];
-    if (row.is_active === false) {
-      console.warn("auth: user tidak aktif →", email);
-      return null;
-    }
-    return row;
+    console.info("auth: fetchRole rows →", rows);
+    if (!rows || rows.length === 0) { console.warn("auth: email tidak ada di user_roles"); return null; }
+    if (rows[0].is_active === false) { console.warn("auth: user tidak aktif"); return null; }
+    return rows[0];
   }
 
   // ── processSession ────────────────────────────────────────────────
   async function processSession(session) {
-    // Cegah double-processing (onAuthStateChange + getSession race)
-    if (_sessionProcessed) {
-      console.info("auth: session sudah diproses, skip");
-      return;
-    }
+    if (_sessionProcessed) { console.info("auth: skip duplikat processSession"); return; }
     _sessionProcessed = true;
 
-    const supaUser    = session.user;
-    const email       = (supaUser.email || "").toLowerCase();
-    const accessToken = session.access_token;
+    const u     = session.user;
+    const email = (u.email || "").toLowerCase();
+    const token = session.access_token;
 
-    console.info("auth: processSession →", email);
-    console.info("auth: access_token tersedia:", !!accessToken);
+    console.info("auth: processSession →", email, "| token:", token ? token.substring(0,20)+"…" : "TIDAK ADA");
 
     let roleData = null;
-    try {
-      roleData = await fetchRole(email, accessToken);
-    } catch (e) {
-      console.warn("auth: fetchRole gagal:", e.message);
-    }
+    try { roleData = await fetchRole(email, token); }
+    catch (e) { console.warn("auth: fetchRole exception:", e.message); }
 
-    // Tentukan role
     const roleName = roleData?.role || "admin";
     const roleDef  = ROLES[roleName] || ROLES.admin;
 
     window.authUser = {
-      id        : supaUser.id,
+      id       : u.id,
       email,
-      name      : roleData?.display_name
-                  || supaUser.user_metadata?.full_name
-                  || supaUser.user_metadata?.name
-                  || email.split("@")[0],
-      avatar    : supaUser.user_metadata?.avatar_url
-                  || supaUser.user_metadata?.picture
-                  || "",
-      role      : roleName,
-      roleLabel : roleDef.label,
-      canEdit   : roleDef.canEdit,
-      canDelete : roleDef.canDelete,
+      name     : roleData?.display_name || u.user_metadata?.full_name || u.user_metadata?.name || email.split("@")[0],
+      avatar   : u.user_metadata?.avatar_url || u.user_metadata?.picture || "",
+      role     : roleName,
+      roleLabel: roleDef.label,
+      canEdit  : roleDef.canEdit,
+      canDelete: roleDef.canDelete,
     };
 
-    console.info("auth ✅ login berhasil:", window.authUser.email,
-                 "| role:", roleName,
-                 "| canEdit:", roleDef.canEdit);
+    console.info("auth ✅", window.authUser.email, "| role:", roleName, "| canEdit:", roleDef.canEdit);
 
-    // Matikan guest mode
     setGuest(false);
     renderLoggedIn(window.authUser);
     patchSidebar(window.authUser);
   }
 
-  // ── Init ──────────────────────────────────────────────────────────
-  function waitForClient(cb, n) {
+  // ── Init — buat client sendiri segera setelah supabase-js tersedia ─
+  // TIDAK menunggu window.client dari app.js.
+  // Supabase v2 share localStorage secara otomatis untuk URL+key yang sama.
+  function waitForSupabaseLib(cb, n) {
     n = n || 0;
-    if (n > 300) { console.error("auth: window.client tidak ada setelah 15 detik"); return; }
-    if (window.client) { cb(window.client); return; }
-    setTimeout(() => waitForClient(cb, n + 1), 50);
+    if (n > 300) { console.error("auth: supabase-js tidak ditemukan"); return; }
+    if (window.supabase && window.supabase.createClient) { cb(); return; }
+    setTimeout(() => waitForSupabaseLib(cb, n + 1), 50);
   }
 
-  function initAuth(cl) {
+  function initAuth() {
+    // Buat client auth.js sendiri — share localStorage dengan window.client app.js
+    _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.info("auth: client dibuat");
+
     setGuest(true);
 
     // onAuthStateChange: tangkap SIGNED_IN setelah redirect OAuth
-    cl.auth.onAuthStateChange(async (event, session) => {
-      console.info("auth: onAuthStateChange →", event);
+    // Supabase v2 otomatis panggil exchangeCodeForSession() saat init jika URL punya ?code=
+    _authClient.auth.onAuthStateChange(async (event, session) => {
+      console.info("auth: onAuthStateChange →", event, "| user:", session?.user?.email || "null");
+
       if (event === "SIGNED_OUT" || !session) {
         _sessionProcessed = false;
         window.authUser   = null;
@@ -345,28 +289,31 @@
         resetSidebar();
         return;
       }
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      // SIGNED_IN: dipanggil setelah exchange code berhasil (redirect OAuth)
+      // INITIAL_SESSION: dipanggil saat ada session di localStorage (reload halaman)
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
         await processSession(session);
       }
-      // INITIAL_SESSION ditangani oleh getSession() di bawah
     });
 
-    // getSession: tangkap session existing saat halaman dimuat / reload
-    cl.auth.getSession().then(async ({ data: { session } }) => {
+    // getSession sebagai backup — jika INITIAL_SESSION tidak fire
+    setTimeout(async () => {
+      if (_sessionProcessed) return; // sudah ditangani onAuthStateChange
+      const { data: { session } } = await _authClient.auth.getSession();
+      console.info("auth: getSession backup →", session?.user?.email || "null");
       if (session) {
-        console.info("auth: getSession → session ada:", session.user?.email);
         await processSession(session);
       } else {
-        console.info("auth: getSession → tidak ada session (guest)");
+        console.info("auth: tidak ada session → guest");
       }
-    });
+    }, 1500);
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────────
   function bootstrap() {
     const onReady = () => {
       setTimeout(renderGuest, 80);
-      waitForClient(initAuth);
+      waitForSupabaseLib(initAuth);
     };
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", onReady);
