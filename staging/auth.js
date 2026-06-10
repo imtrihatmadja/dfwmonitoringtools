@@ -1,16 +1,16 @@
 // =====================================================================
-// auth.js  —  Google OAuth + Role Guard (v3 — CSS-class approach)
-// Paradigma: App selalu tampil. Login Google opsional di topbar.
-// Guest mode dikontrol lewat class "auth-guest" di <body> — BUKAN
-// dengan wrap onclick, sehingga tidak ada konflik dengan app.js.
+// auth.js  —  Google OAuth + Role Guard (v4 — shared client)
+//
+// FIX UTAMA: Pakai window.client yang SAMA dengan app.js.
+// Dua client berbeda = dua localStorage key berbeda = session tidak
+// terbaca setelah redirect OAuth. Ini penyebab "selalu balik Mode Lihat".
+//
+// Diload SEBELUM supabase-js dan app.js di <head>,
+// tapi initAuth() ditunda sampai window.client tersedia.
 // =====================================================================
 
 (function () {
   "use strict";
-
-  // ── Config ────────────────────────────────────────────────────────
-  const SUPABASE_URL      = "https://zdfxcxkgmksaeigyuibe.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZnhjeGtnbWtzYWVpZ3l1aWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3Mjc0NjAsImV4cCI6MjA5MjMwMzQ2MH0.baUlaWNvN3wMKHL05E71aSxedjKvWhfVQXHGXraWyVU";
 
   const ROLES = {
     admin:   { label: "Administrator",   canEdit: true,  canDelete: true  },
@@ -20,32 +20,15 @@
   };
 
   // ── State publik ──────────────────────────────────────────────────
-  window.authUser   = null;
-  window.authClient = null;
+  window.authUser = null;
 
-  // ── Inject CSS guest-mode sekali saja ────────────────────────────
-  // Saat body punya class "auth-guest":
-  //   - Tombol edit/hapus/simpan tetap TERLIHAT tapi dikunci via overlay transparan
-  //   - Klik ditangkap sebelum sampai ke app.js
+  // ── Inject CSS guest-mode (sekali, di <head>) ─────────────────────
+  // Kontrol via class "auth-guest" di <body> — tidak sentuh onclick app.js
   (function injectCSS() {
-    const style = document.createElement("style");
-    style.id = "auth-guest-style";
-    style.textContent = `
-      /* ── Wrapper klik-block untuk semua tombol aksi saat guest ── */
-      body.auth-guest .auth-action-wrap {
-        position: relative;
-        display: inline-block;
-      }
-      body.auth-guest .auth-action-wrap::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        cursor: not-allowed;
-        z-index: 10;
-        border-radius: inherit;
-      }
-
-      /* ── Visual: tombol aksi tampak disabled tapi tidak dihilangkan ── */
+    const s = document.createElement("style");
+    s.id = "auth-css";
+    s.textContent = `
+      /* Tombol aksi tidak bisa diklik saat guest */
       body.auth-guest button.btn-primary:not(#authLoginBtn):not(#refreshBtn):not(#topbarPrintBtn),
       body.auth-guest button.btn-edit,
       body.auth-guest button.btn-remove,
@@ -56,107 +39,56 @@
       body.auth-guest #saveActivityBtn,
       body.auth-guest #saveNoteBtn,
       body.auth-guest #addActivityBtnDetail,
-      body.auth-guest #actUploadAllBtn {
-        opacity: 0.45;
+      body.auth-guest #actUploadAllBtn,
+      body.auth-guest #toStep2Btn,
+      body.auth-guest #addIndicatorBtn,
+      body.auth-guest #addOutcomeBtn {
+        opacity: 0.4;
+        pointer-events: none;
         cursor: not-allowed;
+      }
+      body.auth-guest [data-tab="input"] {
+        opacity: 0.4;
         pointer-events: none;
       }
-
-      /* ── Tab "Tambah Proyek" di sidebar dikunci visual ── */
-      body.auth-guest [data-tab="input"] {
-        opacity: 0.45;
-        cursor: not-allowed;
-      }
-
-      /* ── Overlay klik-catcher global di atas semua tombol aksi ── */
-      #auth-click-guard {
-        display: none;
-      }
-      body.auth-guest #auth-click-guard {
-        display: block;
-        position: fixed;
-        inset: 0;
-        z-index: 9998;
-        background: transparent;
-        pointer-events: none; /* biarkan klik tembus, kita handle di capture listener */
-      }
+      #authTopbarArea button { font-family: inherit; }
+      #authLoginBtn:hover { border-color: #2563eb !important; }
+      #authLogoutBtn:hover { background: #fee2e2 !important; color: #dc2626 !important; }
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(s);
   })();
 
-  // ── Overlay elemen (tidak memblok, hanya untuk referensi) ────────
-  function ensureClickGuard() {
-    if (document.getElementById("auth-click-guard")) return;
-    const el = document.createElement("div");
-    el.id = "auth-click-guard";
-    document.body.appendChild(el);
-  }
-
-  // ── Intercept klik pada tombol yang dilindungi (capture phase) ───
-  // Ini SATU listener di document level — tidak butuh wrap per-tombol
+  // ── Satu capture listener — cegat klik tombol saat guest ──────────
   document.addEventListener("click", function (e) {
     if (!document.body.classList.contains("auth-guest")) return;
-
     const target = e.target.closest(
-      "button.btn-primary, button.btn-edit, button.btn-remove, " +
-      "button.btn-danger, button.btn-upload, button.btn-ind-update, " +
-      "#submitAllBtn, #saveActivityBtn, #saveNoteBtn, " +
-      "#addActivityBtnDetail, #actUploadAllBtn, #toStep2Btn, " +
+      "button.btn-primary, button.btn-edit, button.btn-remove," +
+      "button.btn-danger, button.btn-upload, button.btn-ind-update," +
+      "#submitAllBtn, #saveActivityBtn, #saveNoteBtn," +
+      "#addActivityBtnDetail, #actUploadAllBtn, #toStep2Btn," +
       "#addIndicatorBtn, #addOutcomeBtn, [data-tab='input']"
     );
-
-    // Kecualikan tombol yang boleh diklik guest
-    const exempt = ["authLoginBtn", "authLogoutBtn", "refreshBtn", "topbarPrintBtn"];
     if (!target) return;
-    if (exempt.includes(target.id)) return;
+    const skip = ["authLoginBtn","authLogoutBtn","authToastLoginBtn","refreshBtn","topbarPrintBtn"];
+    if (skip.includes(target.id)) return;
     if (target.closest("#authTopbarArea")) return;
-
     e.preventDefault();
     e.stopImmediatePropagation();
     showLoginPrompt();
-  }, true); // capture: true → jalan sebelum listener app.js
+  }, true);
 
-  // ── Set / clear guest mode ────────────────────────────────────────
-  function setGuestMode(on) {
-    if (on) {
-      document.body.classList.add("auth-guest");
-    } else {
-      document.body.classList.remove("auth-guest");
-    }
-  }
-
-  // ── Tunggu supabase-js ────────────────────────────────────────────
-  function waitForSupabase(cb, n) {
-    n = n || 0;
-    if (n > 200) { console.error("auth.js: supabase-js tidak ditemukan"); return; }
-    if (window.supabase && window.supabase.createClient) cb();
-    else setTimeout(() => waitForSupabase(cb, n + 1), 50);
-  }
-
-  // ── Ambil role dari tabel user_roles ─────────────────────────────
-  async function fetchUserRole(email) {
-    try {
-      const { data, error } = await window.authClient
-        .from("user_roles")
-        .select("role, is_active, display_name")
-        .eq("email", email.toLowerCase())
-        .maybeSingle();
-      if (error) { console.warn("fetchUserRole error:", error.message); return null; }
-      if (!data || data.is_active === false) return null;
-      return data;
-    } catch (e) {
-      console.warn("fetchUserRole exception:", e.message);
-      return null;
-    }
+  // ── Guest mode on/off ─────────────────────────────────────────────
+  function setGuest(on) {
+    document.body.classList.toggle("auth-guest", on);
   }
 
   // ── Toast "login diperlukan" ──────────────────────────────────────
   function showLoginPrompt() {
-    let toast = document.getElementById("authLoginToast");
-    if (toast) { toast.remove(); }
-    toast = document.createElement("div");
-    toast.id = "authLoginToast";
-    toast.innerHTML = `
+    const old = document.getElementById("authLoginToast");
+    if (old) old.remove();
+    const t = document.createElement("div");
+    t.id = "authLoginToast";
+    t.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;">
         <i class="fa-solid fa-lock" style="color:#f59e0b;font-size:16px;flex-shrink:0;"></i>
         <div style="flex:1;">
@@ -169,46 +101,43 @@
           Login
         </button>
         <button onclick="document.getElementById('authLoginToast').remove()"
-          style="background:none;border:none;font-size:18px;color:#94a3b8;
-                 cursor:pointer;padding:0;line-height:1;">×</button>
+          style="background:none;border:none;font-size:20px;color:#94a3b8;cursor:pointer;padding:0;">×</button>
       </div>`;
-    Object.assign(toast.style, {
-      position: "fixed", bottom: "24px", left: "50%",
-      transform: "translateX(-50%)",
-      background: "#fff", border: "1.5px solid #e2e8f0",
-      borderRadius: "12px", padding: "14px 18px",
-      boxShadow: "0 8px 30px rgba(0,0,0,.18)",
-      zIndex: "99999", minWidth: "300px", maxWidth: "90vw",
+    Object.assign(t.style, {
+      position:"fixed", bottom:"24px", left:"50%", transform:"translateX(-50%)",
+      background:"#fff", border:"1.5px solid #e2e8f0", borderRadius:"12px",
+      padding:"14px 18px", boxShadow:"0 8px 30px rgba(0,0,0,.18)",
+      zIndex:"99999", minWidth:"300px", maxWidth:"90vw",
     });
-    document.body.appendChild(toast);
+    document.body.appendChild(t);
     document.getElementById("authToastLoginBtn").onclick = signIn;
-    setTimeout(() => toast && toast.remove(), 6000);
+    setTimeout(() => t.isConnected && t.remove(), 6000);
   }
 
-  // ── Topbar: render area auth ──────────────────────────────────────
-  function renderTopbarAuth() {
+  // ── Topbar UI ─────────────────────────────────────────────────────
+  function ensureTopbarArea() {
+    if (document.getElementById("authTopbarArea")) return;
     const topbarRight = document.querySelector(".topbar-right");
-    if (!topbarRight || document.getElementById("authTopbarArea")) return;
+    if (!topbarRight) return;
     const wrap = document.createElement("div");
     wrap.id = "authTopbarArea";
-    wrap.style.cssText = "display:flex;align-items:center;gap:8px;order:0;";
-    // Sisipkan di awal .topbar-right
+    wrap.style.cssText = "display:flex;align-items:center;gap:8px;";
     topbarRight.insertBefore(wrap, topbarRight.firstChild);
-    renderTopbarGuest(wrap);
   }
 
-  function renderTopbarGuest(wrap) {
-    if (!wrap) wrap = document.getElementById("authTopbarArea");
+  function renderGuest() {
+    ensureTopbarArea();
+    const wrap = document.getElementById("authTopbarArea");
     if (!wrap) return;
     wrap.innerHTML = `
-      <span style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:5px;">
-        <i class="fa-solid fa-eye" style="color:#cbd5e1;"></i>&nbsp;Mode Lihat
+      <span style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:4px;">
+        <i class="fa-solid fa-eye" style="color:#cbd5e1;"></i> Mode Lihat
       </span>
       <button id="authLoginBtn"
         style="display:flex;align-items:center;gap:7px;background:#fff;
                border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 13px;
                font-size:12px;font-weight:700;color:#0f172a;cursor:pointer;
-               box-shadow:0 1px 4px rgba(0,0,0,.07);transition:border-color .15s;">
+               box-shadow:0 1px 4px rgba(0,0,0,.06);">
         <svg width="14" height="14" viewBox="0 0 48 48">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -220,25 +149,21 @@
     document.getElementById("authLoginBtn").onclick = signIn;
   }
 
-  function renderTopbarLoggedIn(user) {
+  function renderLoggedIn(user) {
+    ensureTopbarArea();
     const wrap = document.getElementById("authTopbarArea");
     if (!wrap) return;
     const initial = (user.name || user.email || "?").charAt(0).toUpperCase();
-    const roleColor = { admin:"#7c3aed", manager:"#0369a1", staff:"#15803d", viewer:"#64748b" }[user.role] || "#64748b";
+    const clr = {admin:"#7c3aed",manager:"#0369a1",staff:"#15803d",viewer:"#64748b"}[user.role]||"#64748b";
     wrap.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         ${user.avatar
           ? `<img src="${user.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" alt="">`
-          : `<span style="width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initial}</span>`
+          : `<span style="width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">${initial}</span>`
         }
         <div style="line-height:1.35;">
-          <div style="font-size:12px;font-weight:700;color:#0f172a;max-width:140px;
-                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-            ${user.name || user.email}
-          </div>
-          <div style="font-size:10px;font-weight:700;color:${roleColor};">
-            ${user.roleLabel}
-          </div>
+          <div style="font-size:12px;font-weight:700;color:#0f172a;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name||user.email}</div>
+          <div style="font-size:10px;font-weight:700;color:${clr};">${user.roleLabel}</div>
         </div>
         <button id="authLogoutBtn" title="Keluar"
           style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:7px;
@@ -249,142 +174,156 @@
     document.getElementById("authLogoutBtn").onclick = signOut;
   }
 
-  // ── Sidebar footer ────────────────────────────────────────────────
-  function patchSidebarFooter(user) {
-    const avatarEl = document.querySelector(".user-avatar");
-    const nameEl   = document.querySelector(".user-name");
-    const roleEl   = document.querySelector(".user-role");
-    if (avatarEl) {
-      avatarEl.innerHTML = user.avatar
-        ? `<img src="${user.avatar}" alt="" style="width:100%;height:100%;border-radius:8px;object-fit:cover;">`
-        : (user.name || user.email || "?").charAt(0).toUpperCase();
-    }
-    if (nameEl) nameEl.textContent = user.name || user.email;
-    if (roleEl) roleEl.textContent = user.roleLabel;
+  function patchSidebar(user) {
+    const av = document.querySelector(".user-avatar");
+    const nm = document.querySelector(".user-name");
+    const rl = document.querySelector(".user-role");
+    if (av) av.innerHTML = user.avatar
+      ? `<img src="${user.avatar}" alt="" style="width:100%;height:100%;border-radius:8px;object-fit:cover;">`
+      : (user.name||user.email||"?").charAt(0).toUpperCase();
+    if (nm) nm.textContent = user.name || user.email;
+    if (rl) rl.textContent = user.roleLabel;
   }
 
-  function resetSidebarFooter() {
-    const avatarEl = document.querySelector(".user-avatar");
-    const nameEl   = document.querySelector(".user-name");
-    const roleEl   = document.querySelector(".user-role");
-    if (avatarEl) avatarEl.textContent = "DFW";
-    if (nameEl)   nameEl.textContent   = "DFW Indonesia";
-    if (roleEl)   roleEl.textContent   = "Mode Lihat";
+  function resetSidebar() {
+    const av = document.querySelector(".user-avatar");
+    const nm = document.querySelector(".user-name");
+    const rl = document.querySelector(".user-role");
+    if (av) av.textContent = "DFW";
+    if (nm) nm.textContent = "DFW Indonesia";
+    if (rl) rl.textContent = "Mode Lihat";
   }
 
-  // ── Sign In / Out ─────────────────────────────────────────────────
+  // ── Sign in / out — pakai window.client (sama dengan app.js) ──────
   async function signIn() {
+    // Pastikan client sudah tersedia
+    const cl = window.client || window.authClient;
+    if (!cl) { alert("Client belum siap, coba lagi sebentar."); return; }
     const btn = document.getElementById("authLoginBtn");
     if (btn) { btn.innerHTML = "⏳ Menghubungkan…"; btn.disabled = true; }
     try {
-      const { error } = await window.authClient.auth.signInWithOAuth({
+      const redirect = window.location.origin + window.location.pathname;
+      const { error } = await cl.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.href.split("?")[0].split("#")[0] },
+        options: { redirectTo: redirect },
       });
       if (error) throw error;
-      // Browser redirect ke Google — halaman akan dimuat ulang setelah login
+      // Browser redirect ke Google → halaman reload setelah login
     } catch (e) {
       alert("Login gagal: " + e.message);
-      renderTopbarGuest();
+      renderGuest();
     }
   }
 
   async function signOut() {
-    await window.authClient.auth.signOut();
-    // onAuthStateChange SIGNED_OUT akan handle sisanya
+    const cl = window.client || window.authClient;
+    if (cl) await cl.auth.signOut();
   }
   window.authSignOut = signOut;
 
-  // ── Auth state handler ────────────────────────────────────────────
-  async function handleAuthState(event, session) {
-    // ── Logout / tidak ada session ──
-    if (event === "SIGNED_OUT" || !session) {
-      window.authUser = null;
-      setGuestMode(true);
-      renderTopbarGuest();
-      resetSidebarFooter();
-      return;
-    }
-
-    // ── Login / session ada ──
-    if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
-      if (!session.user) return;
-
-      const supaUser = session.user;
-      const email    = supaUser.email || "";
-
-      // Ambil role — fallback ke "admin" jika tabel belum diisi
-      // (agar pemilik proyek tidak terkunci)
-      let roleData = await fetchUserRole(email);
-
-      // Fallback: jika user_roles belum dikonfigurasi sama sekali,
-      // anggap user yang berhasil login sebagai admin sementara.
-      const roleName = roleData?.role || "admin";
-      const roleDef  = ROLES[roleName] || ROLES.admin;
-
-      window.authUser = {
-        id        : supaUser.id,
-        email,
-        name      : roleData?.display_name
-                    || supaUser.user_metadata?.full_name
-                    || supaUser.user_metadata?.name
-                    || email.split("@")[0],
-        avatar    : supaUser.user_metadata?.avatar_url
-                    || supaUser.user_metadata?.picture
-                    || "",
-        role      : roleName,
-        roleLabel : roleDef.label,
-        canEdit   : roleDef.canEdit,
-        canDelete : roleDef.canDelete,
-      };
-
-      // Matikan guest mode — user sudah login
-      setGuestMode(false);
-      renderTopbarLoggedIn(window.authUser);
-      patchSidebarFooter(window.authUser);
-
-      console.info("auth.js: logged in as", window.authUser.name, "/ role:", roleName);
+  // ── Fetch role dari tabel user_roles ──────────────────────────────
+  async function fetchRole(email, cl) {
+    try {
+      const { data } = await cl
+        .from("user_roles")
+        .select("role, is_active, display_name")
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
+      if (!data || data.is_active === false) return null;
+      return data;
+    } catch (e) {
+      console.warn("auth: fetchRole error", e.message);
+      return null;
     }
   }
 
-  // ── Init ──────────────────────────────────────────────────────────
-  function initAuth() {
-    window.authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // ── Proses session yang sudah confirmed ───────────────────────────
+  async function processSession(supaUser, cl) {
+    const email = supaUser.email || "";
+    const roleData = await fetchRole(email, cl);
 
-    ensureClickGuard();
+    // Fallback ke admin jika tabel user_roles belum diisi
+    const roleName = roleData?.role || "admin";
+    const roleDef  = ROLES[roleName] || ROLES.admin;
 
-    // Pasang guest mode dulu, baru cek session
-    setGuestMode(true);
+    window.authUser = {
+      id        : supaUser.id,
+      email,
+      name      : roleData?.display_name
+                  || supaUser.user_metadata?.full_name
+                  || supaUser.user_metadata?.name
+                  || email.split("@")[0],
+      avatar    : supaUser.user_metadata?.avatar_url
+                  || supaUser.user_metadata?.picture
+                  || "",
+      role      : roleName,
+      roleLabel : roleDef.label,
+      canEdit   : roleDef.canEdit,
+      canDelete : roleDef.canDelete,
+    };
 
-    // Listener perubahan session (redirect OAuth, logout, token refresh)
-    window.authClient.auth.onAuthStateChange((event, session) => {
-      handleAuthState(event, session);
+    setGuest(false);
+    renderLoggedIn(window.authUser);
+    patchSidebar(window.authUser);
+    console.info("auth: signed in →", window.authUser.email, "| role:", roleName);
+  }
+
+  // ── Tunggu window.client dari app.js ─────────────────────────────
+  // app.js diload SETELAH auth.js, jadi window.client belum ada saat
+  // auth.js berjalan. Kita poll sampai dapat, lalu pasang listener.
+  function waitForClient(cb, n) {
+    n = n || 0;
+    if (n > 300) { console.error("auth: window.client tidak tersedia"); return; }
+    if (window.client) { cb(window.client); return; }
+    setTimeout(() => waitForClient(cb, n + 1), 50);
+  }
+
+  // ── Init: pasang listener ke window.client ────────────────────────
+  function initAuth(cl) {
+    // Simpan referensi agar signIn/signOut bisa pakai
+    window.authClient = cl;
+
+    // Pasang guest mode dulu
+    setGuest(true);
+
+    // Listener event auth (menangkap SIGNED_IN setelah redirect OAuth)
+    cl.auth.onAuthStateChange(async (event, session) => {
+      console.info("auth: onAuthStateChange →", event);
+      if (event === "SIGNED_OUT" || !session) {
+        window.authUser = null;
+        setGuest(true);
+        renderGuest();
+        resetSidebar();
+        return;
+      }
+      if (["SIGNED_IN","INITIAL_SESSION","TOKEN_REFRESHED"].includes(event)) {
+        await processSession(session.user, cl);
+      }
     });
 
-    // Cek session yang sudah ada (reload halaman saat sudah login)
-    window.authClient.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        handleAuthState("INITIAL_SESSION", session);
+    // Cek session yang sudah ada (halaman di-reload saat sudah login)
+    cl.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await processSession(session.user, cl);
       }
-      // Jika null → tetap guest mode, tidak perlu lakukan apa-apa
+      // null → tetap guest, tidak apa-apa
     });
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────────
   function bootstrap() {
-    // Render topbar segera setelah DOM ready
-    const onReady = () => {
-      setTimeout(renderTopbarAuth, 80);
-      waitForSupabase(initAuth);
+    const onDOMReady = () => {
+      // Render topbar segera (terlihat responsif)
+      setTimeout(renderGuest, 80);
+      // Tunggu window.client dari app.js
+      waitForClient(initAuth);
     };
 
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", onReady);
+      document.addEventListener("DOMContentLoaded", onDOMReady);
     } else {
-      onReady();
+      onDOMReady();
     }
-    // Fallback render topbar
-    setTimeout(renderTopbarAuth, 600);
   }
 
   bootstrap();
