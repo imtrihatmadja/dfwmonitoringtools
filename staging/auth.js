@@ -1,13 +1,14 @@
 // =====================================================================
-// auth.js — Google OAuth + Role Guard (v7 — own client, PKCE aware)
+// auth.js — Google OAuth + Role Guard (v8 — popup flow)
 //
-// ROOT CAUSE FIX:
-// Supabase v2 pakai PKCE flow. Setelah redirect OAuth, URL mengandung
-// ?code=... yang harus di-exchange SEGERA saat client dibuat.
-// Solusi: auth.js membuat clientnya SENDIRI secepat supabase-js tersedia,
-// tidak menunggu window.client dari app.js.
-// Dua client dengan URL+key yang sama BERBAGI localStorage secara otomatis
-// di Supabase v2 — jadi tidak ada konflik session.
+// ROOT CAUSE FINAL:
+// Browser Edge/Firefox dengan Tracking Prevention memblokir localStorage
+// untuk session OAuth yang datang dari redirect cross-site (Google→app).
+// FIX: Ganti signInWithOAuth redirect → signInWithOAuth popup.
+// Popup tidak dianggap cross-site redirect → storage tidak diblokir.
+//
+// Tambahan: Pakai window.client yang sudah ada dari app.js (bukan buat baru)
+// untuk menghindari "Multiple GoTrueClient instances" warning.
 // =====================================================================
 
 (function () {
@@ -24,10 +25,9 @@
   };
 
   // ── State ─────────────────────────────────────────────────────────
-  window.authUser = null;
+  window.authUser       = null;
   let _isGuest          = true;
   let _sessionProcessed = false;
-  let _authClient       = null; // client milik auth.js sendiri
 
   // ── Capture listener — blokir klik saat guest ─────────────────────
   const PROTECTED =
@@ -36,7 +36,7 @@
     "button.file-btn-delete, button.btn-sub-activity, " +
     "#submitAllBtn, #saveActivityBtn, #saveNoteBtn, " +
     "#addActivityBtnDetail, #actUploadAllBtn, #toStep2Btn, " +
-    "#addIndicatorBtn, #addOutcomeBtn";
+    "#addIndicatorBtn, #addOutcomeBtn, [data-tab='input']";
 
   const EXEMPT = new Set([
     "authLoginBtn","authLogoutBtn","authToastLoginBtn",
@@ -45,7 +45,7 @@
 
   document.addEventListener("click", function (e) {
     if (!_isGuest) return;
-    const t = e.target.closest(PROTECTED + ", [data-tab='input']");
+    const t = e.target.closest(PROTECTED);
     if (!t) return;
     if (EXEMPT.has(t.id)) return;
     if (t.closest("#authTopbarArea")) return;
@@ -58,7 +58,7 @@
   function setGuest(on) {
     _isGuest = on;
     document.body.classList.toggle("auth-guest", on);
-    console.info("auth: guest mode →", on);
+    console.info("auth: guest →", on);
   }
 
   // ── Toast ─────────────────────────────────────────────────────────
@@ -173,114 +173,160 @@
     if (rl) rl.textContent = "Mode Lihat";
   }
 
-  // ── Sign In / Out ─────────────────────────────────────────────────
-  async function signIn() {
-    if (!_authClient) { alert("Halaman belum siap, coba lagi."); return; }
-    const btn = document.getElementById("authLoginBtn");
-    if (btn) { btn.innerHTML = "⏳ Menghubungkan…"; btn.disabled = true; }
-    try {
-      const { error } = await _authClient.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin + window.location.pathname },
-      });
-      if (error) throw error;
-    } catch (e) {
-      alert("Login gagal: " + e.message);
-      renderGuest();
-    }
-  }
-
-  async function signOut() {
-    _sessionProcessed = false;
-    if (_authClient) await _authClient.auth.signOut();
-  }
-  window.authSignOut = signOut;
-
-  // ── fetchRole via REST API langsung ───────────────────────────────
-  async function fetchRole(email, accessToken) {
+  // ── fetchRole via REST — tidak pakai client instance ─────────────
+  async function fetchRole(email, token) {
     const url = `${SUPABASE_URL}/rest/v1/user_roles` +
       `?select=role,is_active,display_name` +
-      `&email=eq.${encodeURIComponent(email.toLowerCase())}` +
-      `&limit=1`;
-
-    console.info("auth: fetchRole →", email);
-    const res = await fetch(url, {
-      headers: {
-        "apikey":        SUPABASE_ANON_KEY,
-        "Authorization": "Bearer " + accessToken,
-        "Content-Type":  "application/json",
-      },
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      console.warn("auth: fetchRole error →", res.status, txt);
+      `&email=eq.${encodeURIComponent(email.toLowerCase())}&limit=1`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "apikey":        SUPABASE_ANON_KEY,
+          "Authorization": "Bearer " + token,
+          "Content-Type":  "application/json",
+        },
+      });
+      const rows = await res.json();
+      console.info("auth: fetchRole →", rows);
+      if (!rows || !rows.length || rows[0].is_active === false) return null;
+      return rows[0];
+    } catch (e) {
+      console.warn("auth: fetchRole error:", e.message);
       return null;
     }
-    const rows = await res.json();
-    console.info("auth: fetchRole rows →", rows);
-    if (!rows || rows.length === 0) { console.warn("auth: email tidak ada di user_roles"); return null; }
-    if (rows[0].is_active === false) { console.warn("auth: user tidak aktif"); return null; }
-    return rows[0];
   }
 
   // ── processSession ────────────────────────────────────────────────
   async function processSession(session) {
-    if (_sessionProcessed) { console.info("auth: skip duplikat processSession"); return; }
+    if (_sessionProcessed) { console.info("auth: skip duplikat"); return; }
     _sessionProcessed = true;
 
     const u     = session.user;
     const email = (u.email || "").toLowerCase();
     const token = session.access_token;
 
-    console.info("auth: processSession →", email, "| token:", token ? token.substring(0,20)+"…" : "TIDAK ADA");
+    console.info("auth: processSession →", email);
 
     let roleData = null;
-    try { roleData = await fetchRole(email, token); }
-    catch (e) { console.warn("auth: fetchRole exception:", e.message); }
+    try { roleData = await fetchRole(email, token); } catch(e) {}
 
     const roleName = roleData?.role || "admin";
     const roleDef  = ROLES[roleName] || ROLES.admin;
 
     window.authUser = {
-      id       : u.id,
+      id:        u.id,
       email,
-      name     : roleData?.display_name || u.user_metadata?.full_name || u.user_metadata?.name || email.split("@")[0],
-      avatar   : u.user_metadata?.avatar_url || u.user_metadata?.picture || "",
-      role     : roleName,
+      name:      roleData?.display_name || u.user_metadata?.full_name || u.user_metadata?.name || email.split("@")[0],
+      avatar:    u.user_metadata?.avatar_url || u.user_metadata?.picture || "",
+      role:      roleName,
       roleLabel: roleDef.label,
-      canEdit  : roleDef.canEdit,
+      canEdit:   roleDef.canEdit,
       canDelete: roleDef.canDelete,
     };
 
-    console.info("auth ✅", window.authUser.email, "| role:", roleName, "| canEdit:", roleDef.canEdit);
-
+    console.info("auth ✅", email, "| role:", roleName, "| canEdit:", roleDef.canEdit);
     setGuest(false);
     renderLoggedIn(window.authUser);
     patchSidebar(window.authUser);
   }
 
-  // ── Init — buat client sendiri segera setelah supabase-js tersedia ─
-  // TIDAK menunggu window.client dari app.js.
-  // Supabase v2 share localStorage secara otomatis untuk URL+key yang sama.
-  function waitForSupabaseLib(cb, n) {
-    n = n || 0;
-    if (n > 300) { console.error("auth: supabase-js tidak ditemukan"); return; }
-    if (window.supabase && window.supabase.createClient) { cb(); return; }
-    setTimeout(() => waitForSupabaseLib(cb, n + 1), 50);
+  // ── SIGN IN — popup flow (bypass Tracking Prevention) ────────────
+  // Popup tidak memerlukan redirect → tidak ada cross-site storage block.
+  // Supabase memunculkan window popup Google, user pilih akun,
+  // popup tertutup dan onAuthStateChange di parent window langsung fire.
+  async function signIn() {
+    const cl = window.client; // pakai client yang sama dengan app.js
+    if (!cl) { alert("Halaman belum siap, coba lagi."); return; }
+
+    const btn = document.getElementById("authLoginBtn");
+    if (btn) { btn.innerHTML = "⏳ Menghubungkan…"; btn.disabled = true; }
+
+    try {
+      // ── Coba popup dulu ───────────────────────────────────────────
+      // Buka URL OAuth manual sebagai popup, tangkap hasilnya
+      const { data, error } = await cl.auth.signInWithOAuth({
+        provider: "google",
+        options:  {
+          skipBrowserRedirect: true,           // jangan redirect halaman ini
+          redirectTo: window.location.origin + window.location.pathname,
+          queryParams: { access_type: "offline", prompt: "select_account" },
+        },
+      });
+      if (error) throw error;
+
+      // Buka popup ke URL yang dikembalikan Supabase
+      const authUrl = data?.url;
+      if (!authUrl) throw new Error("URL OAuth tidak tersedia");
+
+      const popup = window.open(
+        authUrl,
+        "supabase-google-login",
+        "width=500,height=620,left=" + Math.round((screen.width-500)/2) +
+        ",top=" + Math.round((screen.height-620)/2) +
+        ",resizable=yes,scrollbars=yes,status=yes"
+      );
+
+      if (!popup || popup.closed) {
+        // Popup diblokir browser → fallback ke redirect biasa
+        console.warn("auth: popup diblokir, fallback ke redirect");
+        await cl.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: window.location.origin + window.location.pathname },
+        });
+        return;
+      }
+
+      // Pantau popup: tunggu sampai ditutup, lalu cek session
+      btn.innerHTML = "⏳ Menunggu login…";
+      const timer = setInterval(async () => {
+        if (!popup.closed) return;
+        clearInterval(timer);
+
+        console.info("auth: popup tertutup, cek session...");
+        btn && (btn.disabled = false);
+
+        // Cek session setelah popup tertutup
+        const { data: { session } } = await cl.auth.getSession();
+        if (session) {
+          console.info("auth: session ditemukan setelah popup →", session.user?.email);
+          await processSession(session);
+        } else {
+          console.warn("auth: tidak ada session setelah popup tutup");
+          renderGuest();
+        }
+      }, 500);
+
+    } catch (e) {
+      console.error("auth: signIn error:", e.message);
+      alert("Login gagal: " + e.message);
+      renderGuest();
+    }
   }
 
-  function initAuth() {
-    // Buat client auth.js sendiri — share localStorage dengan window.client app.js
-    _authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.info("auth: client dibuat");
+  // ── Sign Out ──────────────────────────────────────────────────────
+  async function signOut() {
+    _sessionProcessed = false;
+    const cl = window.client;
+    if (cl) await cl.auth.signOut();
+  }
+  window.authSignOut = signOut;
 
+  // ── Init — tunggu window.client dari app.js ───────────────────────
+  // Pakai SATU client saja (window.client) — hilangkan warning multiple instances
+  function waitForClient(cb, n) {
+    n = n || 0;
+    if (n > 300) { console.error("auth: window.client tidak tersedia"); return; }
+    if (window.client) { cb(window.client); return; }
+    setTimeout(() => waitForClient(cb, n + 1), 50);
+  }
+
+  function initAuth(cl) {
+    console.info("auth: init dengan window.client");
     setGuest(true);
 
-    // onAuthStateChange: tangkap SIGNED_IN setelah redirect OAuth
-    // Supabase v2 otomatis panggil exchangeCodeForSession() saat init jika URL punya ?code=
-    _authClient.auth.onAuthStateChange(async (event, session) => {
-      console.info("auth: onAuthStateChange →", event, "| user:", session?.user?.email || "null");
-
+    // Dengarkan perubahan session dari window.client
+    cl.auth.onAuthStateChange(async (event, session) => {
+      console.info("auth: onAuthStateChange →", event, "|", session?.user?.email || "null");
       if (event === "SIGNED_OUT" || !session) {
         _sessionProcessed = false;
         window.authUser   = null;
@@ -289,31 +335,25 @@
         resetSidebar();
         return;
       }
-      // SIGNED_IN: dipanggil setelah exchange code berhasil (redirect OAuth)
-      // INITIAL_SESSION: dipanggil saat ada session di localStorage (reload halaman)
-      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+      if (["SIGNED_IN","INITIAL_SESSION","TOKEN_REFRESHED"].includes(event) && session.user) {
         await processSession(session);
       }
     });
 
-    // getSession sebagai backup — jika INITIAL_SESSION tidak fire
-    setTimeout(async () => {
-      if (_sessionProcessed) return; // sudah ditangani onAuthStateChange
-      const { data: { session } } = await _authClient.auth.getSession();
-      console.info("auth: getSession backup →", session?.user?.email || "null");
+    // Cek session existing (reload halaman)
+    cl.auth.getSession().then(async ({ data: { session } }) => {
+      console.info("auth: getSession →", session?.user?.email || "null");
       if (session) {
         await processSession(session);
-      } else {
-        console.info("auth: tidak ada session → guest");
       }
-    }, 1500);
+    });
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────────
   function bootstrap() {
     const onReady = () => {
       setTimeout(renderGuest, 80);
-      waitForSupabaseLib(initAuth);
+      waitForClient(initAuth);
     };
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", onReady);
