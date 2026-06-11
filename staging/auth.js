@@ -1,13 +1,12 @@
 // =====================================================================
-// auth.js — Google OAuth + Role Guard (v9 — postMessage callback)
+// auth.js — Google OAuth + Role Guard (v10 — self-callback)
 //
-// ARSITEKTUR BARU:
-// 1. Klik Login → buka popup ke auth-callback.html (same origin)
-// 2. auth-callback.html → redirect ke Google → kembali ke auth-callback.html
-// 3. auth-callback.html ambil session → postMessage ke parent → tutup sendiri
-// 4. Parent terima session → processSession → UI update
-//
-// same-origin postMessage tidak diblokir Tracking Prevention.
+// TIDAK perlu auth-callback.html terpisah.
+// index.html sendiri yang jadi callback target.
+// Jika halaman dibuka sebagai popup dengan ?code= di URL:
+//   → exchange code → postMessage session ke parent → window.close()
+// Jika dibuka normal (bukan popup):
+//   → jalankan app seperti biasa
 // =====================================================================
 
 (function () {
@@ -23,13 +22,71 @@
     viewer:  { label: "Viewer",          canEdit: false, canDelete: false },
   };
 
+  // ── Deteksi: apakah halaman ini dibuka sebagai OAuth callback? ────
+  // Supabase PKCE mengirim ?code=... ke redirectTo URL
+  const _urlParams  = new URLSearchParams(window.location.search);
+  const _oauthCode  = _urlParams.get("code");
+  const _isCallback = !!_oauthCode && !!window.opener;
+
+  // ── MODE CALLBACK: proses code, kirim ke parent, tutup ───────────
+  if (_isCallback) {
+    // Sembunyikan seluruh UI app agar tidak berkedip
+    document.documentElement.style.visibility = "hidden";
+
+    // Tunggu supabase-js tersedia lalu proses
+    function waitLibAndProcess(n) {
+      n = n || 0;
+      if (n > 200) { sendParent({ error: "supabase-js timeout" }); return; }
+      if (window.supabase && window.supabase.createClient) {
+        processCallback();
+      } else {
+        setTimeout(() => waitLibAndProcess(n + 1), 50);
+      }
+    }
+
+    async function processCallback() {
+      try {
+        const cl = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Exchange authorization code → session
+        const { data, error } = await cl.auth.exchangeCodeForSession(_oauthCode);
+        if (error) { sendParent({ error: error.message }); return; }
+        sendParent({ session: data.session });
+      } catch (e) {
+        sendParent({ error: e.message });
+      }
+    }
+
+    function sendParent(payload) {
+      try {
+        window.opener.postMessage(
+          { type: "AUTH_CALLBACK", ...payload },
+          window.location.origin
+        );
+      } catch(e) { /* opener mungkin sudah tutup */ }
+      setTimeout(() => window.close(), 500);
+    }
+
+    // Jalankan setelah DOM + scripts siap
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", waitLibAndProcess);
+    } else {
+      waitLibAndProcess();
+    }
+
+    // STOP — jangan jalankan kode app di bawah
+    return;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // MODE NORMAL: jalankan app seperti biasa
+  // ═══════════════════════════════════════════════════════════════════
+
   window.authUser       = null;
   let _isGuest          = true;
   let _sessionProcessed = false;
   let _popupRef         = null;
-  let _popupTimer       = null;
 
-  // ── Capture listener ──────────────────────────────────────────────
+  // ── Capture listener — blokir klik saat guest ─────────────────────
   const PROTECTED =
     "button.btn-primary, button.btn-edit, button.btn-remove, " +
     "button.btn-danger, button.btn-upload, button.btn-ind-update, " +
@@ -94,7 +151,7 @@
     setTimeout(() => t.isConnected && t.remove(), 6000);
   }
 
-  // ── Topbar UI ─────────────────────────────────────────────────────
+  // ── Topbar ────────────────────────────────────────────────────────
   function ensureTopbar() {
     if (document.getElementById("authTopbarArea")) return;
     const tr = document.querySelector(".topbar-right");
@@ -205,7 +262,6 @@
     const u     = session.user;
     const email = (u.email || "").toLowerCase();
     const token = session.access_token;
-
     console.info("auth: processSession →", email);
 
     let roleData = null;
@@ -231,23 +287,13 @@
     patchSidebar(window.authUser);
   }
 
-  // ── cleanupPopup ──────────────────────────────────────────────────
-  function cleanupPopup() {
-    if (_popupTimer) { clearInterval(_popupTimer); _popupTimer = null; }
-    if (_popupRef && !_popupRef.closed) { try { _popupRef.close(); } catch(e) {} }
-    _popupRef = null;
-  }
-
-  // ── SIGN IN ───────────────────────────────────────────────────────
+  // ── SIGN IN — popup ke index.html itu sendiri ─────────────────────
   async function signIn() {
-    // Jika sudah login, tidak perlu login lagi
-    if (!_isGuest) {
-      console.info("auth: sudah login, skip signIn");
-      return;
-    }
+    if (!_isGuest) return; // sudah login
 
-    // Tutup popup lama jika masih ada
-    cleanupPopup();
+    if (_popupRef && !_popupRef.closed) {
+      _popupRef.focus(); return; // popup sudah terbuka
+    }
 
     const cl = window.client;
     if (!cl) { alert("Halaman belum siap, coba lagi."); return; }
@@ -256,81 +302,79 @@
     if (btn) { btn.innerHTML = "⏳ Menghubungkan…"; btn.disabled = true; }
 
     try {
-      // Dapatkan URL OAuth tanpa redirect otomatis
+      // redirectTo = URL halaman ini sendiri (bukan auth-callback.html)
+      // Saat popup redirect balik, index.html akan detect ?code= dan kirim postMessage
+      const redirectTo = window.location.origin + window.location.pathname;
+
       const { data, error } = await cl.auth.signInWithOAuth({
         provider: "google",
         options: {
           skipBrowserRedirect: true,
-          redirectTo: window.location.origin + "/auth-callback.html",
+          redirectTo,
           queryParams: { prompt: "select_account" },
         },
       });
       if (error) throw error;
       if (!data?.url) throw new Error("URL OAuth tidak tersedia");
 
-      // Buka sebagai popup
+      // Buka popup
       const W = 520, H = 640;
-      const left = Math.round((screen.width  - W) / 2);
-      const top  = Math.round((screen.height - H) / 2);
-      _popupRef  = window.open(
+      _popupRef = window.open(
         data.url,
         "google-auth-popup",
-        `width=${W},height=${H},left=${left},top=${top},resizable=no,scrollbars=yes`
+        `width=${W},height=${H},` +
+        `left=${Math.round((screen.width-W)/2)},` +
+        `top=${Math.round((screen.height-H)/2)},` +
+        `resizable=no,scrollbars=yes`
       );
 
       if (!_popupRef) {
-        // Popup diblokir → fallback redirect biasa
-        console.warn("auth: popup diblokir → redirect biasa");
+        // Popup diblokir → fallback redirect
+        console.warn("auth: popup diblokir → redirect");
         await cl.auth.signInWithOAuth({
           provider: "google",
-          options: { redirectTo: window.location.origin + window.location.pathname },
+          options: { redirectTo },
         });
         return;
       }
 
-      if (btn) btn.innerHTML = "⏳ Menunggu…";
+      if (btn) btn.innerHTML = "⏳ Menunggu login…";
 
       // Timeout 5 menit
-      const timeoutId = setTimeout(() => {
-        cleanupPopup();
-        if (btn) { btn.disabled = false; renderGuest(); }
+      const tid = setTimeout(() => {
+        window.removeEventListener("message", onMsg);
+        if (_popupRef && !_popupRef.closed) _popupRef.close();
+        _popupRef = null;
+        if (btn) { btn.disabled = false; }
+        renderGuest();
       }, 5 * 60 * 1000);
 
-      // Dengarkan pesan dari auth-callback.html via postMessage
-      function onMessage(e) {
-        // Pastikan pesan dari origin yang sama
+      // Terima postMessage dari popup (same-origin)
+      function onMsg(e) {
         if (e.origin !== window.location.origin) return;
         if (!e.data || e.data.type !== "AUTH_CALLBACK") return;
 
-        clearTimeout(timeoutId);
-        cleanupPopup();
-        window.removeEventListener("message", onMessage);
+        clearTimeout(tid);
+        window.removeEventListener("message", onMsg);
+        _popupRef = null;
+        if (btn) btn.disabled = false;
 
-        if (e.data.error) {
+        if (e.data.error || !e.data.session) {
           console.warn("auth: callback error:", e.data.error);
-          if (btn) { btn.disabled = false; }
           renderGuest();
           return;
         }
 
-        // Session dikirim dari auth-callback.html
-        const session = e.data.session;
-        if (session) {
-          console.info("auth: session diterima via postMessage →", session.user?.email);
-          processSession(session);
-        } else {
-          console.warn("auth: tidak ada session di postMessage");
-          if (btn) { btn.disabled = false; }
-          renderGuest();
-        }
+        console.info("auth: session via postMessage →", e.data.session?.user?.email);
+        processSession(e.data.session);
       }
 
-      window.addEventListener("message", onMessage);
+      window.addEventListener("message", onMsg);
 
     } catch (e) {
       console.error("auth: signIn error:", e.message);
       alert("Login gagal: " + e.message);
-      if (btn) { btn.disabled = false; }
+      if (btn) btn.disabled = false;
       renderGuest();
     }
   }
@@ -371,7 +415,6 @@
       }
     });
 
-    // Cek session existing saat halaman dimuat
     cl.auth.getSession().then(async ({ data: { session } }) => {
       console.info("auth: getSession →", session?.user?.email || "null");
       if (session) await processSession(session);

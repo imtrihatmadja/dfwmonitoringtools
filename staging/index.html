@@ -19,15 +19,36 @@
   <!-- AUTH: style minimal untuk topbar login & toast -->
   <style>
     #authTopbarArea button { font-family: inherit; }
-    #authTopbarArea button:hover { opacity: .85; }
     #authLoginBtn:hover { border-color: #2563eb !important; box-shadow: 0 2px 10px rgba(37,99,235,.18) !important; }
     #authLogoutBtn:hover { background: #fee2e2 !important; color: #dc2626 !important; border-color: #fca5a5 !important; }
+    /* Sembunyikan seluruh app saat mode callback popup */
+    body.auth-callback-mode > *:not(#auth-callback-ui) { display: none !important; }
+    #auth-callback-ui {
+      display: none;
+      position: fixed; inset: 0; z-index: 99999;
+      background: #f8fafc;
+      align-items: center; justify-content: center;
+    }
+    body.auth-callback-mode #auth-callback-ui { display: flex; }
   </style>
 
   <!-- AUTH: load auth.js SEBELUM supabase-js agar bisa listen auth state -->
   <script src="auth.js"></script>
 </head>
 <body>
+<!-- AUTH CALLBACK UI: hanya tampil saat popup OAuth callback -->
+<div id="auth-callback-ui">
+  <div style="background:white;border-radius:16px;padding:36px 32px;text-align:center;
+              box-shadow:0 8px 30px rgba(0,0,0,.1);max-width:300px;width:90%;">
+    <div id="acb-spinner" style="width:36px;height:36px;border:3px solid #e2e8f0;
+         border-top-color:#2563eb;border-radius:50%;animation:acb-spin .7s linear infinite;
+         margin:0 auto 16px;"></div>
+    <style>@keyframes acb-spin{to{transform:rotate(360deg)}}</style>
+    <div id="acb-title" style="font-size:15px;font-weight:700;color:#0f172a;margin-bottom:6px;">Memproses login…</div>
+    <div id="acb-sub"   style="font-size:12px;color:#94a3b8;">Jendela ini akan tertutup otomatis</div>
+  </div>
+</div>
+
 <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- SIDEBAR -->
